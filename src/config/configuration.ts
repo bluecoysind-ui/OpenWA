@@ -479,6 +479,34 @@ export default () => ({
       const n = parseInt(process.env.AUTOMATION_MAX_PER_SESSION ?? '', 10);
       return Number.isFinite(n) && n >= 0 ? n : 32;
     })(),
+    // Max regex pattern length when AUTO_REPLY_REGEX=true. Input to the matcher is truncated to
+    // this many characters as well so a huge inbound body cannot ReDoS the evaluator.
+    regexMaxPatternLength: (() => {
+      const n = parseInt(process.env.AUTO_REPLY_REGEX_MAX_PATTERN ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 256;
+    })(),
+  },
+
+  // One-shot delayed sends (WP4). Flag default ON via features.scheduledMessages; these caps apply
+  // once the scheduler module exists. Inert until a job row exists.
+  scheduler: {
+    maxPendingPerSession: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_PENDING ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 100;
+    })(),
+    maxHorizonHours: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_HORIZON_HOURS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 720;
+    })(),
+    maxLatenessMs: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_LATENESS_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 6 * 60 * 60 * 1000;
+    })(),
+  },
+
+  // remove.bg for sticker convert (WP5). Empty → endpoint fails closed; never log the value.
+  removeBg: {
+    apiKey: process.env.REMOVE_BG_API_KEY || '',
   },
 
   // Server-side media conversion (opt-in): transcodes caller-supplied audio and video into the

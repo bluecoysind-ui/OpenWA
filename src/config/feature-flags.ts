@@ -17,6 +17,17 @@ export interface FeatureFlags {
   simulateTyping: boolean;
   /** Upper bound (ms) on the humanising typing pause. Default 5000. */
   simulateTypingMaxMs: number;
+  /** Persist inbound chat media via StorageService. Opt-in — default OFF. List/delete only when on. */
+  mediaPersist: boolean;
+  /** Inbound `#` commands (core module). Opt-in — default OFF; also requires per-session bot-config. */
+  botCommands: boolean;
+  /** Regex matchMode on automation rules. Opt-in — default OFF. EXACT/CONTAINS/STARTS_WITH need no flag. */
+  autoReplyRegex: boolean;
+  /**
+   * Delayed one-shot sends. Opt-out — default ON, but inert until a scheduled_messages row exists
+   * (WP4). Inbound auto-send stays per-session opt-in.
+   */
+  scheduledMessages: boolean;
 }
 
 /**
@@ -35,6 +46,10 @@ export function computeFeatureFlags(env: NodeJS.ProcessEnv = process.env): Featu
     resolveLidToPhone: env.RESOLVE_LID_TO_PHONE === 'true',
     simulateTyping: env.SIMULATE_TYPING !== 'false',
     simulateTypingMaxMs: Number(env.SIMULATE_TYPING_MAX_MS) || 5000,
+    mediaPersist: env.MEDIA_PERSIST === 'true',
+    botCommands: env.BOT_COMMANDS === 'true',
+    autoReplyRegex: env.AUTO_REPLY_REGEX === 'true',
+    scheduledMessages: env.SCHEDULED_MESSAGES !== 'false',
   };
 }
 

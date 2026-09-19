@@ -273,18 +273,23 @@ describe('validateEnv', () => {
     expect(() => validateEnv({})).not.toThrow();
   });
 
-  it.each(['MEDIA_CONVERSION_ENABLED', 'CHAT_MEDIA_ARCHIVE_ENABLED', 'CHAT_MEDIA_ARCHIVE_OUTBOUND'])(
-    'rejects a %s typo instead of silently leaving the feature off',
-    key => {
-      // Both are read at boot with `=== 'true'`, so a typo silently disables the feature and the
-      // endpoints answer as if it was never configured — the same silent-off class as SEND_PACING.
-      expect(() => validateEnv({ [key]: 'ture' })).toThrow(new RegExp(key));
-      expect(() => validateEnv({ [key]: 'True' })).toThrow(new RegExp(key));
-      expect(() => validateEnv({ [key]: 'true' })).not.toThrow();
-      expect(() => validateEnv({ [key]: 'false' })).not.toThrow();
-      expect(() => validateEnv({ [key]: '' })).not.toThrow();
-    },
-  );
+  it.each([
+    'MEDIA_CONVERSION_ENABLED',
+    'CHAT_MEDIA_ARCHIVE_ENABLED',
+    'CHAT_MEDIA_ARCHIVE_OUTBOUND',
+    'MEDIA_PERSIST',
+    'BOT_COMMANDS',
+    'AUTO_REPLY_REGEX',
+    'SCHEDULED_MESSAGES',
+  ])('rejects a %s typo instead of silently leaving the feature off', key => {
+    // Both are read at boot with `=== 'true'`, so a typo silently disables the feature and the
+    // endpoints answer as if it was never configured — the same silent-off class as SEND_PACING.
+    expect(() => validateEnv({ [key]: 'ture' })).toThrow(new RegExp(key));
+    expect(() => validateEnv({ [key]: 'True' })).toThrow(new RegExp(key));
+    expect(() => validateEnv({ [key]: 'true' })).not.toThrow();
+    expect(() => validateEnv({ [key]: 'false' })).not.toThrow();
+    expect(() => validateEnv({ [key]: '' })).not.toThrow();
+  });
 
   it('rejects a MEDIA_DOWNLOAD_ENABLED typo instead of silently keeping the expensive default on', () => {
     // The odd one out of the boolean family: it is read with `!== 'false' && !== '0' && !== 'no'`

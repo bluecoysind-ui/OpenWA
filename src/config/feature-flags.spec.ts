@@ -12,6 +12,10 @@ describe('feature-flags', () => {
         resolveLidToPhone: false, // opt-in
         simulateTyping: true, // opt-out
         simulateTypingMaxMs: 5000,
+        mediaPersist: false,
+        botCommands: false,
+        autoReplyRegex: false,
+        scheduledMessages: true, // opt-out; inert until a job exists
       });
     });
 
@@ -25,13 +29,26 @@ describe('feature-flags', () => {
       }
     });
 
-    it('treats opt-out flags (storeEphemeral, simulateTyping) as OFF only for the exact string "false"', () => {
+    it('treats opt-out flags (storeEphemeral, simulateTyping, scheduledMessages) as OFF only for the exact string "false"', () => {
       expect(computeFeatureFlags({ STORE_EPHEMERAL_MESSAGES: 'false' }).storeEphemeralMessages).toBe(false);
       expect(computeFeatureFlags({ SIMULATE_TYPING: 'false' }).simulateTyping).toBe(false);
+      expect(computeFeatureFlags({ SCHEDULED_MESSAGES: 'false' }).scheduledMessages).toBe(false);
       // Anything else stays ON.
       for (const v of ['true', 'FALSE', '0', 'no', '']) {
         expect(computeFeatureFlags({ STORE_EPHEMERAL_MESSAGES: v }).storeEphemeralMessages).toBe(true);
         expect(computeFeatureFlags({ SIMULATE_TYPING: v }).simulateTyping).toBe(true);
+        expect(computeFeatureFlags({ SCHEDULED_MESSAGES: v }).scheduledMessages).toBe(true);
+      }
+    });
+
+    it('treats WA-AKG port opt-in flags as ON only for the exact string "true"', () => {
+      expect(computeFeatureFlags({ MEDIA_PERSIST: 'true' }).mediaPersist).toBe(true);
+      expect(computeFeatureFlags({ BOT_COMMANDS: 'true' }).botCommands).toBe(true);
+      expect(computeFeatureFlags({ AUTO_REPLY_REGEX: 'true' }).autoReplyRegex).toBe(true);
+      for (const v of ['false', 'TRUE', '1', 'yes', '']) {
+        expect(computeFeatureFlags({ MEDIA_PERSIST: v }).mediaPersist).toBe(false);
+        expect(computeFeatureFlags({ BOT_COMMANDS: v }).botCommands).toBe(false);
+        expect(computeFeatureFlags({ AUTO_REPLY_REGEX: v }).autoReplyRegex).toBe(false);
       }
     });
 
@@ -91,9 +108,12 @@ describe('feature-flags', () => {
     // Extract the body of one top-level service block. Compose indents a service's keys two spaces
     // under the `name:` key, so the block runs from `  serviceName:` to the next top-level key.
     function extractTopLevelService(compose: string, serviceName: string): string {
-      const start = compose.indexOf(`\n  ${serviceName}:\n`);
+      // Compose files may be checked out with CRLF on Windows. Normalise so the
+      // service-block hunt does not depend on checkout line endings.
+      const normalised = compose.replace(/\r\n/g, '\n');
+      const start = normalised.indexOf(`\n  ${serviceName}:\n`);
       if (start === -1) throw new Error(`service ${serviceName} not found`);
-      const rest = compose.slice(start + 1);
+      const rest = normalised.slice(start + 1);
       const next = rest.search(/\n[a-z]/);
       return next === -1 ? rest : rest.slice(0, next);
     }

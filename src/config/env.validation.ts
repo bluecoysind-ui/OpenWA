@@ -194,6 +194,10 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'STATS_CACHE_TTL_MS', // 0 = memo disabled
     'WEBHOOK_MAX_PER_SESSION', // 0 = unlimited
     'AUTOMATION_MAX_PER_SESSION', // 0 = unlimited
+    'AUTO_REPLY_REGEX_MAX_PATTERN',
+    'SCHEDULED_MESSAGES_MAX_PENDING', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_LATENESS_MS', // 0 = refuse any overdue job
     'WEBHOOK_MEDIA_INLINE_MAX_BYTES', // 0 = never inline media
     'EXPORT_INLINE_MEDIA_BUDGET_BYTES', // 0 = a data export carries no inline media at all
     'MESSAGE_LIST_INLINE_MEDIA_BUDGET_BYTES', // 0 = a message list carries no inline media at all
@@ -399,6 +403,11 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'MEDIA_CONVERSION_ENABLED',
     'CHAT_MEDIA_ARCHIVE_ENABLED',
     'CHAT_MEDIA_ARCHIVE_OUTBOUND',
+    // WA-AKG port (docs/wa-akg-port): opt-in except SCHEDULED_MESSAGES, which is opt-out.
+    'MEDIA_PERSIST',
+    'BOT_COMMANDS',
+    'AUTO_REPLY_REGEX',
+    'SCHEDULED_MESSAGES',
     // Read with `=== 'true'` in BOTH configuration.ts and data-source.ts, and this is the one whose
     // typo fails OPEN: `DATABASE_SSL=require` is the natural Postgres spelling and reads as OFF, so
     // credentials and message bodies cross the wire in plaintext to a server the operator believed

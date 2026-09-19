@@ -263,6 +263,36 @@ describe('configuration search namespace', () => {
   });
 });
 
+describe('configuration — scheduler and automation port knobs', () => {
+  const keys = [
+    'SCHEDULED_MESSAGES_MAX_PENDING',
+    'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
+    'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+    'AUTO_REPLY_REGEX_MAX_PATTERN',
+    'REMOVE_BG_API_KEY',
+  ];
+  const orig: Record<string, string | undefined> = {};
+  beforeEach(() => keys.forEach(k => (orig[k] = process.env[k])));
+  afterEach(() =>
+    keys.forEach(k => {
+      if (orig[k] === undefined) delete process.env[k];
+      else process.env[k] = orig[k];
+    }),
+  );
+
+  it('exposes scheduler/automation/removeBg defaults', () => {
+    keys.forEach(k => delete process.env[k]);
+    const cfg = configuration();
+    expect(cfg.scheduler).toEqual({
+      maxPendingPerSession: 100,
+      maxHorizonHours: 720,
+      maxLatenessMs: 6 * 60 * 60 * 1000,
+    });
+    expect(cfg.automation.regexMaxPatternLength).toBe(256);
+    expect(cfg.removeBg.apiKey).toBe('');
+  });
+});
+
 describe('configuration stats namespace', () => {
   const orig = process.env.STATS_CACHE_TTL_MS;
   afterEach(() => {

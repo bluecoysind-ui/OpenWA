@@ -86,6 +86,15 @@ export const BLANK_SHADOWED_ENV_KEYS: string[] = [
   // Autoreply rule cap, blank-forwarded like the knobs above so an operator who sets nothing does
   // not have an empty string shadow a value in .env / data/.env.generated.
   'AUTOMATION_MAX_PER_SESSION',
+  'AUTO_REPLY_REGEX',
+  'AUTO_REPLY_REGEX_MAX_PATTERN',
+  'MEDIA_PERSIST',
+  'BOT_COMMANDS',
+  'SCHEDULED_MESSAGES',
+  'SCHEDULED_MESSAGES_MAX_PENDING',
+  'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
+  'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+  'REMOVE_BG_API_KEY',
   // Behaviour flags with no dashboard route: before they were forwarded, a value set in .env simply
   // never reached the container. They are blank-forwarded like everything else here so the forward
   // itself cannot pin them off.
