@@ -173,7 +173,8 @@
       "src/modules/docker/compose-network\\.spec\\.ts$",
       "src/modules/queue/bull-board-mount-coverage\\.spec\\.ts$",
       "/node_modules/",
-      "src/database/migrations/__tests__/migration-drift\\.spec\\.ts$"
+      "src/database/migrations/__tests__/migration-drift\\.spec\\.ts$",
+      "_reference/"
     ],
     "transform": {
       "^.+\\.(t|j)s$": [
