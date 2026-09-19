@@ -2,7 +2,7 @@
 jest.mock('archiver', () => ({ TarArchive: jest.fn() }));
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, NotImplementedException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import request from 'supertest';
@@ -381,5 +381,177 @@ describe('Message send endpoints (e2e)', () => {
 
     expect((res.body as { message: string }).message).toMatch(/not active/);
     expect(engine.sendTextMessage).not.toHaveBeenCalled();
+  });
+
+  it('send-poll without an API key is 401 and a viewer key is 403', async () => {
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${sessionId}/messages/send-poll`)
+      .send({ chatId: '628123@c.us', name: 'Q', options: ['A', 'B'] })
+      .expect(401);
+
+    const viewer = (
+      await app.get(AuthService).createApiKey({ name: `e2e-send-viewer-${Date.now()}`, role: ApiKeyRole.VIEWER })
+    ).rawKey;
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${sessionId}/messages/send-poll`)
+      .set('X-API-Key', viewer)
+      .send({ chatId: '628123@c.us', name: 'Q', options: ['A', 'B'] })
+      .expect(403);
+  });
+
+  it('a scoped operator key cannot send into another session', async () => {
+    const sessionRepo: Repository<Session> = app.get(getRepositoryToken(Session, 'data'));
+    const other = await sessionRepo.save(sessionRepo.create({ name: `e2e-send-other-${Date.now()}` }));
+    const scoped = (
+      await app.get(AuthService).createApiKey({
+        name: `e2e-send-scoped-${Date.now()}`,
+        role: ApiKeyRole.OPERATOR,
+        allowedSessions: [sessionId],
+      })
+    ).rawKey;
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${other.id}/messages/send-text-list`)
+      .set('X-API-Key', scoped)
+      .send({ chatId: '628123456789@c.us', title: 'T', options: ['A', 'B'] })
+      .expect(401);
+  });
+
+  it('send-poll surfaces an engine 501', async () => {
+    engine.sendPollMessage.mockRejectedValueOnce(new NotImplementedException('polls not supported'));
+    await post('send-poll', { chatId: '628123@c.us', name: 'Q', options: ['A', 'B'] }).expect(501);
+  });
+
+  it('send-poll accepts selectableCount', async () => {
+    await post('send-poll', {
+      chatId: '628123@c.us',
+      name: 'Pick two',
+      options: ['A', 'B', 'C'],
+      selectableCount: 2,
+    }).expect(201);
+    expect(engine.sendPollMessage).toHaveBeenCalledWith(
+      '628123@c.us',
+      expect.objectContaining({ selectableCount: 2, allowMultipleAnswers: true }),
+    );
+  });
+
+  it('send-poll 400s when selectableCount conflicts with allowMultipleAnswers', async () => {
+    await post('send-poll', {
+      chatId: '628123@c.us',
+      name: 'Q',
+      options: ['A', 'B'],
+      selectableCount: 1,
+      allowMultipleAnswers: true,
+    }).expect(400);
+  });
+
+  it('send-poll accepts selectableCount 3 with the flag omitted', async () => {
+    await post('send-poll', {
+      chatId: '628123@c.us',
+      name: 'Pick three',
+      options: ['A', 'B', 'C', 'D'],
+      selectableCount: 3,
+    }).expect(201);
+    expect(engine.sendPollMessage).toHaveBeenCalledWith(
+      '628123@c.us',
+      expect.objectContaining({ selectableCount: 3, allowMultipleAnswers: true }),
+    );
+  });
+
+  it('send-poll 400s when selectableCount 3 conflicts with allowMultipleAnswers false', async () => {
+    await post('send-poll', {
+      chatId: '628123@c.us',
+      name: 'Q',
+      options: ['A', 'B', 'C', 'D'],
+      selectableCount: 3,
+      allowMultipleAnswers: false,
+    }).expect(400);
+  });
+
+  it('send-sticker forwards packName/author', async () => {
+    const base64 = Buffer.from('fake-webp').toString('base64');
+    await post('send-sticker', {
+      chatId: '628123@c.us',
+      base64,
+      mimetype: 'image/webp',
+      packName: 'OpenWA',
+      author: 'Bot',
+    }).expect(201);
+    expect(engine.sendStickerMessage).toHaveBeenCalledWith(
+      '628123@c.us',
+      expect.objectContaining({ packName: 'OpenWA', packAuthor: 'Bot' }),
+    );
+  });
+
+  it('forward toChatIds returns per-destination results', async () => {
+    const res = await post('forward', {
+      fromChatId: '628123@c.us',
+      toChatId: '628111@c.us',
+      toChatIds: ['628222@c.us'],
+      messageId: 'wamid.src.1',
+    }).expect(201);
+    expect(res.body).toMatchObject({
+      fromChatId: '628123@c.us',
+      messageId: 'wamid.src.1',
+      results: [
+        expect.objectContaining({ chatId: '628111@c.us', status: 'sent' }),
+        expect.objectContaining({ chatId: '628222@c.us', status: 'sent' }),
+      ],
+    });
+    expect(engine.forwardMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('forward toChatIds without toChatId is 201 when every dest sends', async () => {
+    await post('forward', {
+      fromChatId: '628123@c.us',
+      toChatIds: ['628111@c.us', '628222@c.us'],
+      messageId: 'wamid.src.1',
+    }).expect(201);
+    expect(engine.forwardMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('forward toChatIds is 207 when some dests fail', async () => {
+    engine.forwardMessage
+      .mockResolvedValueOnce({ messageId: 'wamid.out.1', timestamp: 1 })
+      .mockRejectedValueOnce(new Error('engine refused'));
+    const res = await post('forward', {
+      fromChatId: '628123@c.us',
+      toChatId: '628111@c.us',
+      toChatIds: ['628222@c.us'],
+      messageId: 'wamid.src.1',
+    }).expect(207);
+    expect(res.body).toMatchObject({
+      results: [
+        expect.objectContaining({ chatId: '628111@c.us', status: 'sent' }),
+        expect.objectContaining({ chatId: '628222@c.us', status: 'failed' }),
+      ],
+    });
+  });
+
+  it('forward toChatIds is 502 when every dest fails', async () => {
+    engine.forwardMessage
+      .mockRejectedValueOnce(new Error('engine refused'))
+      .mockRejectedValueOnce(new Error('engine refused'));
+    await post('forward', {
+      fromChatId: '628123@c.us',
+      toChatIds: ['628111@c.us', '628222@c.us'],
+      messageId: 'wamid.src.1',
+    }).expect(502);
+  });
+
+  it('send-text-list formats through send-text', async () => {
+    await post('send-text-list', {
+      chatId: '628123456789@c.us',
+      title: 'Lunch',
+      options: ['Pizza', 'Salad'],
+    }).expect(201);
+    expect(engine.sendTextMessage).toHaveBeenCalledWith('628123456789@c.us', '*Lunch*\n\n1. Pizza\n2. Salad');
+  });
+
+  it('GET messages q without chatId is 400', async () => {
+    await request(app.getHttpServer())
+      .get(`/api/sessions/${sessionId}/messages`)
+      .query({ q: 'hello' })
+      .set('X-API-Key', operatorKey)
+      .expect(400);
   });
 });

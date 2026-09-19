@@ -3,9 +3,21 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { EngineRegistry } from '../../engine/engine-registry.service';
 import { MessageProjector } from '../session/message-projector.service';
-import { SendTextMessageDto, SendMediaMessageDto, SendAudioMessageDto, MessageResponseDto } from './dto';
+import {
+  SendTextMessageDto,
+  SendMediaMessageDto,
+  SendAudioMessageDto,
+  SendStickerMessageDto,
+  MessageResponseDto,
+} from './dto';
 import { SendTemplateMessageDto } from './dto/send-template.dto';
-import { ReplyMessageDto, ClickButtonDto } from './dto/message-actions.dto';
+import {
+  ReplyMessageDto,
+  ClickButtonDto,
+  ForwardMessageDto,
+  ForwardManyResponseDto,
+  SendTextListDto,
+} from './dto/message-actions.dto';
 import { Message, MessageDirection } from './entities/message.entity';
 import { HookManager, applySendingGate } from '../../core/hooks';
 import { SendPacingService } from './send-pacing.service';
@@ -15,6 +27,7 @@ import { LidMappingStoreService } from '../../engine/identity/lid-mapping-store.
 import { ChatMediaArchiveService } from '../chat-media/chat-media-archive.service';
 import { StorageService, isMissingObjectError } from '../../common/storage/storage.service';
 import { MessageSendService, SaveOutgoingMessageData } from './message-send.service';
+import { escapeLikePattern, MESSAGE_BODY_SEARCH_MAX, MESSAGE_BODY_SEARCH_Q_MAX } from './like-escape';
 // Type-only: the module binds this class to PLUGIN_MESSAGE_PORT with a `useExisting` alias, which
 // TypeScript does not check, so `implements` is what keeps the two in step.
 import type { PluginMessagePort } from '../../core/plugins/plugin-host-ports';
@@ -34,6 +47,11 @@ export interface GetMessagesOptions {
    * `offset`, which is left working unchanged for callers that already use it.
    */
   after?: string;
+  /**
+   * Substring match on `body`. Requires `chatId` (or the request is 400). LIKE wildcards in the
+   * needle are escaped; the page size is clamped to 50.
+   */
+  q?: string;
   /**
    * Set false to omit every inline media payload, leaving each row's `{ omitted, sizeBytes }` marker
    * and the media endpoint. The budget below is per RESPONSE, so a walk pulls it afresh on every
@@ -223,12 +241,19 @@ export class MessageService implements PluginMessagePort {
 
   sendPoll(
     sessionId: string,
-    dto: { chatId: string; name: string; options: string[]; allowMultipleAnswers?: boolean; quotedMessageId?: string },
+    dto: {
+      chatId: string;
+      name: string;
+      options: string[];
+      allowMultipleAnswers?: boolean;
+      selectableCount?: number;
+      quotedMessageId?: string;
+    },
   ): Promise<MessageResponseDto> {
     return this.sender.sendPoll(sessionId, dto);
   }
 
-  sendSticker(sessionId: string, dto: SendMediaMessageDto): Promise<MessageResponseDto> {
+  sendSticker(sessionId: string, dto: SendStickerMessageDto | SendMediaMessageDto): Promise<MessageResponseDto> {
     return this.sender.sendSticker(sessionId, dto);
   }
 
@@ -243,10 +268,11 @@ export class MessageService implements PluginMessagePort {
     return this.sender.clickButton(sessionId, dto);
   }
 
-  forward(
-    sessionId: string,
-    dto: { fromChatId: string; toChatId: string; messageId: string },
-  ): Promise<MessageResponseDto> {
+  sendTextList(sessionId: string, dto: SendTextListDto): Promise<MessageResponseDto> {
+    return this.sender.sendTextList(sessionId, dto);
+  }
+
+  forward(sessionId: string, dto: ForwardMessageDto): Promise<MessageResponseDto | ForwardManyResponseDto> {
     return this.sender.forward(sessionId, dto);
   }
 
@@ -263,12 +289,22 @@ export class MessageService implements PluginMessagePort {
     options: GetMessagesOptions = {},
   ): Promise<{ messages: Message[]; total: number }> {
     const { chatId, from, after, inlineMedia } = options;
+    const needle = options.q?.trim();
+    if (needle) {
+      if (!chatId) {
+        throw new BadRequestException('q requires chatId to scope the search');
+      }
+      if (needle.length > MESSAGE_BODY_SEARCH_Q_MAX) {
+        throw new BadRequestException(`q must be at most ${MESSAGE_BODY_SEARCH_Q_MAX} characters`);
+      }
+    }
     // Sanitize pagination: a non-finite limit/offset — e.g. `?limit=abc` -> NaN —
     // must never reach TypeORM's take()/skip(). Clamp to sane bounds; fall back to defaults.
     const rawLimit = options.limit;
     const rawOffset = options.offset;
     const limit =
       typeof rawLimit === 'number' && Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 50;
+    const searchLimit = needle ? Math.min(limit, MESSAGE_BODY_SEARCH_MAX) : limit;
     const offset = typeof rawOffset === 'number' && Number.isFinite(rawOffset) ? Math.max(Math.trunc(rawOffset), 0) : 0;
 
     const tiebreak = this.orderTiebreak;
@@ -283,7 +319,7 @@ export class MessageService implements PluginMessagePort {
       // Postgres sorts it differently between two statements, so a page walk repeats some rows and
       // never returns others. See `orderTiebreak` for why the key differs by dialect.
       .addOrderBy(`message.${tiebreak}`, 'DESC')
-      .take(limit);
+      .take(searchLimit);
 
     // `after` replaces the offset rather than adding to it: mixing a row anchor with a count is
     // meaningless, and silently ignoring one of the two is friendlier to an SDK that always sends
@@ -297,6 +333,12 @@ export class MessageService implements PluginMessagePort {
       // by a raw engine id) while the caller filters by the neutral `@c.us` from the chat list - same
       // chat, different dialect. Resolving both sides through the table keeps them equal.
       query.andWhere('message.chatId IN (:...chatIds)', { chatIds: this.resolveJidCandidates(chatId) });
+    }
+
+    if (needle) {
+      query.andWhere("message.body LIKE :bodySearch ESCAPE '\\'", {
+        bodySearch: `%${escapeLikePattern(needle)}%`,
+      });
     }
 
     if (from) {

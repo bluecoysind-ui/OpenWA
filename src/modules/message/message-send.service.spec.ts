@@ -778,6 +778,19 @@ describe('MessageSendService', () => {
       });
       expect(mockEngine.sendStickerMessage).toHaveBeenCalled();
     });
+
+    it('forwards packName/author on the media payload', async () => {
+      await service.sendSticker('sess-1', {
+        chatId: 'test@c.us',
+        url: 'https://example.com/sticker.webp',
+        packName: 'OpenWA',
+        author: 'Bot',
+      });
+      expect(mockEngine.sendStickerMessage).toHaveBeenCalledWith(
+        'test@c.us',
+        expect.objectContaining({ packName: 'OpenWA', packAuthor: 'Bot' }),
+      );
+    });
   });
 
   // ── sendLocation ──────────────────────────────────────────────────
@@ -851,6 +864,50 @@ describe('MessageSendService', () => {
         '120363000@g.us',
         expect.objectContaining({ allowMultipleAnswers: true }),
       );
+    });
+
+    it('forwards an explicit selectableCount and 400s on conflict', async () => {
+      await service.sendPoll('sess-1', {
+        chatId: '120363000@g.us',
+        name: 'Pick two',
+        options: ['A', 'B', 'C'],
+        selectableCount: 2,
+      });
+      expect(mockEngine.sendPollMessage).toHaveBeenCalledWith(
+        '120363000@g.us',
+        expect.objectContaining({ allowMultipleAnswers: true, selectableCount: 2 }),
+      );
+
+      await expect(
+        service.sendPoll('sess-1', {
+          chatId: '120363000@g.us',
+          name: 'Q',
+          options: ['A', 'B'],
+          selectableCount: 1,
+          allowMultipleAnswers: true,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      await service.sendPoll('sess-1', {
+        chatId: '120363000@g.us',
+        name: 'Pick three',
+        options: ['A', 'B', 'C', 'D'],
+        selectableCount: 3,
+      });
+      expect(mockEngine.sendPollMessage).toHaveBeenCalledWith(
+        '120363000@g.us',
+        expect.objectContaining({ allowMultipleAnswers: true, selectableCount: 3 }),
+      );
+
+      await expect(
+        service.sendPoll('sess-1', {
+          chatId: '120363000@g.us',
+          name: 'Q',
+          options: ['A', 'B', 'C', 'D'],
+          selectableCount: 3,
+          allowMultipleAnswers: false,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -1090,6 +1147,70 @@ describe('MessageSendService', () => {
       });
 
       expect(assertSendAllowed).toHaveBeenCalledWith('sess-1', 'to@c.us');
+    });
+
+    it('forwards to each unique dest and returns per-destination results when N>1', async () => {
+      const { assertSendAllowed } = (service as unknown as { pacing: { assertSendAllowed: jest.Mock } }).pacing;
+      mockEngine.forwardMessage
+        .mockResolvedValueOnce(mockEngineResult)
+        .mockRejectedValueOnce(new Error('engine refused'));
+
+      const body = (await service.forward('sess-1', {
+        fromChatId: 'from@c.us',
+        toChatId: '628111@c.us',
+        toChatIds: ['628222@c.us', '628111@c.us'],
+        messageId: 'wa-msg-to-fwd',
+      })) as {
+        fromChatId: string;
+        messageId: string;
+        results: Array<{ chatId: string; status: string; error?: { code: string } }>;
+      };
+
+      expect(body.fromChatId).toBe('from@c.us');
+      expect(body.messageId).toBe('wa-msg-to-fwd');
+      expect(body.results[0]).toEqual(expect.objectContaining({ chatId: '628111@c.us', status: 'sent' }));
+      expect(body.results[1]?.chatId).toBe('628222@c.us');
+      expect(body.results[1]?.status).toBe('failed');
+      expect(body.results[1]?.error?.code).toBe('SEND_FAILED');
+      expect(assertSendAllowed).toHaveBeenCalledWith('sess-1', '628111@c.us');
+      expect(assertSendAllowed).toHaveBeenCalledWith('sess-1', '628222@c.us');
+      expect(mockEngine.forwardMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('a single toChatIds dest uses the existing single-forward envelope', async () => {
+      const body = await service.forward('sess-1', {
+        fromChatId: 'from@c.us',
+        toChatIds: ['628111@c.us'],
+        messageId: 'wa-msg-to-fwd',
+      });
+      expect(body).toEqual({ messageId: mockEngineResult.id, timestamp: mockEngineResult.timestamp });
+      expect(mockEngine.forwardMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('forwards toChatIds alone (no toChatId) the same way as N>1', async () => {
+      const body = (await service.forward('sess-1', {
+        fromChatId: 'from@c.us',
+        toChatIds: ['628111@c.us', '628222@c.us'],
+        messageId: 'wa-msg-to-fwd',
+      })) as { results: Array<{ chatId: string; status: string }> };
+
+      expect(body.results.map(r => r.chatId)).toEqual(['628111@c.us', '628222@c.us']);
+      expect(mockEngine.forwardMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('sendTextList', () => {
+    it('formats the list and sends it through send-text', async () => {
+      await service.sendTextList('sess-1', {
+        chatId: '628123456789@c.us',
+        title: 'Lunch',
+        options: ['Pizza', 'Salad'],
+        footer: 'Kitchen closes at 3',
+      });
+      expect(mockEngine.sendTextMessage).toHaveBeenCalledWith(
+        '628123456789@c.us',
+        '*Lunch*\n\n1. Pizza\n2. Salad\n\nKitchen closes at 3',
+      );
     });
   });
 

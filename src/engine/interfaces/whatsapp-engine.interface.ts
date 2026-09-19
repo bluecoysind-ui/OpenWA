@@ -63,6 +63,10 @@ export interface MediaInput extends Quotable {
   mentions?: string[];
   /** When true, send as a WhatsApp voice note (PTT). audio-only; ignored by other media types. */
   ptt?: boolean;
+  /** Sticker pack title. whatsapp-web.js `stickerName`; Baileys ignores until WP5 (WebP EXIF). */
+  packName?: string;
+  /** Sticker pack author. whatsapp-web.js `stickerAuthor`; Baileys ignores until WP5. */
+  packAuthor?: string;
 }
 
 /**
@@ -390,6 +394,11 @@ export interface PollInput extends Quotable {
   options: string[];
   /** When true a voter can pick several options; default is single choice. */
   allowMultipleAnswers?: boolean;
+  /**
+   * How many options a voter may pick. `1` = single; `0` = unlimited on Baileys.
+   * whatsapp-web.js only has a boolean; `selectableCount !== 1` maps to `allowMultipleAnswers`.
+   */
+  selectableCount?: number;
 }
 
 export interface ReactionSender {

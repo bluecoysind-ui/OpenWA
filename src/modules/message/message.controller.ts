@@ -7,6 +7,7 @@ import {
   SendTextMessageDto,
   SendMediaMessageDto,
   SendAudioMessageDto,
+  SendStickerMessageDto,
   MessageResponseDto,
   SEND_TEXT_BODY_EXAMPLES,
   SEND_IMAGE_BODY_EXAMPLES,
@@ -37,6 +38,10 @@ import {
   SendPollDto,
   ReplyMessageDto,
   ForwardMessageDto,
+  ForwardManyResponseDto,
+  forwardManyStatusCode,
+  SendTextListDto,
+  SEND_TEXT_LIST_BODY_EXAMPLES,
   ReactMessageDto,
   DeleteMessageDto,
   EditMessageDto,
@@ -94,6 +99,13 @@ export class MessageController {
       'Keyset cursor: the id of the last message of the previous page. Anchors the window to a row ' +
       'rather than a count, so a message arriving mid-walk cannot shift it. Takes precedence over offset.',
   })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    description:
+      'Substring search on message body. Requires chatId. LIKE wildcards in the needle are escaped; ' +
+      'page size is clamped to 50.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Message history',
@@ -114,6 +126,7 @@ export class MessageController {
     @Query('offset') offset?: string,
     @Query('after') after?: string,
     @Query('inlineMedia') inlineMedia?: string,
+    @Query('q') q?: string,
   ) {
     return this.messageService.getMessages(sessionId, {
       chatId,
@@ -128,6 +141,7 @@ export class MessageController {
       // Opt-out, so anything but an explicit false keeps today's behaviour. Same string pair the
       // opt-in flags on this controller accept, read the other way round.
       inlineMedia: inlineMedia !== 'false' && inlineMedia !== '0',
+      q: q?.trim() || undefined,
     });
   }
 
@@ -151,6 +165,22 @@ export class MessageController {
   @ApiResponse({ status: 501, description: CUSTOM_LINK_PREVIEW_501 })
   async sendText(@Param('sessionId') sessionId: string, @Body() dto: SendTextMessageDto): Promise<MessageResponseDto> {
     return this.messageService.sendText(sessionId, dto);
+  }
+
+  @Post('send-text-list')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({
+    summary: 'Send a numbered text list (formatted text, not a native WhatsApp list)',
+    description:
+      'Formats `*title*` plus numbered options (and optional footer) and sends it through the ordinary send-text path, including pacing. Neither engine exposes a native list message.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiBody({ type: SendTextListDto, examples: SEND_TEXT_LIST_BODY_EXAMPLES })
+  @ApiResponse({ status: 201, description: 'Message sent', type: MessageResponseDto })
+  @ApiResponse({ status: 400, description: 'Session not active or invalid request' })
+  @ApiResponse({ status: 409, description: ENGINE_NOT_READY_409 })
+  async sendTextList(@Param('sessionId') sessionId: string, @Body() dto: SendTextListDto): Promise<MessageResponseDto> {
+    return this.messageService.sendTextList(sessionId, dto);
   }
 
   @Post('send-template')
@@ -311,7 +341,7 @@ export class MessageController {
   @RequireRole(ApiKeyRole.OPERATOR)
   @ApiOperation({ summary: 'Send a sticker message' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
-  @ApiBody({ type: SendMediaMessageDto, examples: SEND_STICKER_BODY_EXAMPLES })
+  @ApiBody({ type: SendStickerMessageDto, examples: SEND_STICKER_BODY_EXAMPLES })
   @ApiResponse({
     status: 201,
     description: 'Sticker sent',
@@ -323,7 +353,7 @@ export class MessageController {
   @ApiResponse({ status: 413, description: MEDIA_TOO_LARGE_413 })
   async sendSticker(
     @Param('sessionId') sessionId: string,
-    @Body() dto: SendMediaMessageDto,
+    @Body() dto: SendStickerMessageDto,
   ): Promise<MessageResponseDto> {
     return this.messageService.sendSticker(sessionId, dto);
   }
@@ -391,18 +421,37 @@ export class MessageController {
 
   @Post('forward')
   @RequireRole(ApiKeyRole.OPERATOR)
-  @ApiOperation({ summary: 'Forward a message to another chat' })
+  @ApiOperation({
+    summary: 'Forward a message to another chat',
+    description:
+      '`toChatId` is required unless `toChatIds` is a non-empty array. Optional `toChatIds` adds destinations ' +
+      '(unique combined cap 10). One destination returns the usual `{ messageId, timestamp }` at 201. ' +
+      'More than one returns per-destination results: 201 all sent, 207 mixed, 502 all failed. Each dest is paced.',
+  })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({
     status: 201,
-    description: 'Message forwarded',
+    description: 'Message forwarded (single dest: MessageResponseDto; multi: all dests sent)',
     type: MessageResponseDto,
   })
+  @ApiResponse({
+    status: 207,
+    description: 'Multi-dest: some dests sent, some failed. Body is ForwardManyResponseDto.',
+  })
+  @ApiResponse({ status: 502, description: 'Multi-dest: every dest failed. Body is ForwardManyResponseDto.' })
   @ApiResponse({ status: 409, description: ENGINE_NOT_READY_409 })
   @ApiResponse({ status: 400, description: RECIPIENT_UNREACHABLE_400 })
   @ApiResponse({ status: 404, description: MESSAGE_NOT_FOUND_404 })
-  async forward(@Param('sessionId') sessionId: string, @Body() dto: ForwardMessageDto): Promise<MessageResponseDto> {
-    return this.messageService.forward(sessionId, dto);
+  async forward(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: ForwardMessageDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<MessageResponseDto | ForwardManyResponseDto> {
+    const body = await this.messageService.forward(sessionId, dto);
+    if (body && typeof body === 'object' && 'results' in body) {
+      res.status(forwardManyStatusCode(body.results));
+    }
+    return body;
   }
 
   // ========== Phase 3: Reactions ==========

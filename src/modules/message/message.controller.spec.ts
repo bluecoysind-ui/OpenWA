@@ -112,3 +112,71 @@ describe('MessageController - inlineMedia is opt-out', () => {
     expect(await afterFor('  db-42  ')).toBe('db-42');
   });
 });
+
+describe('MessageController - q is trimmed and optional', () => {
+  const getMessages = jest.fn().mockResolvedValue({ messages: [], total: 0 });
+  const controller = new MessageController(
+    { getMessages } as unknown as MessageService,
+    {} as unknown as BulkMessageService,
+  );
+
+  it('passes a trimmed q through', async () => {
+    await controller.getMessages(
+      'session-1',
+      '628123@c.us',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '  hello  ',
+    );
+    const [, options] = getMessages.mock.calls[0] as [string, { q?: string; chatId?: string }];
+    expect(options).toMatchObject({ chatId: '628123@c.us', q: 'hello' });
+  });
+
+  it('treats a blank q as absent', async () => {
+    getMessages.mockClear();
+    await controller.getMessages('session-1', undefined, undefined, undefined, undefined, undefined, undefined, '  ');
+    const [, options] = getMessages.mock.calls[0] as [string, { q?: string }];
+    expect(options.q).toBeUndefined();
+  });
+});
+
+describe('MessageController — multi-forward status', () => {
+  const forward = jest.fn();
+  const controller = new MessageController(
+    { forward } as unknown as MessageService,
+    {} as unknown as BulkMessageService,
+  );
+
+  it('declares the response passthrough so 207/502 are not swallowed', () => {
+    expect(Reflect.getMetadata(RESPONSE_PASSTHROUGH_METADATA, MessageController, 'forward')).toBe(true);
+  });
+
+  it('sets 207 on mixed results and 502 when every dest failed', async () => {
+    const status = jest.fn();
+    const res = { status } as unknown as Response;
+    forward.mockResolvedValueOnce({
+      fromChatId: 'a@c.us',
+      messageId: 'm',
+      results: [
+        { chatId: 'b@c.us', status: 'sent' },
+        { chatId: 'c@c.us', status: 'failed' },
+      ],
+    });
+    await controller.forward('s', { fromChatId: 'a@c.us', messageId: 'm', toChatIds: ['b@c.us', 'c@c.us'] }, res);
+    expect(status).toHaveBeenCalledWith(207);
+
+    forward.mockResolvedValueOnce({
+      fromChatId: 'a@c.us',
+      messageId: 'm',
+      results: [
+        { chatId: 'b@c.us', status: 'failed' },
+        { chatId: 'c@c.us', status: 'failed' },
+      ],
+    });
+    await controller.forward('s', { fromChatId: 'a@c.us', messageId: 'm', toChatIds: ['b@c.us', 'c@c.us'] }, res);
+    expect(status).toHaveBeenCalledWith(502);
+  });
+});

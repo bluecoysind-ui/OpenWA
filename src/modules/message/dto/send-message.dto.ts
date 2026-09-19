@@ -246,6 +246,27 @@ export class SendMediaMessageDto {
   quotedMessageId?: string;
 }
 
+export class SendStickerMessageDto extends SendMediaMessageDto {
+  @ApiPropertyOptional({
+    description:
+      'Sticker pack title. Honoured by whatsapp-web.js (`stickerName`). Baileys has no EXIF writer in-tree; the sticker still sends and pack metadata is ignored until WP5.',
+    maxLength: 128,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  packName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Sticker pack author. Honoured by whatsapp-web.js (`stickerAuthor`). Baileys ignores this until WP5.',
+    maxLength: 128,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  author?: string;
+}
+
 /**
  * Request-body examples for the media send routes, applied with `@ApiBody` on the controller.
  *

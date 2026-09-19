@@ -500,9 +500,9 @@ export class WwebjsMessaging {
         this.client().sendMessage(to, messageMedia, {
           sendMediaAsSticker: true,
           ...this.quoteOptions(media.quotedMessageId),
-          // Same options bag every other media send uses, so the library tags a sticker exactly as it
-          // tags an image. Omitted when empty to leave an untagged sticker call unchanged.
           ...(media.mentions?.length ? { mentions: media.mentions } : {}),
+          ...(media.packName ? { stickerName: media.packName } : {}),
+          ...(media.packAuthor ? { stickerAuthor: media.packAuthor } : {}),
         }),
       media.quotedMessageId,
     );
@@ -521,7 +521,9 @@ export class WwebjsMessaging {
     // only used as a custom poll id), so cast to the constructor's options type to pass just
     // allowMultipleAnswers.
     type PollSendOptions = ConstructorParameters<typeof Poll>[2];
-    const pollOptions = { allowMultipleAnswers: poll.allowMultipleAnswers === true } as PollSendOptions;
+    const allowMultiple =
+      poll.allowMultipleAnswers === true || (typeof poll.selectableCount === 'number' && poll.selectableCount !== 1);
+    const pollOptions = { allowMultipleAnswers: allowMultiple } as PollSendOptions;
     const msg = await this.sendResolved(
       chatId,
       to =>

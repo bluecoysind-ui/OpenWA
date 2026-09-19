@@ -458,7 +458,8 @@ export class BaileysMessaging {
         poll: {
           name: poll.name,
           values: poll.options,
-          selectableCount: poll.allowMultipleAnswers ? 0 : 1,
+          selectableCount:
+            typeof poll.selectableCount === 'number' ? poll.selectableCount : poll.allowMultipleAnswers ? 0 : 1,
         },
       },
       await this.quoteOption(poll.quotedMessageId),

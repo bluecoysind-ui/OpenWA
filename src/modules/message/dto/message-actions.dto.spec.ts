@@ -9,6 +9,8 @@ import {
   ForwardMessageDto,
   EditMessageDto,
   ReplyMessageDto,
+  SendTextListDto,
+  forwardManyStatusCode,
 } from './message-actions.dto';
 import { GLOBAL_VALIDATION_OPTIONS } from '../../../config/app-validation';
 
@@ -186,5 +188,103 @@ describe('mentions on the quoted-send and edit routes (whitelist behaviour)', ()
     // takes the field.
     await expect(through(ReplyMessageDto, { ...REPLY, mentions: ['120363000000000000@g.us'] })).rejects.toBeDefined();
     await expect(through(EditMessageDto, { ...EDIT, mentions: ['not-a-wid'] })).rejects.toBeDefined();
+  });
+});
+
+describe('WP2 additive message DTOs', () => {
+  it('SendPollDto accepts selectableCount 0–12', async () => {
+    expect(
+      await errorsFor(SendPollDto, {
+        chatId: '120363000@g.us',
+        name: 'Where?',
+        options: ['Park', 'Beach'],
+        selectableCount: 2,
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('SendPollDto rejects a non-integer selectableCount', async () => {
+    const errs = await errorsFor(SendPollDto, {
+      chatId: '120363000@g.us',
+      name: 'Q',
+      options: ['A', 'B'],
+      selectableCount: 1.5,
+    });
+    expect(errs.some(e => e.property === 'selectableCount')).toBe(true);
+  });
+
+  it('ForwardMessageDto still accepts a single toChatId', async () => {
+    expect(
+      await errorsFor(ForwardMessageDto, {
+        fromChatId: '628111@c.us',
+        toChatId: '628222@c.us',
+        messageId: 'wamid.1',
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('ForwardMessageDto accepts toChatIds without toChatId', async () => {
+    expect(
+      await errorsFor(ForwardMessageDto, {
+        fromChatId: '628111@c.us',
+        toChatIds: ['628222@c.us', '628333@c.us'],
+        messageId: 'wamid.1',
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('ForwardMessageDto rejects neither dest field', async () => {
+    const errs = await errorsFor(ForwardMessageDto, { fromChatId: '628111@c.us', messageId: 'wamid.1' });
+    expect(errs.some(e => e.property === 'toChatId' || e.property === 'toChatIds')).toBe(true);
+  });
+
+  it('ForwardMessageDto accepts toChatIds of chat WIDs', async () => {
+    expect(
+      await errorsFor(ForwardMessageDto, {
+        fromChatId: '628111@c.us',
+        toChatId: '628222@c.us',
+        toChatIds: ['628333@c.us', '120363000000000000@g.us'],
+        messageId: 'wamid.1',
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('ForwardMessageDto rejects a junk toChatIds entry', async () => {
+    const errs = await errorsFor(ForwardMessageDto, {
+      fromChatId: '628111@c.us',
+      toChatId: '628222@c.us',
+      toChatIds: ['not-a-jid'],
+      messageId: 'wamid.1',
+    });
+    expect(errs.some(e => e.property === 'toChatIds')).toBe(true);
+  });
+
+  it('SendTextListDto accepts a titled option list', async () => {
+    expect(
+      await errorsFor(SendTextListDto, {
+        chatId: '628123456789@c.us',
+        title: 'Lunch',
+        options: ['Pizza', 'Salad'],
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('SendTextListDto rejects a non-chat chatId', async () => {
+    const errs = await errorsFor(SendTextListDto, { chatId: 'not-a-jid', title: 'T', options: ['A', 'B'] });
+    expect(errs.some(e => e.property === 'chatId')).toBe(true);
+  });
+});
+
+describe('forwardManyStatusCode', () => {
+  it('is 201 when every dest sent', () => {
+    expect(forwardManyStatusCode([{ status: 'sent' }, { status: 'sent' }])).toBe(201);
+  });
+
+  it('is 207 when some dests failed', () => {
+    expect(forwardManyStatusCode([{ status: 'sent' }, { status: 'failed' }])).toBe(207);
+  });
+
+  it('is 502 when every dest failed', () => {
+    expect(forwardManyStatusCode([{ status: 'failed' }, { status: 'failed' }])).toBe(502);
   });
 });
