@@ -46,6 +46,7 @@ import {
   StatusResult,
   ChatSummary,
   StatusPostOptions,
+  OwnProfile,
 } from '../interfaces/whatsapp-engine.interface';
 import { EngineNotSupportedError } from '../../common/errors/engine-not-supported.error';
 import { NotFoundException } from '@nestjs/common';
@@ -276,6 +277,10 @@ export class BaileysAdapter implements IWhatsAppEngine {
     return this.messaging.getNumberId(number);
   }
 
+  async checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>> {
+    return this.messaging.checkNumbers(numbers);
+  }
+
   async sendChatState(chatId: string, state: ChatState): Promise<void> {
     return this.messaging.sendChatState(chatId, state);
   }
@@ -474,6 +479,10 @@ export class BaileysAdapter implements IWhatsAppEngine {
   }
 
   // ----- Profile (own account) -----
+
+  async getOwnProfile(): Promise<OwnProfile> {
+    return this.contacts.getOwnProfile();
+  }
 
   async setProfileName(name: string): Promise<void> {
     return this.contacts.setProfileName(name);

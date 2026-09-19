@@ -1,10 +1,11 @@
 import type { WAMessage, WAMessageKey, WASocket } from '@whiskeysockets/baileys';
-import { ChatSummary, Contact, MediaInput } from '../interfaces/whatsapp-engine.interface';
+import { ChatSummary, Contact, MediaInput, OwnProfile } from '../interfaces/whatsapp-engine.interface';
 import { resolveMediaBuffer } from './baileys-messaging';
 import { type createLogger } from '../../common/services/logger.service';
 import { BAILEYS_QUERY_BUDGET_MS, withQueryDeadline } from './baileys-query-deadline';
 import { EngineTransportError } from '../../common/errors/engine-transport.error';
 import { RecipientUnreachableError } from '../../common/errors/recipient-unreachable.error';
+import { userPart } from '../identity/wa-id';
 
 /**
  * Contacts/profile/chats-domain operations extracted from BaileysAdapter. The adapter keeps the
@@ -51,6 +52,31 @@ export class BaileysContacts {
   /** Post-ensureReady socket handle. */
   private sock(): WASocket {
     return this.host.getSocket();
+  }
+
+  async getOwnProfile(): Promise<OwnProfile> {
+    this.host.ensureReady();
+    const sock = this.sock();
+    const selfJid = this.host.normalizedSelfJid();
+    const phone = selfJid ? userPart(this.host.toNeutralJid(selfJid)) : null;
+    const pushName = typeof sock.user?.name === 'string' ? sock.user.name : null;
+    let about: string | null = null;
+    let profilePictureUrl: string | null = null;
+    if (selfJid) {
+      try {
+        const status = await this.confirmed(sock.fetchStatus(selfJid), 'the profile about lookup');
+        const text = Array.isArray(status) ? status[0]?.status : undefined;
+        about = typeof text === 'string' && text.length > 0 ? text : null;
+      } catch {
+        about = null;
+      }
+      try {
+        profilePictureUrl = await this.getProfilePicture(selfJid);
+      } catch {
+        profilePictureUrl = null;
+      }
+    }
+    return { phone, pushName, about, profilePictureUrl };
   }
 
   async getProfilePicture(contactId: string): Promise<string | null> {

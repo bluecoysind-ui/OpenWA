@@ -247,6 +247,12 @@ export interface Contact {
   isMyContact: boolean;
   isBlocked: boolean;
   profilePicUrl?: string;
+  /** Privacy-id user-part when `id` is already `@lid`. Never fetched; omitted when unknown. */
+  lid?: string;
+  /** Present only when the engine already had it locally — no extra per-contact network call. */
+  isBusiness?: boolean;
+  /** Business verified name when already on the stored contact. */
+  verifiedName?: string;
 }
 
 export interface Group {
@@ -1135,6 +1141,14 @@ export interface ContactCapability {
   getNumberId(number: string): Promise<string | null>;
 
   /**
+   * Batch number-on-WhatsApp lookup. `numbers` are already-normalized digit strings (or engine-ready
+   * ids). Baileys uses `onWhatsApp(...array)`; whatsapp-web.js walks `getNumberId` with jitter.
+   * Order matches the input. A transport failure rejects the whole batch (the HTTP layer maps
+   * invalid entries itself and does not send them here).
+   */
+  checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>>;
+
+  /**
    * Best-effort resolution of a contact id to a phone number (MSISDN digits), or `null` when the
    * engine cannot map it (e.g. a privacy `@lid` the account has never seen). The contact id is the
    * engine's native scheme; the adapter decides how to resolve it.
@@ -1283,7 +1297,20 @@ export interface CallCapability {
  * The account's OWN profile: display name, about text, and picture. Distinct from
  * ContactCapability, which reads and writes other parties.
  */
+export interface OwnProfile {
+  phone: string | null;
+  pushName: string | null;
+  about: string | null;
+  profilePictureUrl: string | null;
+}
+
 export interface ProfileCapability {
+  /**
+   * Read the logged-in account's phone, push name, about text, and profile picture URL.
+   * Adapter internals (auth state, raw wid objects) are not returned.
+   */
+  getOwnProfile(): Promise<OwnProfile>;
+
   /** Set the account's display name. */
   setProfileName(name: string): Promise<void>;
 

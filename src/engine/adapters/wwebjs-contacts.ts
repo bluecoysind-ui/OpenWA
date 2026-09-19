@@ -1,7 +1,8 @@
 import { type Client } from 'whatsapp-web.js';
 import { Contact } from '../interfaces/whatsapp-engine.interface';
 import { EngineTransportError } from '../../common/errors/engine-transport.error';
-import { userPart } from '../identity/wa-id';
+import { setTimeout as delay } from 'node:timers/promises';
+import { userPart, parseWaId } from '../identity/wa-id';
 import { readWid, type SerializedWid } from '../types/whatsapp-web-js.types';
 import { type WwebjsEngineHost, withPage } from './wwebjs-host';
 
@@ -95,6 +96,11 @@ export class WwebjsContacts {
       number: c.number,
       isMyContact: c.isMyContact,
       isBlocked: c.isBlocked,
+      ...(parseWaId(id).kind === 'lid' ? { lid: parseWaId(id).userPart } : {}),
+      ...('isBusiness' in c && c.isBusiness ? { isBusiness: true } : {}),
+      ...('verifiedName' in c && typeof (c as { verifiedName?: string }).verifiedName === 'string'
+        ? { verifiedName: (c as { verifiedName?: string }).verifiedName }
+        : {}),
     };
   }
 
@@ -168,6 +174,16 @@ export class WwebjsContacts {
 
   async checkNumberExists(number: string): Promise<boolean> {
     return (await this.getNumberId(number)) !== null;
+  }
+
+  async checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>> {
+    const out: Array<{ number: string; exists: boolean; chatId: string | null }> = [];
+    for (let i = 0; i < numbers.length; i++) {
+      if (i > 0) await delay(50 + Math.floor(Math.random() * 100));
+      const chatId = await this.getNumberId(numbers[i]);
+      out.push({ number: numbers[i], exists: chatId !== null, chatId });
+    }
+    return out;
   }
 
   async resolveContactPhone(contactId: string): Promise<string | null> {

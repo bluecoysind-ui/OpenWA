@@ -33,6 +33,7 @@ import {
   LabelInput,
   CustomLinkPreview,
   GroupJoinInfo,
+  OwnProfile,
 } from '../interfaces/whatsapp-engine.interface';
 import { EngineNotSupportedError } from '../../common/errors/engine-not-supported.error';
 import { resolveAuthTimeoutMs } from '../engine-init-timeout';
@@ -578,6 +579,10 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     return this.contacts.getNumberId(number);
   }
 
+  checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>> {
+    return this.contacts.checkNumbers(numbers);
+  }
+
   checkNumberExists(number: string): Promise<boolean> {
     return this.contacts.checkNumberExists(number);
   }
@@ -777,6 +782,10 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   }
 
   // ========== Profile (own account) ==========
+
+  getOwnProfile(): Promise<OwnProfile> {
+    return this.profile.getOwnProfile();
+  }
 
   setProfileName(name: string): Promise<void> {
     return this.profile.setProfileName(name);

@@ -25,6 +25,7 @@ import { MessageNotFoundError } from '../../common/errors/message-not-found.erro
 import { type createLogger } from '../../common/services/logger.service';
 import { EngineTransportError } from '../../common/errors/engine-transport.error';
 import { BAILEYS_QUERY_BUDGET_MS, withQueryDeadline } from './baileys-query-deadline';
+import { userPart } from '../identity/wa-id';
 
 /**
  * Messaging-domain operations extracted from BaileysAdapter. The adapter keeps the public
@@ -259,6 +260,25 @@ export class BaileysMessaging {
     // boundary so the value matches whatsapp-web.js (`<phone>@c.us`) and the IWhatsAppEngine contract
     // (no raw `@s.whatsapp.net` in a neutral field). It also round-trips back to a send on either engine.
     return hit?.exists ? this.host.toNeutralJid(hit.jid) : null;
+  }
+
+  async checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>> {
+    this.host.ensureReady();
+    if (numbers.length === 0) return [];
+    const results = await this.sock().onWhatsApp(...numbers);
+    if (results === undefined) {
+      throw new EngineTransportError('WhatsApp did not answer the number-check query');
+    }
+    const byUser = new Map<string, { exists: boolean; jid: string }>();
+    for (const hit of results) {
+      if (!hit?.jid) continue;
+      byUser.set(userPart(hit.jid), { exists: Boolean(hit.exists), jid: hit.jid });
+    }
+    return numbers.map(number => {
+      const hit = byUser.get(userPart(number)) ?? byUser.get(number);
+      if (!hit?.exists) return { number, exists: false, chatId: null };
+      return { number, exists: true, chatId: this.host.toNeutralJid(hit.jid) };
+    });
   }
 
   async sendChatState(chatId: string, state: ChatState): Promise<void> {
