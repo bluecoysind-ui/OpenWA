@@ -166,5 +166,15 @@ describe('Automation rules (e2e)', () => {
       .set('X-API-Key', apiKey)
       .send({ name: 'x', replyText: 'y', cooldownSeconds: 999_999 })
       .expect(400);
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${session}/automation-rules`)
+      .set('X-API-Key', apiKey)
+      .send({ name: 'x', replyText: 'y', matchMode: 'regex', matchPattern: 'a+' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${session}/automation-rules`)
+      .set('X-API-Key', apiKey)
+      .send({ name: 'x', replyText: 'y', matchMode: 'startsWith', matchPattern: 'hi', chatContext: 'private' })
+      .expect(201);
   });
 });

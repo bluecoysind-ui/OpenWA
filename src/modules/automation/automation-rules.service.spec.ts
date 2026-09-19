@@ -11,6 +11,7 @@ import { Session, SessionStatus } from '../session/entities/session.entity';
 import type { MessageService } from '../message/message.service';
 import type { ModuleRef } from '@nestjs/core';
 import type { ConfigService } from '@nestjs/config';
+import { BOT_INBOUND_PORT } from '../../core/plugins/plugin-host-ports';
 
 describe('AutomationRulesService', () => {
   let ds: DataSource;
@@ -86,11 +87,14 @@ describe('AutomationRulesService', () => {
   });
 
   describe('CRUD scoping', () => {
-    it('create applies the defaults: enabled, 60s cooldown, no conditions', async () => {
+    it('create applies the defaults: enabled, 60s cooldown, no conditions, contains/all', async () => {
       const rule = await service.create('sessA', { name: 'r', replyText: 'hi' });
       expect(rule.enabled).toBe(true);
       expect(rule.cooldownSeconds).toBe(60);
       expect(rule.conditions).toBeNull();
+      expect(rule.matchMode).toBe('contains');
+      expect(rule.chatContext).toBe('all');
+      expect(rule.matchPattern).toBeNull();
     });
 
     it('findOne returns a rule only for its owning session', async () => {
@@ -244,6 +248,120 @@ describe('AutomationRulesService', () => {
 
       await service.evaluateInbound('sessA', inbound({ chatId: undefined }));
 
+      expect(sends).toHaveLength(0);
+    });
+  });
+
+  describe('matchMode / chatContext / media / cache', () => {
+    it('equals/contains/startsWith match the body after filter conditions', async () => {
+      await service.create('sessA', {
+        name: 'eq',
+        replyText: 'eq',
+        matchMode: 'equals' as never,
+        matchPattern: 'hello there',
+        cooldownSeconds: 0,
+      });
+      await service.evaluateInbound('sessA', inbound());
+      expect(sends.map(s => s.text)).toEqual(['eq']);
+      sends.length = 0;
+      await service.evaluateInbound('sessA', inbound({ body: 'hello' }));
+      expect(sends).toHaveLength(0);
+    });
+
+    it('chatContext group skips private chats', async () => {
+      await service.create('sessA', {
+        name: 'g',
+        replyText: 'g',
+        chatContext: 'group' as never,
+      });
+      await service.evaluateInbound('sessA', inbound({ isGroup: false }));
+      expect(sends).toHaveLength(0);
+      await service.evaluateInbound('sessA', inbound({ isGroup: true, chatId: 'g@g.us', from: 'g@g.us' }));
+      expect(sends).toHaveLength(1);
+    });
+
+    it('refuses regex matchMode when AUTO_REPLY_REGEX is off', async () => {
+      await expect(
+        service.create('sessA', { name: 'r', replyText: 'x', matchMode: 'regex' as never, matchPattern: 'a+' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('regex matches truncated input when the flag is on', async () => {
+      const svc = new AutomationRulesService(ds.getRepository(AutomationRule), moduleRefStub, undefined, {
+        get: (key: string, def?: unknown) => {
+          if (key === 'features.autoReplyRegex') return true;
+          if (key === 'automation.regexMaxPatternLength') return 8;
+          if (key === 'automation.maxPerSession') return 32;
+          return def;
+        },
+      } as unknown as ConfigService);
+      await svc.create('sessA', {
+        name: 're',
+        replyText: 're',
+        matchMode: 'regex' as never,
+        matchPattern: 'hel',
+        cooldownSeconds: 0,
+      });
+      await svc.evaluateInbound('sessA', inbound({ body: 'hello there' }));
+      expect(sends.map(s => s.text)).toEqual(['re']);
+    });
+
+    it('sends an image when replyMediaUrl is set', async () => {
+      const images: Array<{ url: string; caption?: string }> = [];
+      const ref = {
+        get: () =>
+          ({
+            sendText: (sessionId: string, dto: { chatId: string; text: string }) => sendImpl(sessionId, dto),
+            sendImage: (_s: string, dto: { url: string; caption?: string }) => {
+              images.push(dto);
+              return Promise.resolve({});
+            },
+          }) as unknown as MessageService,
+      } as unknown as ModuleRef;
+      const svc = new AutomationRulesService(ds.getRepository(AutomationRule), ref, undefined);
+      await svc.create('sessA', {
+        name: 'img',
+        replyText: 'cap',
+        replyMediaUrl: 'https://example.com/a.png',
+      });
+      await svc.evaluateInbound('sessA', inbound());
+      expect(images).toEqual([{ chatId: '628111@c.us', url: 'https://example.com/a.png', caption: 'cap' }]);
+      expect(sends).toHaveLength(0);
+    });
+
+    it('skips evaluation when bot access lists deny the sender', async () => {
+      const ref = {
+        get: (token: unknown) => {
+          if (token === BOT_INBOUND_PORT) {
+            return {
+              senderAllowed: () => Promise.resolve(false),
+              looksLikeCommand: () => Promise.resolve(false),
+              maybeAutoRead: () => Promise.resolve(undefined),
+            };
+          }
+          return {
+            sendText: (sessionId: string, dto: { chatId: string; text: string }) => sendImpl(sessionId, dto),
+          };
+        },
+      } as unknown as ModuleRef;
+      const svc = new AutomationRulesService(ds.getRepository(AutomationRule), ref, undefined);
+      await svc.create('sessA', { name: 'all', replyText: 'ack' });
+      await svc.evaluateInbound('sessA', inbound());
+      expect(sends).toHaveLength(0);
+    });
+
+    it('invalidates the per-session cache on CRUD so an update is seen immediately', async () => {
+      const rule = await service.create('sessA', { name: 'all', replyText: 'ack', cooldownSeconds: 0 });
+      await service.evaluateInbound('sessA', inbound());
+      expect(sends).toHaveLength(1);
+      await service.update('sessA', rule.id, { enabled: false });
+      await service.evaluateInbound('sessA', inbound({ id: 'wamid.2' }));
+      expect(sends).toHaveLength(1);
+    });
+
+    it('skips automation when a command already handled the message', async () => {
+      await service.create('sessA', { name: 'all', replyText: 'ack' });
+      await service.evaluateInbound('sessA', inbound({ _openwaCommandHandled: true }));
       expect(sends).toHaveLength(0);
     });
   });
