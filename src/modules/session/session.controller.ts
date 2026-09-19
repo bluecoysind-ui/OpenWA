@@ -40,6 +40,7 @@ import {
   SessionGroupSummaryDto,
   SessionsOverviewResponseDto,
 } from './dto';
+import { resolveMuteUntil } from './dto/mute-chat.dto';
 import { Session } from './entities/session.entity';
 import { ChatSummary } from '../../engine/interfaces/whatsapp-engine.interface';
 import { AuditService } from '../audit/audit.service';
@@ -738,7 +739,7 @@ export class SessionController {
     @Param('sessionId', ParseUUIDPipe) id: string,
     @Body() dto: MuteChatDto,
   ): Promise<{ success: boolean }> {
-    await this.sessionService.muteChat(id, dto.chatId, dto.muteUntil);
+    await this.sessionService.muteChat(id, dto.chatId, resolveMuteUntil(dto));
     return { success: true };
   }
 
