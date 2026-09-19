@@ -16,6 +16,10 @@ public enum WebhookEvent {
     MESSAGE_ACK,
     @SerializedName("message.failed")
     MESSAGE_FAILED,
+    @SerializedName("scheduled.message.sent")
+    SCHEDULED_MESSAGE_SENT,
+    @SerializedName("scheduled.message.failed")
+    SCHEDULED_MESSAGE_FAILED,
     @SerializedName("message.revoked")
     MESSAGE_REVOKED,
     @SerializedName("message.reaction")

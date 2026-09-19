@@ -38,6 +38,8 @@
                 "contact_numbers_checked",
                 "send_pacing_blocked",
                 "send_breaker_tripped",
+                "scheduled_message_sent",
+                "scheduled_message_failed",
                 "webhook_created",
                 "webhook_deleted",
                 "webhook_triggered",
@@ -8284,6 +8286,215 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/scheduled-messages": {
+      "post": {
+        "operationId": "SchedulerController_create",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduledMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, flag off, cap, or horizon."
+          }
+        },
+        "summary": "Schedule a one-shot text or media-URL send",
+        "tags": [
+          "scheduler"
+        ]
+      },
+      "get": {
+        "operationId": "SchedulerController_findAll",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List scheduled messages for the session",
+        "tags": [
+          "scheduler"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/scheduled-messages/{jobId}": {
+      "get": {
+        "operationId": "SchedulerController_findOne",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job in this session."
+          }
+        },
+        "summary": "Get one scheduled message",
+        "tags": [
+          "scheduler"
+        ]
+      },
+      "patch": {
+        "operationId": "SchedulerController_update",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduledMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Job is not pending."
+          }
+        },
+        "summary": "Update a pending scheduled message",
+        "tags": [
+          "scheduler"
+        ]
+      },
+      "delete": {
+        "operationId": "SchedulerController_remove",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Job cancelled."
+          },
+          "409": {
+            "description": "Job is not pending."
+          }
+        },
+        "summary": "Cancel a pending scheduled message",
+        "tags": [
+          "scheduler"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/catalog": {
       "get": {
         "operationId": "CatalogController_getCatalog",
@@ -11136,6 +11347,8 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
                 "message.edited",
@@ -11232,6 +11445,8 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
                 "message.edited",
@@ -11330,6 +11545,8 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
                 "message.edited",
@@ -14384,6 +14601,12 @@
             "items": {
               "type": "object"
             }
+          },
+          "scheduledMessages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
         },
         "required": [
@@ -14402,7 +14625,8 @@
           "webhookOutboxEvents",
           "integrationDeliveryFailures",
           "statusUpdates",
-          "automationRules"
+          "automationRules",
+          "scheduledMessages"
         ]
       },
       "TableCountsDto": {
@@ -14471,6 +14695,10 @@
           "automationRules": {
             "type": "number",
             "example": 2
+          },
+          "scheduledMessages": {
+            "type": "number",
+            "example": 0
           }
         },
         "required": [
@@ -14489,7 +14717,8 @@
           "webhookOutboxEvents",
           "integrationDeliveryFailures",
           "statusUpdates",
-          "automationRules"
+          "automationRules",
+          "scheduledMessages"
         ]
       },
       "OmittedInlineMediaDto": {
@@ -14566,7 +14795,7 @@
         "properties": {
           "tables": {
             "type": "object",
-            "description": "Every one of the 16 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
+            "description": "Every one of the 17 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
             "properties": {
               "sessions": {
                 "type": "array"
@@ -14614,6 +14843,9 @@
                 "type": "array"
               },
               "automationRules": {
+                "type": "array"
+              },
+              "scheduledMessages": {
                 "type": "array"
               }
             }
@@ -16658,6 +16890,181 @@
           "mimetype",
           "bytes"
         ]
+      },
+      "CreateScheduledMessageDto": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "Destination chat JID",
+            "example": "628123456789@c.us"
+          },
+          "sendAt": {
+            "type": "string",
+            "description": "ISO-8601 instant with offset (UTC or ±HH:MM). Naive local datetimes are refused. Stored as UTC; `timezone` is kept for display.",
+            "example": "2026-09-21T15:00:00Z"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone stored with the job (display / future recurrence). Default UTC.",
+            "example": "Asia/Jakarta",
+            "default": "UTC"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text body. Required when mediaUrl is omitted.",
+            "maxLength": 4096
+          },
+          "mediaUrl": {
+            "type": "string",
+            "description": "http(s) media URL. Fetched at send time through the SSRF-safe send path. Required when text is omitted.",
+            "example": "https://example.com/image.jpg"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ],
+            "default": "text"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption for a media send",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "chatId",
+          "sendAt"
+        ]
+      },
+      "ScheduledMessageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "sendAt": {
+            "type": "string",
+            "description": "Scheduled instant as UTC ISO-8601"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "text": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ]
+          },
+          "caption": {
+            "type": "object",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sending",
+              "sent",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "attemptCount": {
+            "type": "number"
+          },
+          "lastError": {
+            "type": "object",
+            "nullable": true
+          },
+          "sentMessageId": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "chatId",
+          "sendAt",
+          "timezone",
+          "text",
+          "mediaUrl",
+          "mediaType",
+          "caption",
+          "status",
+          "attemptCount",
+          "lastError",
+          "sentMessageId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateScheduledMessageDto": {
+        "type": "object",
+        "properties": {
+          "sendAt": {
+            "type": "string",
+            "description": "ISO-8601 instant with offset. Only pending jobs can be rescheduled."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "mediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ]
+          },
+          "caption": {
+            "type": "object",
+            "maxLength": 1024
+          }
+        }
       },
       "CatalogDto": {
         "type": "object",

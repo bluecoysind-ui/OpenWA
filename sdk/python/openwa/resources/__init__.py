@@ -21,6 +21,7 @@ from .search import SearchResource
 from .sessions import SessionsResource
 from .status import StatusResource
 from .templates import TemplatesResource
+from .scheduled_messages import ScheduledMessagesResource
 from .webhooks import WebhooksResource
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "StatusResource",
     "TemplatesResource",
     "WebhooksResource",
+    "ScheduledMessagesResource",
 ]

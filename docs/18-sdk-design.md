@@ -28,9 +28,9 @@ All five SDKs expose the same fluent surface:
 
 | Resource    | Methods                                                                                                                                                                                                                                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessions`  | list, get, getConfig, updateConfig, getProxy, updateProxy, create, delete, start, stop, logout, forceKill, getQrCode, requestPairingCode, setOnlinePresence, stats                                                                                                                                       |
+| `sessions`  | list, get, getOwnProfile, getConfig, updateConfig, getProxy, updateProxy, create, delete, start, stop, logout, forceKill, getQrCode, requestPairingCode, setOnlinePresence, stats                                                                                                                        |
 | `messages`  | list, sendText, sendTextList, sendImage/Video/Audio/Document/Sticker, sendLocation, sendContact, sendTemplate, sendPoll, reply, forward, clickButton, react, delete, editMessage, history, reactions, media, pin, unpin, star, votePoll, sendBulk, batchStatus, cancelBatch                              |
-| `contacts`  | list, get, check, profilePicture, profilePictures, phone, upsert, delete, block, unblock, listBlocked                                                                                                                                                                                                    |
+| `contacts`  | list, get, check, checkNumbers, profilePicture, profilePictures, phone, upsert, delete, block, unblock, listBlocked                                                                                                                                                                                     |
 | `groups`    | list, get, create, joinInfo, joinGroup, add/remove/promote/demoteParticipants, setSubject, setDescription, getGroupSettings, updateGroupSettings, leave, getPicture, setPicture, deletePicture, inviteCode, revokeInviteCode, getMembershipRequests, approveMembershipRequests, rejectMembershipRequests |
 | `webhooks`  | list, listAll, deliveryFailures, get, create, update, delete, test                                                                                                                                                                                                                                       |
 | `chats`     | list, subscribePresence, getPresence, markRead, markUnread, archive, pin, mute, clearMessages, delete, sendState                                                                                                                                                                                         |
@@ -43,6 +43,7 @@ All five SDKs expose the same fluent surface:
 | `profile`   | setProfileName, setProfileStatus, setProfilePicture, deleteProfilePicture                                                                                                                                                                                                                                |
 | `calls`     | rejectCall, createLink                                                                                                                                                                                                                                                                                   |
 | `media`     | conversionStatus, convertVoice, convertVideo _(OPERATOR)_                                                                                                                                                                                                                                                |
+| `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
 | `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
 
 > The SDKs cover the user-facing resources above and stop there. The administrative and operational surfaces are deliberately left out — `auth/api-keys`, `audit`, `settings`, `stats`, `automation`, `infra`, `plugins` and the `integration` management routes are predominantly `ADMIN`-gated; `metrics` is a `@Public()` Prometheus scrape gated by `METRICS_TOKEN` rather than by role; `mcp` is a Streamable-HTTP transport mounted straight onto the Express adapter; and `ingress` is the `@Public()` receiver that integration providers post into. `docker` has no HTTP surface at all — it is an internal service module. Methods that require an `OPERATOR`-level key are annotated **OPERATOR** in the per-language tables below.
@@ -132,6 +133,7 @@ The top-level client also exposes:
 | `getProxy`           | `getProxy(id)`                 | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `updateProxy`        | `updateProxy(id, body)`        | Update per-session proxy settings; changes apply on the next start, not to a running engine. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                       |
 | `get`                | `get(id)`                      | Get a single session by id.                                                                                                                                                                                                                                                                                                                                     |
+| `getOwnProfile`      | `getOwnProfile(id)`            | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`             | `create(body)`                 | Create a new session (`body.name` required). **OPERATOR**                                                                                                                                                                                                                                                                                                       |
 | `delete`             | `delete(id)`                   | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`              | `start(id)`                    | Start a session and initialize the WhatsApp connection. **OPERATOR**                                                                                                                                                                                                                                                                                            |
@@ -185,6 +187,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `list`            | `list(sessionId, query?)`              | List contacts known to the session.                                                  |
 | `get`             | `get(sessionId, contactId)`            | Get details for a single contact by JID.                                             |
 | `check`           | `check(sessionId, number)`             | Check whether a phone number is registered on WhatsApp.                              |
+| `checkNumbers`    | `checkNumbers(sessionId, body)`        | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profilePicture`  | `profilePicture(sessionId, contactId)` | Get the contact's profile picture URL (or null).                                     |
 | `profilePictures` | `profilePictures(sessionId, ids)`      | Batch-resolve profile picture URLs for up to 50 contacts in one request.             |
 | `phone`           | `phone(sessionId, contactId)`          | Resolve a contact id (e.g. a `@lid`) to a phone number.                              |
@@ -341,6 +344,16 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `conversionStatus` | `conversionStatus(sessionId)`    | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(sessionId, input)` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convertVideo`     | `convertVideo(sessionId, input)` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+
+#### `scheduled-messages`
+
+| Method   | Signature                          | Description                                                                 |
+| -------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `list`   | `list(sessionId)`                  | List scheduled one-shot sends for the session.                              |
+| `create` | `create(sessionId, body)`          | Schedule a text or media-URL send. **OPERATOR**                             |
+| `get`    | `get(sessionId, jobId)`            | Get one scheduled job.                                                      |
+| `update` | `update(sessionId, jobId, body)`   | Update a pending job. **OPERATOR**                                          |
+| `delete` | `delete(sessionId, jobId)`         | Cancel a pending job. **OPERATOR**                                          |
 
 #### `health`
 
@@ -507,6 +520,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `get_proxy`            | `get_proxy(session_id) -> SessionProxy`                         | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `update_proxy`         | `update_proxy(session_id, body) -> SessionProxy`                | Update per-session proxy settings; changes apply on the next start. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                                                |
 | `get`                  | `get(session_id) -> SessionResponse`                            | Get one session.                                                                                                                                                                                                                                                                                                                                                |
+| `get_own_profile`      | `get_own_profile(session_id)`                                   | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`               | `create(body) -> SessionResponse`                               | Create a session (`body["name"]` required). **OPERATOR**                                                                                                                                                                                                                                                                                                        |
 | `delete`               | `delete(session_id) -> None`                                    | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`                | `start(session_id) -> SessionResponse`                          | Start (connect) a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                         |
@@ -558,6 +572,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `list`             | `list(session_id, query=None) -> list[ContactRecord]`               | List contacts (`query`: `limit`, `offset`).                                          |
 | `get`              | `get(session_id, contact_id) -> ContactRecord`                      | Get one contact.                                                                     |
 | `check`            | `check(session_id, number) -> CheckNumberResponse`                  | Check whether a number is on WhatsApp.                                               |
+| `check_numbers`    | `check_numbers(session_id, body)`                                   | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profile_picture`  | `profile_picture(session_id, contact_id) -> ProfilePictureResponse` | Get a contact's profile picture.                                                     |
 | `profile_pictures` | `profile_pictures(session_id, ids) -> ProfilePicturesResponse`      | Batch-resolve profile picture URLs for up to 50 contacts.                            |
 | `phone`            | `phone(session_id, contact_id) -> ContactPhoneResponse`             | Resolve a contact's phone number.                                                    |
@@ -713,6 +728,16 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `convert_voice`     | `convert_voice(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convert_video`     | `convert_video(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
 
+#### `client.scheduled-messages`
+
+| Method   | Signature                                          | Description                                      |
+| -------- | -------------------------------------------------- | ------------------------------------------------ |
+| `list`   | `list(session_id)`                                 | List scheduled one-shot sends for the session.   |
+| `create` | `create(session_id, body)`                         | Schedule a text or media-URL send. **OPERATOR**  |
+| `get`    | `get(session_id, job_id)`                          | Get one scheduled job.                           |
+| `update` | `update(session_id, job_id, body)`                 | Update a pending job. **OPERATOR**               |
+| `delete` | `delete(session_id, job_id)`                       | Cancel a pending job. **OPERATOR**               |
+
 #### `client.health`
 
 | Method  | Signature                        | Description             |
@@ -853,6 +878,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `getProxy`           | `getProxy(string $id): array`                        | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `updateProxy`        | `updateProxy(string $id, array $body): array`        | Update per-session proxy settings; changes apply on the next start. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                                                |
 | `get`                | `get(string $id): array`                             | Get one session.                                                                                                                                                                                                                                                                                                                                                |
+| `getOwnProfile`      | `getOwnProfile(string $id): array`                   | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`             | `create(array $body): array`                         | Create a session (`$body['name']` required). **OPERATOR**                                                                                                                                                                                                                                                                                                       |
 | `delete`             | `delete(string $id): void`                           | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`              | `start(string $id): array`                           | Start a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                   |
@@ -904,6 +930,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `list`            | `list(string $sessionId, array $query = []): array`                | List contacts.                                                                       |
 | `get`             | `get(string $sessionId, string $contactId): array`                 | Get one contact.                                                                     |
 | `check`           | `check(string $sessionId, string $number): array`                  | Check whether a number is on WhatsApp.                                               |
+| `checkNumbers`    | `checkNumbers(string $sessionId, array $body): array`              | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profilePicture`  | `profilePicture(string $sessionId, string $contactId): array`      | Get a contact's profile picture.                                                     |
 | `profilePictures` | `profilePictures(string $sessionId, array $ids): array`            | Batch-resolve profile picture URLs for up to 50 contacts in one request.             |
 | `phone`           | `phone(string $sessionId, string $contactId): array`               | Resolve a contact's phone number.                                                    |
@@ -1058,6 +1085,16 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `conversionStatus` | `conversionStatus(string $sessionId): array`           | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(string $sessionId, array $media): array` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convertVideo`     | `convertVideo(string $sessionId, array $media): array` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+
+#### `scheduled-messages`
+
+| Method   | Signature                                                        | Description                                      |
+| -------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| `list`   | `list(string $sessionId): array`                                 | List scheduled one-shot sends for the session.   |
+| `create` | `create(string $sessionId, array $body): array`                  | Schedule a text or media-URL send. **OPERATOR**  |
+| `get`    | `get(string $sessionId, string $jobId): array`                   | Get one scheduled job.                           |
+| `update` | `update(string $sessionId, string $jobId, array $body): array`   | Update a pending job. **OPERATOR**               |
+| `delete` | `delete(string $sessionId, string $jobId): void`                 | Cancel a pending job. **OPERATOR**               |
 
 #### `health`
 

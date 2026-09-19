@@ -5668,7 +5668,8 @@ The migration set (`MigrationTables`) is, in payload-key order: `sessions`, `web
     "webhookOutboxEvents": [],
     "integrationDeliveryFailures": [],
     "statusUpdates": [],
-    "automationRules": []
+    "automationRules": [],
+    "scheduledMessages": []
   },
   "counts": {
     "sessions": 1,
@@ -5686,7 +5687,8 @@ The migration set (`MigrationTables`) is, in payload-key order: `sessions`, `web
     "webhookOutboxEvents": 0,
     "integrationDeliveryFailures": 0,
     "statusUpdates": 0,
-    "automationRules": 0
+    "automationRules": 0,
+    "scheduledMessages": 0
   },
   "skippedTables": []
 }
@@ -5753,7 +5755,8 @@ Replace all Data DB rows with the supplied export. **Destructive and transaction
     "webhookOutboxEvents": [],
     "integrationDeliveryFailures": [],
     "statusUpdates": [],
-    "automationRules": []
+    "automationRules": [],
+    "scheduledMessages": []
   },
   "stopOrphans": true
 }
@@ -5780,7 +5783,8 @@ Replace all Data DB rows with the supplied export. **Destructive and transaction
     "webhookOutboxEvents": 0,
     "integrationDeliveryFailures": 0,
     "statusUpdates": 0,
-    "automationRules": 0
+    "automationRules": 0,
+    "scheduledMessages": 0
   },
   "warnings": [],
   "notices": [],
@@ -6661,6 +6665,48 @@ Partial update (any subset of the create fields). **Auth:** API key (OPERATOR) �
 #### DELETE /api/sessions/:sessionId/automation-rules/:ruleId
 
 Delete a rule. **Auth:** API key (OPERATOR) · **Response** `204`.
+
+### 6.4.16a Scheduled messages (one-shot)
+
+Delayed one-shot sends under `/api/sessions/:sessionId/scheduled-messages`. Text or an http(s) media
+URL (fetched at send time through the SSRF-safe send path). `sendAt` is an ISO-8601 **instant with
+offset**; `timezone` is an IANA name stored for display. Statuses: `pending`, `sending`, `sent`,
+`failed`, `cancelled`. The claim loop runs only when `SCHEDULED_MESSAGES` is on (default on).
+At-most-once: a job is marked `sending` before the send; a crash leaves it `failed` (never
+auto-resent). Overdue jobs past `SCHEDULED_MESSAGES_MAX_LATENESS_MS` fail. A pacing 429 reschedules
+with backoff. `DELETE` cancels a pending job (row kept). Sends go through `MessageService`.
+
+#### POST /api/sessions/:sessionId/scheduled-messages
+
+Create a job. **Auth:** API key (OPERATOR)
+
+**Request body** — `chatId` (required), `sendAt` (ISO instant with offset), `timezone` (IANA, default
+`UTC`), `text` and/or `mediaUrl`, optional `mediaType` (`text`/`image`/`video`/`document`/`audio`)
+and `caption`.
+
+**Response** `201` — the job, including `status` and UTC `sendAt`.
+
+**Errors:** `400` flag off, cap, horizon, naive `sendAt`, or neither text nor mediaUrl
+
+#### GET /api/sessions/:sessionId/scheduled-messages
+
+List jobs for the session (soonest first). **Auth:** API key (VIEWER)
+
+#### GET /api/sessions/:sessionId/scheduled-messages/:jobId
+
+Get one job. **Auth:** API key (VIEWER) · `200` or `404` when the job does not belong to the session.
+
+#### PATCH /api/sessions/:sessionId/scheduled-messages/:jobId
+
+Update a **pending** job. **Auth:** API key (OPERATOR) · `200`, `404`, or `409` if not pending.
+
+**Errors:** `409` job is not pending
+
+#### DELETE /api/sessions/:sessionId/scheduled-messages/:jobId
+
+Cancel a pending job. **Auth:** API key (OPERATOR) · **Response** `204`. `409` if not pending.
+
+**Errors:** `409` job is not pending
 
 ### 6.4.17 Integration fabric (ingress & instances)
 

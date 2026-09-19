@@ -48,6 +48,7 @@ from .resources import (
     StatusResource,
     TemplatesResource,
     WebhooksResource,
+    ScheduledMessagesResource,
 )
 from .types import AuthValidateResponse
 
@@ -163,6 +164,10 @@ class OpenWAClient:
     @property
     def media(self) -> MediaResource:
         return MediaResource(self._http)
+
+    @property
+    def scheduled_messages(self) -> ScheduledMessagesResource:
+        return ScheduledMessagesResource(self._http)
 
     # ── Auth ─────────────────────────────────────────────────────────
 

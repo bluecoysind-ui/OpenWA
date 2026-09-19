@@ -69,7 +69,8 @@ type Client struct {
 	Auth      *AuthService
 	Profile   *ProfileService
 	Calls     *CallsService
-	Media     *MediaService
+	Media             *MediaService
+	ScheduledMessages *ScheduledMessagesService
 }
 
 var localhostHosts = map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
@@ -152,6 +153,7 @@ func New(baseURL, apiKey string, opts ...Option) (*Client, error) {
 	c.Profile = &ProfileService{client: c}
 	c.Calls = &CallsService{client: c}
 	c.Media = &MediaService{client: c}
+	c.ScheduledMessages = &ScheduledMessagesService{client: c}
 	return c, nil
 }
 

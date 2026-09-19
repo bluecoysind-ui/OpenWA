@@ -65,7 +65,8 @@ MessageType = Literal[
     "unknown",
 ]
 WebhookEvent = Literal[
-    "message.received", "message.sent", "message.ack", "message.failed", "message.revoked",
+    "message.received", "message.sent", "message.ack", "message.failed",
+    "scheduled.message.sent", "scheduled.message.failed", "message.revoked",
     "message.reaction", "message.edited", "session.status", "session.qr", "session.authenticated",
     "session.disconnected", "session.reconnect_loop", "session.restriction", "presence.update",
     "group.join", "group.leave", "group.update", "group.join_request",

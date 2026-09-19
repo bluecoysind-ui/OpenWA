@@ -915,6 +915,8 @@ export type WebhookEvent =
   | 'message.sent'
   | 'message.ack'
   | 'message.failed'
+  | 'scheduled.message.sent'
+  | 'scheduled.message.failed'
   | 'message.revoked'
   | 'message.reaction'
   | 'message.edited'
