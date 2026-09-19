@@ -73,6 +73,10 @@ class SessionsResource:
         """Return a single session."""
         return self._http.request("GET", f"/api/sessions/{quote_segment(session_id)}")
 
+    def get_own_profile(self, session_id: str) -> dict:
+        """Read the logged-in account profile (phone, push name, about, picture URL). VIEWER."""
+        return self._http.request("GET", f"/api/sessions/{quote_segment(session_id)}/profile")
+
     def create(self, body: CreateSessionRequest) -> SessionResponse:
         """Provision a new session."""
         return self._http.request("POST", "/api/sessions", body=body)

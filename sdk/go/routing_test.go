@@ -19,6 +19,7 @@ func TestRouting(t *testing.T) {
 	}{
 		{"Sessions.List", func(c *Client) { c.Sessions.List(ctx, nil) }, "GET", "/api/sessions"},
 		{"Sessions.Get", func(c *Client) { c.Sessions.Get(ctx, "s1") }, "GET", "/api/sessions/s1"},
+		{"Sessions.GetOwnProfile", func(c *Client) { c.Sessions.GetOwnProfile(ctx, "s1") }, "GET", "/api/sessions/s1/profile"},
 		{"Sessions.Create", func(c *Client) { c.Sessions.Create(ctx, CreateSessionRequest{}) }, "POST", "/api/sessions"},
 		{"Sessions.GetConfig", func(c *Client) { c.Sessions.GetConfig(ctx, "s1") }, "GET", "/api/sessions/s1/config"},
 		{"Sessions.UpdateConfig", func(c *Client) { c.Sessions.UpdateConfig(ctx, "s1", UpdateSessionConfigRequest{}) }, "PATCH", "/api/sessions/s1/config"},
@@ -60,6 +61,7 @@ func TestRouting(t *testing.T) {
 		{"Contacts.List", func(c *Client) { c.Contacts.List(ctx, "s1", nil) }, "GET", "/api/sessions/s1/contacts"},
 		{"Contacts.Get", func(c *Client) { c.Contacts.Get(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1"},
 		{"Contacts.Check", func(c *Client) { c.Contacts.Check(ctx, "s1", "628") }, "GET", "/api/sessions/s1/contacts/check/628"},
+		{"Contacts.CheckNumbers", func(c *Client) { c.Contacts.CheckNumbers(ctx, "s1", []string{"628"}) }, "POST", "/api/sessions/s1/contacts/check"},
 		{"Contacts.ProfilePicture", func(c *Client) { c.Contacts.ProfilePicture(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1/profile-picture"},
 		{"Contacts.ProfilePictures", func(c *Client) { c.Contacts.ProfilePictures(ctx, "s1", []string{"u1"}) }, "GET", "/api/sessions/s1/contacts/profile-pictures"},
 		{"Contacts.Phone", func(c *Client) { c.Contacts.Phone(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1/phone"},

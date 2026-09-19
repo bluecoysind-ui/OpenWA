@@ -50,6 +50,26 @@ export class ContactsResource {
     });
   }
 
+  /** Bulk number-on-WhatsApp lookup. Max 50. OPERATOR. GET check/:number is unchanged. */
+  checkNumbers(
+    sessionId: string,
+    body: { numbers: string[] },
+  ): Promise<{
+    results: Array<{
+      input: string;
+      normalized: string | null;
+      exists: boolean;
+      chatId: string | null;
+      error?: string;
+    }>;
+  }> {
+    return this.client.request({
+      method: 'POST',
+      path: `/api/sessions/${encodeSegment(sessionId)}/contacts/check`,
+      body,
+    });
+  }
+
   /** Get the contact's profile picture URL (or null). */
   profilePicture(sessionId: string, contactId: string): Promise<ProfilePictureResponse> {
     return this.client.request<ProfilePictureResponse>({

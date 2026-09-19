@@ -747,6 +747,10 @@ export interface ContactRecord {
    */
   isBlocked?: boolean;
   profilePicUrl?: string | null;
+  /** Privacy-id user-part when this contact is already known as an @lid. */
+  lid?: string;
+  isBusiness?: boolean;
+  verifiedName?: string;
 }
 
 export interface CheckNumberResponse {

@@ -35,6 +35,7 @@
                 "message_sent",
                 "message_failed",
                 "message_multi_forward",
+                "contact_numbers_checked",
                 "send_pacing_blocked",
                 "send_breaker_tripped",
                 "webhook_created",
@@ -4908,6 +4909,58 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/contacts/check": {
+      "post": {
+        "description": "Max 50 numbers, deduped after normalize. Invalid entries are per-item errors, not a 400 for the batch. Per-session rate limit (CONTACT_CHECK_RATE_MAX / WINDOW_MS, default 10/min). GET check/:number is unchanged.",
+        "operationId": "ContactController_checkNumbers",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckNumbersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-number results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckNumbersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session not started or more than 50 numbers"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          },
+          "429": {
+            "description": "Per-session contact-check rate limit"
+          }
+        },
+        "summary": "Check whether phone numbers exist on WhatsApp (bulk)",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/contacts/{contactId}/profile-picture": {
       "get": {
         "operationId": "ContactController_getProfilePicture",
@@ -6224,6 +6277,45 @@
         "summary": "Revoke group invite code and generate new one",
         "tags": [
           "groups"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/profile": {
+      "get": {
+        "description": "Phone number, push name, about text, and profile picture URL. VIEWER. Session not started is the usual 400.",
+        "operationId": "ProfileController_getOwnProfile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Own profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session is not started"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          }
+        },
+        "summary": "Get the logged-in account profile",
+        "tags": [
+          "profile"
         ]
       }
     },
@@ -10808,16 +10900,20 @@
             "description": "Chat ID in the active engine's native format (e.g. 1234567890-123@g.us on whatsapp-web.js)",
             "example": "1234567890-123@g.us"
           },
+          "durationSec": {
+            "type": "number",
+            "description": "Mute for this many seconds from now. Cannot be sent together with `muteUntil`. Positive integer, max 31536000 (365 days).",
+            "example": 3600
+          },
           "muteUntil": {
             "type": "number",
-            "description": "Absolute epoch-MILLISECONDS timestamp at which the mute expires, or `null` to unmute now. Required — omitting it is rejected rather than guessed, because the two plausible readings (unmute vs mute forever) are opposites. To mute indefinitely, send a far-future timestamp. Milliseconds, not seconds: a seconds-scale value is an instant in 1970, so the mute expires immediately while the request still answers 200.",
+            "description": "Absolute epoch-MILLISECONDS timestamp at which the mute expires, or `null` to unmute now. Required unless `durationSec` is sent — omitting both is rejected rather than guessed, because the two plausible readings (unmute vs mute forever) are opposites. To mute indefinitely, send a far-future timestamp. Milliseconds, not seconds: a seconds-scale value is an instant in 1970, so the mute expires immediately while the request still answers 200. Cannot be sent together with `durationSec`.",
             "example": 1800000000000,
             "nullable": true
           }
         },
         "required": [
-          "chatId",
-          "muteUntil"
+          "chatId"
         ]
       },
       "PinChatDto": {
@@ -14764,6 +14860,19 @@
             "type": "string",
             "description": "Profile picture URL. Absent when the contact has none or their privacy settings hide it.",
             "example": "https://pps.whatsapp.net/v/t61.24694-24/12345_678_910_n.jpg"
+          },
+          "lid": {
+            "type": "string",
+            "description": "Privacy-id user-part when this contact is already known as an @lid. Never fetched extra.",
+            "example": "123456789012345"
+          },
+          "isBusiness": {
+            "type": "boolean",
+            "description": "True when the engine already knew this contact is a business account."
+          },
+          "verifiedName": {
+            "type": "string",
+            "description": "Business verified name when already present on the stored contact."
           }
         },
         "required": [
@@ -14816,6 +14925,73 @@
           "number",
           "exists",
           "whatsappId"
+        ]
+      },
+      "CheckNumbersDto": {
+        "type": "object",
+        "properties": {
+          "numbers": {
+            "minItems": 1,
+            "maxItems": 50,
+            "example": [
+              "628123456789",
+              "+62 812-345-6789"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "numbers"
+        ]
+      },
+      "NumberCheckItemDto": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "example": "628123456789"
+          },
+          "normalized": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789"
+          },
+          "exists": {
+            "type": "boolean",
+            "example": true
+          },
+          "chatId": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789@c.us"
+          },
+          "error": {
+            "type": "string",
+            "example": "invalid"
+          }
+        },
+        "required": [
+          "input",
+          "normalized",
+          "exists",
+          "chatId"
+        ]
+      },
+      "CheckNumbersResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberCheckItemDto"
+            }
+          }
+        },
+        "required": [
+          "results"
         ]
       },
       "ProfilePictureResponseDto": {
@@ -15428,6 +15604,37 @@
           "inviteCode",
           "inviteLink",
           "message"
+        ]
+      },
+      "OwnProfileDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789"
+          },
+          "pushName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Ada"
+          },
+          "about": {
+            "type": "string",
+            "nullable": true,
+            "example": "Busy"
+          },
+          "profilePictureUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://pps.whatsapp.net/v/t61.24694-24/n.jpg"
+          }
+        },
+        "required": [
+          "phone",
+          "pushName",
+          "about",
+          "profilePictureUrl"
         ]
       },
       "SetProfileNameDto": {

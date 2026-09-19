@@ -277,6 +277,33 @@ Get a single session by ID.
 
 **Errors:** `401` missing/invalid key, or key not scoped to this session · `404` session not found
 
+#### GET /api/sessions/:sessionId/profile
+
+The logged-in account's phone number, push name, about text, and profile picture URL. VIEWER. No adapter internals. Session not started is the usual `400`.
+
+**Auth:** API key · **Scope:** session-scoped
+
+**Path parameters**
+
+| Name        | Type   | Description           |
+| ----------- | ------ | --------------------- |
+| `sessionId` | string | WhatsApp session UUID |
+
+**Response** `200`
+
+```json
+{
+  "phone": "628123456789",
+  "pushName": "Ada",
+  "about": "Busy",
+  "profilePictureUrl": "https://pps.whatsapp.net/v/t61.24694-24/n.jpg"
+}
+```
+
+Nulls are omitted-as-null, not missing keys: a hidden about or picture is `null`.
+
+**Errors:** `400` session is not started · `401` missing/invalid API key, or key not scoped to this session · `409` engine not ready (retryable)
+
 #### GET /api/sessions/:sessionId/config
 
 Get the effective tunable configuration for a session. Only the three recognised keys are reported,
@@ -1060,13 +1087,18 @@ Mute a chat's notifications until a given moment, or unmute it.
 
 **Request body** — `MuteChatDto`
 
-| Field       | Type           | Required | Constraints                                                                                 | Description                                                     |
-| ----------- | -------------- | -------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `chatId`    | string         | Yes      | `@IsString`; `@IsNotEmpty`; `@Matches(/^[^\s@]+@[^\s@]+$/)` (localpart@host, no whitespace) | Engine-native JID, e.g. `1234567890-123@g.us`                   |
-| `muteUntil` | number \| null | Yes      | `@IsInt`; `@Min(1)` when not `null`                                                         | Epoch **milliseconds** the mute expires at, or `null` to unmute |
+| Field         | Type           | Required | Constraints                                                                                 | Description                                                                                           |
+| ------------- | -------------- | -------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `chatId`      | string         | Yes      | `@IsString`; `@IsNotEmpty`; `@Matches(/^[^\s@]+@[^\s@]+$/)` (localpart@host, no whitespace) | Engine-native JID, e.g. `1234567890-123@g.us`                                                         |
+| `durationSec` | number         | No       | `@IsInt`; `@Min(1)`; `@Max(31536000)` (365 days)                                            | Mute for this many seconds from now. Cannot be sent together with `muteUntil`.                        |
+| `muteUntil`   | number \| null | No\*     | `@IsInt`; `@Min(1)` when not `null`                                                         | Epoch **milliseconds** the mute expires at, or `null` to unmute. Required unless `durationSec` is set |
 
 ```json
 { "chatId": "1234567890-123@g.us", "muteUntil": 1800000000000 }
+```
+
+```json
+{ "chatId": "1234567890-123@g.us", "durationSec": 3600 }
 ```
 
 ```json
@@ -1079,10 +1111,7 @@ Mute a chat's notifications until a given moment, or unmute it.
 { "success": true }
 ```
 
-> **`muteUntil` is required, and `null` is not the same as omitting it.** The two plausible readings
-> of a missing field — unmute, or mute forever — are opposites, so the endpoint rejects the omission
-> with a `400` instead of guessing. Send `null` to unmute. To mute indefinitely, send a far-future
-> timestamp: neither engine exposes a portable "forever" value (whatsapp-web.js uses `-1` internally,
+> **One of `muteUntil` or `durationSec` is required.** Sending both is `400`. `muteUntil: null` still unmutes. Omitting both is rejected rather than guessed, because unmute vs mute-forever are opposites. To mute indefinitely, send a far-future `muteUntil` timestamp: neither engine exposes a portable "forever" value (whatsapp-web.js uses `-1` internally,
 > Baileys has none), so the API keeps one well-defined shape.
 
 > **Milliseconds, not seconds.** This was measured against a live WhatsApp account rather than read
@@ -2134,12 +2163,12 @@ Forward a message from one chat to another.
 
 **Request body** — `ForwardMessageDto`
 
-| Field      | Type     | Required | Constraints | Description                                                                                                                                                                                                |
-| ---------- | -------- | -------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| fromChatId | string   | Yes      | non-empty   | Source chat                                                                                                                                                                                                                                                                      |
-| toChatId   | string   | No*      | non-empty   | Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged.                                                                                                                                                            |
+| Field      | Type     | Required | Constraints | Description                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | -------- | -------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fromChatId | string   | Yes      | non-empty   | Source chat                                                                                                                                                                                                                                                                                                                                     |
+| toChatId   | string   | No*      | non-empty   | Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged.                                                                                                                                                                                                                           |
 | toChatIds  | string[] | No*      | max 10      | Destinations (unique with `toChatId`). Combined unique set capped at **10**. Each dest is paced (`assertSendAllowed`; no inter-dest sleep). N=1 keeps `{ messageId, timestamp }` at 201. N>1 returns `{ fromChatId, messageId, results[] }` at **201** all sent / **207** mixed / **502** all failed. N>1 is audited (`message_multi_forward`). |
-| messageId  | string   | Yes      | non-empty   | WhatsApp id of the message to forward                                                                                                                                                                                                                                            |
+| messageId  | string   | Yes      | non-empty   | WhatsApp id of the message to forward                                                                                                                                                                                                                                                                                                           |
 
 ```json
 { "fromChatId": "628111111111@c.us", "toChatId": "628222222222@c.us", "messageId": "true_628111111111@c.us_3EB0XYZ" }
@@ -2455,6 +2484,34 @@ Check whether a phone number exists on WhatsApp and return its canonical WhatsAp
 
 **Errors:** `400` session is not started · `401` missing/invalid API key · `409` conflict or engine not ready (retryable) · `503` session not ready or dependency unavailable (retryable)
 
+#### POST /api/sessions/:sessionId/contacts/check
+
+Bulk number-on-WhatsApp lookup. Max 50 numbers, deduped after normalize. Invalid entries are per-item errors (`error`), not a `400` for the batch. GET `check/:number` is unchanged. This is number enumeration: per-session rate limit `CONTACT_CHECK_RATE_MAX` / `CONTACT_CHECK_RATE_WINDOW_MS` (default 10 requests per 60s) on top of the 50 cap; `429` with `code: CONTACT_CHECK_RATE` when exceeded. Audited as `contact_numbers_checked`. OPERATOR.
+
+**Auth:** API key (OPERATOR) · **Scope:** session-scoped
+
+**Request body**
+
+```json
+{ "numbers": ["628123456789", "+62 812-345-6789", "not-a-number"] }
+```
+
+**Response** `200`
+
+```json
+{
+  "results": [
+    { "input": "628123456789", "normalized": "628123456789", "exists": true, "chatId": "628123456789@c.us" },
+    { "input": "+62 812-345-6789", "normalized": "628123456789", "exists": true, "chatId": "628123456789@c.us" },
+    { "input": "not-a-number", "normalized": null, "exists": false, "chatId": null, "error": "invalid" }
+  ]
+}
+```
+
+Duplicate inputs after normalize share one engine lookup; each input still gets its own row. Baileys batches via `onWhatsApp`; whatsapp-web.js walks sequentially with 50–150 ms jitter.
+
+**Errors:** `400` session not started, empty `numbers`, or more than 50 · `401` missing/invalid API key, or key not scoped to this session · `403` VIEWER key · `429` per-session contact-check rate limit · `409` engine not ready · `503` WhatsApp did not answer the lookup
+
 #### GET /api/sessions/:sessionId/contacts/:contactId
 
 Get a single contact by its WhatsApp id.
@@ -2481,6 +2538,8 @@ Get a single contact by its WhatsApp id.
   "profilePicUrl": "https://pps.whatsapp.net/v/..."
 }
 ```
+
+Optional `lid`, `isBusiness`, and `verifiedName` appear only when already on the engine contact or `lid_mappings`. They are never fetched with an extra per-contact network call.
 
 **Errors:** `400` session is not started · `401` missing/invalid API key · `404` `Contact <id> not found` (engine returned null) · `409` conflict or engine not ready (retryable) · `503` the whatsapp-web.js page died mid-read, so the lookup reached no answer (distinct from the `404`, which asserts the contact does not exist)
 

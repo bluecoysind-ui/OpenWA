@@ -149,3 +149,9 @@ New entities live on the **`data` connection**. Each migration is created in the
 - **Multi-forward latency:** `SendPacingService` is a cap/breaker, not a sleep. Destinations run sequentially (engine RTT + persist). Typical ~0.3–2s each → ~6–40s for 20 dests. Worst-case is one engine hang × N (same class as a single forward). 202 + pollable would be a new batch pipeline (stop: big; send-bulk already does that). **Choice:** stay synchronous; lower unique dest cap **20 → 10** so typical totals stay near the ~20s HTTP budget.
 - **Multi-forward HTTP:** N=1 unchanged (201 or thrown 4xx/501). N>1 with `results[]`: **201** all sent, **207** mixed, **502** all failed.
 - **`toChatId`:** optional when `toChatIds` is non-empty; at least one dest required. `toChatId` alone is unchanged.
+
+## D24 — WP3 chat GET skipped; groups/labels already covered
+
+`GET /chats/:chatId` is **not** added. `GET /sessions/:id/chats` already returns `ChatSummary` (id, name, kind, unread, lastMessage, archived, pinned, muted, muteExpiration) which is enough for a WP7 chat header/actions pane. History is `GET .../messages?chatId=` / `.../messages/:chatId/history`.
+
+Groups and labels: no new code. Inventory (list/get/join/leave/create, invite get+revoke, members, subject/description/picture, settings, ephemeral, label CRUD, chat labels, chats-by-label) is already on the existing controllers. Documented 501s stay: wwjs `createGroup`, wwjs group ephemeral, Baileys chats-by-label, wwjs label create/delete. See docs/29 and GAP 4.7–4.8.
