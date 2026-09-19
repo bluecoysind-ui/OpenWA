@@ -20,6 +20,7 @@ import com.rmyndharis.openwa.model.AuthValidateResponse;
 import com.rmyndharis.openwa.resources.CallsResource;
 import com.rmyndharis.openwa.resources.MediaResource;
 import com.rmyndharis.openwa.resources.ScheduledMessagesResource;
+import com.rmyndharis.openwa.resources.BotConfigResource;
 import com.rmyndharis.openwa.resources.CatalogResource;
 import com.rmyndharis.openwa.resources.ChannelsResource;
 import com.rmyndharis.openwa.resources.ChatsResource;
@@ -86,6 +87,7 @@ public final class OpenWAClient {
     public final CallsResource calls = new CallsResource(this);
     public final MediaResource media = new MediaResource(this);
     public final ScheduledMessagesResource scheduledMessages = new ScheduledMessagesResource(this);
+    public final BotConfigResource botConfig = new BotConfigResource(this);
 
     public OpenWAClient(ClientConfig config) {
         // ClientConfig's constructor validates baseUrl/apiKey/timeout, so config is already sound here.

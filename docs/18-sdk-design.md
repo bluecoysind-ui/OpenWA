@@ -44,6 +44,7 @@ All five SDKs expose the same fluent surface:
 | `calls`     | rejectCall, createLink                                                                                                                                                                                                                                                                                   |
 | `media`     | conversionStatus, convertVoice, convertVideo _(OPERATOR)_                                                                                                                                                                                                                                                |
 | `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
+| `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                                                |
 | `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
 
 > The SDKs cover the user-facing resources above and stop there. The administrative and operational surfaces are deliberately left out — `auth/api-keys`, `audit`, `settings`, `stats`, `automation`, `infra`, `plugins` and the `integration` management routes are predominantly `ADMIN`-gated; `metrics` is a `@Public()` Prometheus scrape gated by `METRICS_TOKEN` rather than by role; `mcp` is a Streamable-HTTP transport mounted straight onto the Express adapter; and `ingress` is the `@Public()` receiver that integration providers post into. `docker` has no HTTP surface at all — it is an internal service module. Methods that require an `OPERATOR`-level key are annotated **OPERATOR** in the per-language tables below.
@@ -354,6 +355,13 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `get`    | `get(sessionId, jobId)`            | Get one scheduled job.                                                      |
 | `update` | `update(sessionId, jobId, body)`   | Update a pending job. **OPERATOR**                                          |
 | `delete` | `delete(sessionId, jobId)`         | Cancel a pending job. **OPERATOR**                                          |
+
+#### `bot-config`
+
+| Method   | Signature                    | Description                                              |
+| -------- | ---------------------------- | -------------------------------------------------------- |
+| `get`    | `get(sessionId)`             | Get the session bot config (defaults if never saved).    |
+| `update` | `update(sessionId, body)`    | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
 
 #### `health`
 
@@ -738,6 +746,13 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `update` | `update(session_id, job_id, body)`                 | Update a pending job. **OPERATOR**               |
 | `delete` | `delete(session_id, job_id)`                       | Cancel a pending job. **OPERATOR**               |
 
+#### `client.bot-config`
+
+| Method   | Signature                          | Description                                              |
+| -------- | ---------------------------------- | -------------------------------------------------------- |
+| `get`    | `get(session_id)`                  | Get the session bot config (defaults if never saved).    |
+| `update` | `update(session_id, body)`         | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
+
 #### `client.health`
 
 | Method  | Signature                        | Description             |
@@ -1095,6 +1110,13 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `get`    | `get(string $sessionId, string $jobId): array`                   | Get one scheduled job.                           |
 | `update` | `update(string $sessionId, string $jobId, array $body): array`   | Update a pending job. **OPERATOR**               |
 | `delete` | `delete(string $sessionId, string $jobId): void`                 | Cancel a pending job. **OPERATOR**               |
+
+#### `bot-config`
+
+| Method   | Signature                                              | Description                                              |
+| -------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| `get`    | `get(string $sessionId): array`                        | Get the session bot config (defaults if never saved).    |
+| `update` | `update(string $sessionId, array $body): array`        | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
 
 #### `health`
 

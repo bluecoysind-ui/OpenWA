@@ -22,6 +22,7 @@ from .sessions import SessionsResource
 from .status import StatusResource
 from .templates import TemplatesResource
 from .scheduled_messages import ScheduledMessagesResource
+from .bot_config import BotConfigResource
 from .webhooks import WebhooksResource
 
 __all__ = [
@@ -42,4 +43,5 @@ __all__ = [
     "TemplatesResource",
     "WebhooksResource",
     "ScheduledMessagesResource",
+    "BotConfigResource",
 ]

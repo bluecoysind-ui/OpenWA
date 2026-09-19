@@ -5619,7 +5619,7 @@ Request a graceful server restart, optionally orchestrating Docker profiles (add
 
 #### GET /api/infra/export-data
 
-Export every row of the 16 migration tables from the Data DB as JSON. Read-only, but runs raw `SELECT *` on the `data` DataSource.
+Export every row of the 18 migration tables from the Data DB as JSON. Read-only, but runs raw `SELECT *` on the `data` DataSource.
 
 **Auth:** API key (ADMIN)
 
@@ -5669,7 +5669,8 @@ The migration set (`MigrationTables`) is, in payload-key order: `sessions`, `web
     "integrationDeliveryFailures": [],
     "statusUpdates": [],
     "automationRules": [],
-    "scheduledMessages": []
+    "scheduledMessages": [],
+    "botConfigs": []
   },
   "counts": {
     "sessions": 1,
@@ -5688,7 +5689,8 @@ The migration set (`MigrationTables`) is, in payload-key order: `sessions`, `web
     "integrationDeliveryFailures": 0,
     "statusUpdates": 0,
     "automationRules": 0,
-    "scheduledMessages": 0
+    "scheduledMessages": 0,
+    "botConfigs": 0
   },
   "skippedTables": []
 }
@@ -5696,7 +5698,7 @@ The migration set (`MigrationTables`) is, in payload-key order: `sessions`, `web
 
 Rows are raw DB column shapes (e.g. `messageBatches` rows use snake_case columns: `batch_id`, `session_id`, `current_index`, `created_at`, …). **`webhooks` rows omit `secret` and `headers`** (webhook credentials are excluded from backups; they restore as `null`/`{}`), while `pluginInstances` rows still carry integration secrets — treat the payload as a credential dump. On Postgres the generated `body_ts` FTS column is stripped from `messages` so archives stay dialect-neutral.
 
-`sessions`/`webhooks` are queried directly, so a hard DB error there yields `500`. The other 14 are queried tolerantly: a _genuinely missing_ table (an older DB that has not run the migration) exports as `[]` and its name is listed in `skippedTables`; any other error (lock, I/O, timeout) fails the export rather than reporting the table as empty. Check `skippedTables` before restoring — a skipped table is "not migrated yet", not "exported empty".
+`sessions`/`webhooks` are queried directly, so a hard DB error there yields `500`. The other 15 are queried tolerantly: a _genuinely missing_ table (an older DB that has not run the migration) exports as `[]` and its name is listed in `skippedTables`; any other error (lock, I/O, timeout) fails the export rather than reporting the table as empty. Check `skippedTables` before restoring — a skipped table is "not migrated yet", not "exported empty".
 
 **Errors:** `401` · `403` · `500` DB error
 
@@ -5706,7 +5708,7 @@ Rows are raw DB column shapes (e.g. `messageBatches` rows use snake_case columns
 
 Replace all Data DB rows with the supplied export. **Destructive and transactional (all-or-nothing).**
 
-> **The replace covers all 16 migration tables, not just the ones you send.** Inside the transaction every table in the migration set is emptied first and only then re-populated from the payload, so a table you omit ends up **empty**, not untouched. Always restore a payload produced by `GET /api/infra/export-data` of the same or a newer build — a hand-built body carrying only a subset silently wipes the rest.
+> **The replace covers all 18 migration tables, not just the ones you send.** Inside the transaction every table in the migration set is emptied first and only then re-populated from the payload, so a table you omit ends up **empty**, not untouched. Always restore a payload produced by `GET /api/infra/export-data` of the same or a newer build — a hand-built body carrying only a subset silently wipes the rest.
 
 **Auth:** API key (ADMIN)
 
@@ -5756,7 +5758,8 @@ Replace all Data DB rows with the supplied export. **Destructive and transaction
     "integrationDeliveryFailures": [],
     "statusUpdates": [],
     "automationRules": [],
-    "scheduledMessages": []
+    "scheduledMessages": [],
+    "botConfigs": []
   },
   "stopOrphans": true
 }
@@ -5784,7 +5787,8 @@ Replace all Data DB rows with the supplied export. **Destructive and transaction
     "integrationDeliveryFailures": 0,
     "statusUpdates": 0,
     "automationRules": 0,
-    "scheduledMessages": 0
+    "scheduledMessages": 0,
+    "botConfigs": 0
   },
   "warnings": [],
   "notices": [],
@@ -6631,6 +6635,10 @@ Create a rule. **Auth:** API key (OPERATOR)
 | conditions      | object  | no       | Webhook-filter conditions (`message` family). Omitted = match all. |
 | cooldownSeconds | number  | no       | Per-chat quiet period, 0–86400. Default `60`.                      |
 | enabled         | boolean | no       | Default `true`.                                                    |
+| matchMode       | string  | no       | `equals` / `contains` (default) / `startsWith` / `regex`. Extra body match after `conditions`. Empty `matchPattern` skips this. `regex` requires `AUTO_REPLY_REGEX=true`. |
+| matchPattern    | string  | no       | Pattern for `matchMode`. Regex length capped (`AUTO_REPLY_REGEX_MAX_PATTERN`, default 256); inbound body is truncated to the same cap. |
+| chatContext     | string  | no       | `all` (default) / `group` / `private`.                             |
+| replyMediaUrl   | string  | no       | http(s) image URL; sent via the SSRF-safe send-image path with `replyText` as caption. |
 
 **Response** `201`
 
@@ -6643,12 +6651,18 @@ Create a rule. **Auth:** API key (OPERATOR)
   "conditions": { "conditions": [{ "field": "body", "operator": "contains", "value": "price" }] },
   "replyText": "Thanks for reaching out — we reply within the hour.",
   "cooldownSeconds": 60,
+  "matchMode": "contains",
+  "matchPattern": null,
+  "chatContext": "all",
+  "replyMediaUrl": null,
   "createdAt": "2026-08-04T10:00:00.000Z",
   "updatedAt": "2026-08-04T10:00:00.000Z"
 }
 ```
 
-`400` — invalid conditions (unknown field/operator, over-limit values) or over-limit text.
+`400` — invalid conditions (unknown field/operator, over-limit values) or over-limit text; `regex` matchMode while `AUTO_REPLY_REGEX` is off; invalid or over-long regex.
+
+Bot-config access lists (allow/block) are evaluated **before** rule conditions. `fromMe` is skipped. Rules are cached per session and invalidated on CRUD.
 
 #### GET /api/sessions/:sessionId/automation-rules
 
@@ -6707,6 +6721,29 @@ Update a **pending** job. **Auth:** API key (OPERATOR) · `200`, `404`, or `409`
 Cancel a pending job. **Auth:** API key (OPERATOR) · **Response** `204`. `409` if not pending.
 
 **Errors:** `409` job is not pending
+
+### 6.4.16b Bot config and commands
+
+Per-session bot settings under `/api/sessions/:sessionId/bot-config`. Access lists are evaluated
+**before** automation-rule conditions and before commands. `BOT_COMMANDS=false` (default) means the
+commands module registers no `message:received` hook. Built-in commands (`#ping`, `#id`, `#uptime`,
+`#menu`, `#sticker <https-url>`) use the paced send path; sticker takes a URL only (no inbound media
+bytes). Welcome text fires on `group.join` through the same send path.
+
+#### GET /api/sessions/:sessionId/bot-config
+
+Return the saved config, or the defaults if none has been saved. **Auth:** API key (VIEWER)
+
+#### PUT /api/sessions/:sessionId/bot-config
+
+Upsert. **Auth:** API key (OPERATOR)
+
+**Request body** (all optional): `accessMode` (`all` / `allow` / `block`), `allowList[]`, `blockList[]`
+(max 500), `prefix` (default `#`), `commandsEnabled`, `autoRead`, `alwaysOnline`, `welcomeMessage`.
+
+**Response** `200` — the stored config.
+
+**Errors:** `400` invalid body
 
 ### 6.4.17 Integration fabric (ingress & instances)
 

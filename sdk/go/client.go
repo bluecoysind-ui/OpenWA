@@ -71,6 +71,7 @@ type Client struct {
 	Calls     *CallsService
 	Media             *MediaService
 	ScheduledMessages *ScheduledMessagesService
+	BotConfig         *BotConfigService
 }
 
 var localhostHosts = map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
@@ -154,6 +155,7 @@ func New(baseURL, apiKey string, opts ...Option) (*Client, error) {
 	c.Calls = &CallsService{client: c}
 	c.Media = &MediaService{client: c}
 	c.ScheduledMessages = &ScheduledMessagesService{client: c}
+	c.BotConfig = &BotConfigService{client: c}
 	return c, nil
 }
 

@@ -32,6 +32,7 @@
                 "session_restricted",
                 "session_restriction_lifted",
                 "session_rebind_rejected",
+                "bot_config_updated",
                 "message_sent",
                 "message_failed",
                 "message_multi_forward",
@@ -8495,6 +8496,78 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/bot-config": {
+      "get": {
+        "operationId": "BotConfigController_get",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotConfigResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get the session bot config (defaults if never saved)",
+        "tags": [
+          "bot"
+        ]
+      },
+      "put": {
+        "operationId": "BotConfigController_put",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBotConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotConfigResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create or replace the session bot config",
+        "tags": [
+          "bot"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/catalog": {
       "get": {
         "operationId": "CatalogController_getCatalog",
@@ -11738,6 +11811,35 @@
             "type": "boolean",
             "description": "Whether the rule is active",
             "default": true
+          },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ],
+            "default": "contains",
+            "description": "Body matcher applied after webhook-filter conditions. regex requires AUTO_REPLY_REGEX=true."
+          },
+          "matchPattern": {
+            "type": "object",
+            "description": "Pattern for matchMode. Omitted = no extra body match (conditions-only).",
+            "maxLength": 1024
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ],
+            "default": "all"
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "description": "http(s) image URL sent as the reply (SSRF-safe fetch at send time). replyText becomes the caption."
           }
         },
         "required": [
@@ -11771,6 +11873,31 @@
           "cooldownSeconds": {
             "type": "number"
           },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ]
+          },
+          "matchPattern": {
+            "type": "object",
+            "nullable": true
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ]
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -11787,6 +11914,8 @@
           "enabled",
           "replyText",
           "cooldownSeconds",
+          "matchMode",
+          "chatContext",
           "createdAt",
           "updatedAt"
         ]
@@ -11817,6 +11946,32 @@
           "enabled": {
             "type": "boolean",
             "description": "Whether the rule is active"
+          },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ]
+          },
+          "matchPattern": {
+            "type": "object",
+            "maxLength": 1024,
+            "nullable": true
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ]
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "nullable": true
           }
         }
       },
@@ -14607,6 +14762,12 @@
             "items": {
               "type": "object"
             }
+          },
+          "botConfigs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
         },
         "required": [
@@ -14626,7 +14787,8 @@
           "integrationDeliveryFailures",
           "statusUpdates",
           "automationRules",
-          "scheduledMessages"
+          "scheduledMessages",
+          "botConfigs"
         ]
       },
       "TableCountsDto": {
@@ -14699,6 +14861,10 @@
           "scheduledMessages": {
             "type": "number",
             "example": 0
+          },
+          "botConfigs": {
+            "type": "number",
+            "example": 0
           }
         },
         "required": [
@@ -14718,7 +14884,8 @@
           "integrationDeliveryFailures",
           "statusUpdates",
           "automationRules",
-          "scheduledMessages"
+          "scheduledMessages",
+          "botConfigs"
         ]
       },
       "OmittedInlineMediaDto": {
@@ -14795,7 +14962,7 @@
         "properties": {
           "tables": {
             "type": "object",
-            "description": "Every one of the 17 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
+            "description": "Every one of the 18 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
             "properties": {
               "sessions": {
                 "type": "array"
@@ -14846,6 +15013,9 @@
                 "type": "array"
               },
               "scheduledMessages": {
+                "type": "array"
+              },
+              "botConfigs": {
                 "type": "array"
               }
             }
@@ -17063,6 +17233,121 @@
           "caption": {
             "type": "object",
             "maxLength": 1024
+          }
+        }
+      },
+      "BotConfigResponseDto": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "allow",
+              "block"
+            ]
+          },
+          "allowList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "commandsEnabled": {
+            "type": "boolean"
+          },
+          "autoRead": {
+            "type": "boolean"
+          },
+          "alwaysOnline": {
+            "type": "boolean"
+          },
+          "welcomeMessage": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "accessMode",
+          "allowList",
+          "blockList",
+          "prefix",
+          "commandsEnabled",
+          "autoRead",
+          "alwaysOnline",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateBotConfigDto": {
+        "type": "object",
+        "properties": {
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "allow",
+              "block"
+            ],
+            "default": "all"
+          },
+          "allowList": {
+            "description": "JIDs / user-parts allowed when accessMode is allow. Matched before rule conditions.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockList": {
+            "description": "JIDs / user-parts always denied. Evaluated before allow-list and before rule conditions.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Command prefix (e.g. #). Default #.",
+            "default": "#"
+          },
+          "commandsEnabled": {
+            "type": "boolean",
+            "description": "Per-session command switch. Global BOT_COMMANDS must also be on."
+          },
+          "autoRead": {
+            "type": "boolean",
+            "description": "Mark inbound chats read after an allowed message."
+          },
+          "alwaysOnline": {
+            "type": "boolean",
+            "description": "Set engine presence available when saved and a live engine exists."
+          },
+          "welcomeMessage": {
+            "type": "object",
+            "description": "Text sent to a group on group.join, through the paced send path. Empty disables.",
+            "maxLength": 4096,
+            "nullable": true
           }
         }
       },

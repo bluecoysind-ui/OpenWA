@@ -11,6 +11,7 @@ use OpenWA\Resources\CatalogResource;
 use OpenWA\Resources\CallsResource;
 use OpenWA\Resources\MediaResource;
 use OpenWA\Resources\ScheduledMessagesResource;
+use OpenWA\Resources\BotConfigResource;
 use OpenWA\Resources\ChannelsResource;
 use OpenWA\Resources\ChatsResource;
 use OpenWA\Resources\ContactsResource;
@@ -71,6 +72,7 @@ class Client
     public CallsResource $calls;
     public MediaResource $media;
     public ScheduledMessagesResource $scheduledMessages;
+    public BotConfigResource $botConfig;
 
     /**
      * @param array{
@@ -119,6 +121,7 @@ class Client
         $this->calls = new CallsResource($this->http);
         $this->media = new MediaResource($this->http);
         $this->scheduledMessages = new ScheduledMessagesResource($this->http);
+        $this->botConfig = new BotConfigResource($this->http);
     }
 
     /**

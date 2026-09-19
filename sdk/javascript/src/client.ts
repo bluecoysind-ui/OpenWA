@@ -27,6 +27,7 @@ import { request, requestBytes, encodeSegment, warnIfInsecureHttpUrl, type Binar
 import { CallsResource } from './resources/calls.js';
 import { MediaResource } from './resources/media.js';
 import { ScheduledMessagesResource } from './resources/scheduled-messages.js';
+import { BotConfigResource } from './resources/bot-config.js';
 import { CatalogResource } from './resources/catalog.js';
 import { ChannelsResource } from './resources/channels.js';
 import { ChatsResource } from './resources/chats.js';
@@ -93,6 +94,7 @@ export class OpenWAClient {
   readonly calls = new CallsResource(this);
   readonly media = new MediaResource(this);
   readonly scheduledMessages = new ScheduledMessagesResource(this);
+  readonly botConfig = new BotConfigResource(this);
 
   // ── Auth ─────────────────────────────────────────────────────────
 

@@ -49,6 +49,7 @@ from .resources import (
     TemplatesResource,
     WebhooksResource,
     ScheduledMessagesResource,
+    BotConfigResource,
 )
 from .types import AuthValidateResponse
 
@@ -168,6 +169,10 @@ class OpenWAClient:
     @property
     def scheduled_messages(self) -> ScheduledMessagesResource:
         return ScheduledMessagesResource(self._http)
+
+    @property
+    def bot_config(self) -> BotConfigResource:
+        return BotConfigResource(self._http)
 
     # ── Auth ─────────────────────────────────────────────────────────
 
