@@ -394,6 +394,7 @@ export class MigrationTablesDto {
   @ApiProperty({ type: [Object] }) statusUpdates!: object[];
   @ApiProperty({ type: [Object] }) automationRules!: object[];
   @ApiProperty({ type: [Object] }) scheduledMessages!: object[];
+  @ApiProperty({ type: [Object] }) botConfigs!: object[];
 }
 
 /** Row count per table, with the same keys as {@link MigrationTablesDto}. */
@@ -415,6 +416,7 @@ export class TableCountsDto {
   @ApiProperty({ example: 5 }) statusUpdates!: number;
   @ApiProperty({ example: 2 }) automationRules!: number;
   @ApiProperty({ example: 0 }) scheduledMessages!: number;
+  @ApiProperty({ example: 0 }) botConfigs!: number;
 }
 
 export class OmittedInlineMediaDto {

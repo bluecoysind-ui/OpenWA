@@ -270,6 +270,9 @@ export const EXPORT_TABLES: AnyExportTable[] = [
 
   // scheduled_messages FKs sessions ON DELETE CASCADE, same restore reason as automation_rules.
   defineExportTable({ key: 'scheduledMessages', table: 'scheduled_messages', optional: true }),
+
+  // bot_configs FKs sessions ON DELETE CASCADE; restore must re-insert or every session loses its bot settings.
+  defineExportTable({ key: 'botConfigs', table: 'bot_configs', optional: true }),
 ];
 
 /**

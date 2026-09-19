@@ -248,6 +248,25 @@ export interface AutomationRuleRow {
   conditions: string | null;
   replyText: string;
   cooldownSeconds: number;
+  matchMode?: string;
+  matchPattern?: string | null;
+  chatContext?: string;
+  replyMediaUrl?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface BotConfigRow {
+  id: string;
+  sessionId: string;
+  accessMode: string;
+  allowList: string | string[];
+  blockList: string | string[];
+  prefix: string;
+  commandsEnabled: boolean | number;
+  autoRead: boolean | number;
+  alwaysOnline: boolean | number;
+  welcomeMessage: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -288,6 +307,7 @@ export interface MigrationTables {
   statusUpdates: StatusUpdateRow[];
   automationRules: AutomationRuleRow[];
   scheduledMessages: ScheduledMessageRow[];
+  botConfigs: BotConfigRow[];
 }
 
 export type TableCounts = { [K in keyof MigrationTables]: number };

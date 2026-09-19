@@ -49,6 +49,7 @@ import {
   ScheduledMediaType,
   ScheduledMessageStatus,
 } from '../scheduler/entities/scheduled-message.entity';
+import { BotConfig } from '../bot/entities/bot-config.entity';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { BadRequestException } from '@nestjs/common';
 
@@ -88,6 +89,7 @@ describe('InfraDataController.importData round-trips export-data (no silent mess
         StatusUpdate,
         AutomationRule,
         ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1230,6 +1232,7 @@ describe('InfraDataController.import/export preserves every data-DB table', () =
         StatusUpdate,
         AutomationRule,
         ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1584,6 +1587,7 @@ describe('InfraDataController audit trail — import emits only on a committed r
         StatusUpdate,
         AutomationRule,
         ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1731,6 +1735,7 @@ describe('InfraDataController.importData status_updates + runtime reconciliation
         StatusUpdate,
         AutomationRule,
         ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });

@@ -18,6 +18,7 @@ import type {
   StatusUpdateRow,
   AutomationRuleRow,
   ScheduledMessageRow,
+  BotConfigRow,
 } from './migration-tables.types';
 
 // A per-table restore step for importData: which backup key to read, the exact INSERT text (kept in
@@ -407,8 +408,8 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'automationRules',
     label: 'automation rule',
-    sql: `INSERT INTO automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "createdAt", "updatedAt")
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    sql: `INSERT INTO automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "matchMode", "matchPattern", "chatContext", "replyMediaUrl", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     id: (rule: AutomationRuleRow) => rule.id,
     map: (rule: AutomationRuleRow) => [
       rule.id,
@@ -418,6 +419,10 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
       rule.conditions ?? null,
       rule.replyText,
       rule.cooldownSeconds ?? 60,
+      rule.matchMode ?? 'contains',
+      rule.matchPattern ?? null,
+      rule.chatContext ?? 'all',
+      rule.replyMediaUrl ?? null,
       rule.createdAt,
       rule.updatedAt,
     ],
@@ -446,6 +451,27 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
       job.updatedAt,
     ],
   }),
+  defineTableImporter({
+    key: 'botConfigs',
+    label: 'bot config',
+    sql: `INSERT INTO bot_configs (id, "sessionId", "accessMode", "allowList", "blockList", prefix, "commandsEnabled", "autoRead", "alwaysOnline", "welcomeMessage", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    id: (row: BotConfigRow) => row.id,
+    map: (row: BotConfigRow) => [
+      row.id,
+      row.sessionId,
+      row.accessMode ?? 'all',
+      typeof row.allowList === 'string' ? row.allowList : JSON.stringify(row.allowList ?? []),
+      typeof row.blockList === 'string' ? row.blockList : JSON.stringify(row.blockList ?? []),
+      row.prefix ?? '#',
+      row.commandsEnabled ?? true,
+      row.autoRead ?? false,
+      row.alwaysOnline ?? false,
+      row.welcomeMessage ?? null,
+      row.createdAt,
+      row.updatedAt,
+    ],
+  }),
 ];
 
 // The `as TableCounts` cast in importData means a dropped or mis-keyed descriptor is invisible to
@@ -469,6 +495,7 @@ const EXPECTED_TABLE_KEYS: ReadonlyArray<keyof MigrationTables> = [
   'statusUpdates',
   'automationRules',
   'scheduledMessages',
+  'botConfigs',
 ];
 const importerKeys = TABLE_IMPORTERS.map(importer => importer.key);
 for (const key of EXPECTED_TABLE_KEYS) {
