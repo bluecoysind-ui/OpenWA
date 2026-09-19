@@ -22,7 +22,7 @@ const dbType = process.env.DATABASE_TYPE || 'sqlite';
 
 const sourceGlob = (...segments: string[]): string => path.join(__dirname, ...segments).replace(/\\/g, '/');
 
-// Scoped to the DATA-owned modules only (session/webhook/message/template/engine/integration/status-store/automation/scheduler), mirroring
+// Scoped to the DATA-owned modules only (session/webhook/message/template/engine/integration/status-store/automation/scheduler/bot), mirroring
 // the runtime data connection (app.module.ts). A broad '**' glob would also sweep in the main-owned
 // auth/audit entities and pollute `migration:generate` against the data DB with their DDL.
 const dataEntities = [
@@ -35,6 +35,7 @@ const dataEntities = [
   sourceGlob('..', 'modules', 'status-store', '**', '*.entity{.ts,.js}'),
   sourceGlob('..', 'modules', 'automation', '**', '*.entity{.ts,.js}'),
   sourceGlob('..', 'modules', 'scheduler', '**', '*.entity{.ts,.js}'),
+  sourceGlob('..', 'modules', 'bot', '**', '*.entity{.ts,.js}'),
 ];
 const dataMigrations = [sourceGlob('migrations', '*{.ts,.js}')];
 

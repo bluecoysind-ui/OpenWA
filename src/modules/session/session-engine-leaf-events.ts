@@ -34,6 +34,7 @@ export class SessionEngineLeafEvents {
   private readonly configService?: ConfigService;
   private readonly statusStore: StatusStoreService;
   private readonly logger: ReturnType<typeof createLogger>;
+  private readonly onGroupJoin?: (sessionId: string, groupId: string) => void;
 
   constructor(deps: {
     sessionRepository: Repository<Session>;
@@ -42,6 +43,7 @@ export class SessionEngineLeafEvents {
     configService?: ConfigService;
     statusStore: StatusStoreService;
     logger: ReturnType<typeof createLogger>;
+    onGroupJoin?: (sessionId: string, groupId: string) => void;
   }) {
     this.sessionRepository = deps.sessionRepository;
     this.eventsGateway = deps.eventsGateway;
@@ -49,6 +51,7 @@ export class SessionEngineLeafEvents {
     this.configService = deps.configService;
     this.statusStore = deps.statusStore;
     this.logger = deps.logger;
+    this.onGroupJoin = deps.onGroupJoin;
   }
 
   /**
@@ -151,6 +154,7 @@ export class SessionEngineLeafEvents {
       case 'join':
         this.eventsGateway.emitGroupJoin(id, payload);
         void this.webhookService.dispatch(id, 'group.join', payload);
+        this.onGroupJoin?.(id, event.groupId);
         break;
       case 'leave':
         this.eventsGateway.emitGroupLeave(id, payload);

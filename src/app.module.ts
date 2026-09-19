@@ -38,6 +38,7 @@ import { StatusStoreModule } from './modules/status-store/status-store.module';
 import { ChatMediaModule } from './modules/chat-media/chat-media.module';
 import { AutomationModule } from './modules/automation/automation.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { BotModule } from './modules/bot/bot.module';
 import { TakeoverModule } from './modules/takeover/takeover.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HooksModule } from './core/hooks';
@@ -175,6 +176,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
             __dirname + '/modules/status-store/**/*.entity{.ts,.js}',
             __dirname + '/modules/automation/**/*.entity{.ts,.js}',
             __dirname + '/modules/scheduler/**/*.entity{.ts,.js}',
+            __dirname + '/modules/bot/**/*.entity{.ts,.js}',
           ],
           migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
           logging: configService.get<boolean>('dataDatabase.logging', false),
@@ -314,6 +316,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     ChatMediaModule, // opt-in chat-media archive (retention purge + orphan sweep)
     AutomationModule, // single-message autoreply rules, evaluated on the inbound dispatch
     SchedulerModule, // one-shot delayed sends (WP4a); loop idle unless SCHEDULED_MESSAGES is on
+    BotModule, // bot-config + core commands (WP4b); commands subscribe only when BOT_COMMANDS=true
     TakeoverModule, // adopts sessions whose holder's lease lapsed (crashed peer / recreated node)
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)
     PluginsApiModule, // Phase 5: Plugins API

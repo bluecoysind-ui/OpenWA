@@ -11,6 +11,7 @@ import {
 import { Session } from '../../session/entities/session.entity';
 import { jsonColumnType } from '../../../common/utils/column-types';
 import { WebhookFilters } from '../../webhook/filters/filter-types';
+import { AutomationChatContext, AutomationMatchMode } from '../automation-match';
 
 /**
  * A single-message autoreply rule: when an inbound message matches `conditions`, the gateway answers
@@ -53,6 +54,18 @@ export class AutomationRule {
   // autoreply-vs-autoreply exchange. 0 disables it — knowingly.
   @Column({ type: 'int', default: 60 })
   cooldownSeconds!: number;
+
+  @Column({ type: 'varchar', length: 16, default: AutomationMatchMode.CONTAINS })
+  matchMode!: AutomationMatchMode;
+
+  @Column({ type: 'text', nullable: true })
+  matchPattern!: string | null;
+
+  @Column({ type: 'varchar', length: 16, default: AutomationChatContext.ALL })
+  chatContext!: AutomationChatContext;
+
+  @Column({ type: 'text', nullable: true })
+  replyMediaUrl!: string | null;
 
   @CreateDateColumn()
   createdAt!: Date;

@@ -1,4 +1,5 @@
 import { Injectable, HttpException, HttpStatus, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -36,6 +37,7 @@ import {
 } from './session-engine-event-wiring';
 import { SessionEngineControls } from './session-engine-controls';
 import { SessionOwnershipService, nodeOwnsSession } from './session-ownership.service';
+import { BOT_INBOUND_PORT, type BotInboundPort } from '../../core/plugins/plugin-host-ports';
 
 /**
  * Eager status-history reads are opt-in. On affected freshly paired whatsapp-web.js accounts,
@@ -299,6 +301,8 @@ export class SessionEngineLifecycle {
     // ownsSession() default below therefore has to be TRUE, not false.
     @Optional()
     private readonly ownership?: SessionOwnershipService,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     // The fence Maps are handed over BY REFERENCE: they stay lifecycle fields (specs poke them
     // through the lifecycle), while the fence logic operates on the same instances.
@@ -321,6 +325,16 @@ export class SessionEngineLifecycle {
       configService: this.configService,
       statusStore: this.statusStore,
       logger: this.logger,
+      onGroupJoin: (sessionId, groupId) => {
+        try {
+          const bot = this.moduleRef?.get<typeof BOT_INBOUND_PORT, BotInboundPort>(BOT_INBOUND_PORT, {
+            strict: false,
+          });
+          void bot?.handleGroupJoin(sessionId, groupId).catch(() => undefined);
+        } catch {
+          // BotModule not loaded — welcome is a no-op.
+        }
+      },
     });
     this.eventWiring = new SessionEngineEventWiring({ logger: this.logger });
     // The wiring host is built ONCE here: arrow closures bind the live methods/state (never a
