@@ -17,6 +17,7 @@ import type {
   IntegrationDeliveryFailureRow,
   StatusUpdateRow,
   AutomationRuleRow,
+  ScheduledMessageRow,
 } from './migration-tables.types';
 
 // A per-table restore step for importData: which backup key to read, the exact INSERT text (kept in
@@ -421,6 +422,30 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
       rule.updatedAt,
     ],
   }),
+  defineTableImporter({
+    key: 'scheduledMessages',
+    label: 'scheduled message',
+    sql: `INSERT INTO scheduled_messages (id, "sessionId", "chatId", "sendAtUtc", timezone, text, "mediaUrl", "mediaType", caption, status, "attemptCount", "lastError", "sentMessageId", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+    id: (job: ScheduledMessageRow) => job.id,
+    map: (job: ScheduledMessageRow) => [
+      job.id,
+      job.sessionId,
+      job.chatId,
+      job.sendAtUtc,
+      job.timezone ?? 'UTC',
+      job.text ?? null,
+      job.mediaUrl ?? null,
+      job.mediaType ?? 'text',
+      job.caption ?? null,
+      job.status ?? 'pending',
+      job.attemptCount ?? 0,
+      job.lastError ?? null,
+      job.sentMessageId ?? null,
+      job.createdAt,
+      job.updatedAt,
+    ],
+  }),
 ];
 
 // The `as TableCounts` cast in importData means a dropped or mis-keyed descriptor is invisible to
@@ -443,6 +468,7 @@ const EXPECTED_TABLE_KEYS: ReadonlyArray<keyof MigrationTables> = [
   'integrationDeliveryFailures',
   'statusUpdates',
   'automationRules',
+  'scheduledMessages',
 ];
 const importerKeys = TABLE_IMPORTERS.map(importer => importer.key);
 for (const key of EXPECTED_TABLE_KEYS) {

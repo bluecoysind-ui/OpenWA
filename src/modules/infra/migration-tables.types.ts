@@ -252,6 +252,24 @@ export interface AutomationRuleRow {
   updatedAt: string | Date;
 }
 
+export interface ScheduledMessageRow {
+  id: string;
+  sessionId: string;
+  chatId: string;
+  sendAtUtc: string | Date;
+  timezone: string;
+  text: string | null;
+  mediaUrl: string | null;
+  mediaType: string;
+  caption: string | null;
+  status: string;
+  attemptCount: number;
+  lastError: string | null;
+  sentMessageId: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
 export interface MigrationTables {
   sessions: SessionRow[];
   webhooks: WebhookRow[];
@@ -269,6 +287,7 @@ export interface MigrationTables {
   integrationDeliveryFailures: IntegrationDeliveryFailureRow[];
   statusUpdates: StatusUpdateRow[];
   automationRules: AutomationRuleRow[];
+  scheduledMessages: ScheduledMessageRow[];
 }
 
 export type TableCounts = { [K in keyof MigrationTables]: number };

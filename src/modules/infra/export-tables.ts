@@ -267,6 +267,9 @@ export const EXPORT_TABLES: AnyExportTable[] = [
   // rule with it — exporting and re-inserting it is not optional, or a restore silently destroys
   // every autoreply rule.
   defineExportTable({ key: 'automationRules', table: 'automation_rules', optional: true }),
+
+  // scheduled_messages FKs sessions ON DELETE CASCADE, same restore reason as automation_rules.
+  defineExportTable({ key: 'scheduledMessages', table: 'scheduled_messages', optional: true }),
 ];
 
 /**
