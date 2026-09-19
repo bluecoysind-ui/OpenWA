@@ -8,6 +8,13 @@ describe('ProfileController', () => {
     return { controller, service };
   };
 
+  it('GET own profile delegates with no envelope', async () => {
+    const profile = { phone: '628', pushName: 'Ada', about: null, profilePictureUrl: null };
+    const { controller, service } = build({ getOwnProfile: jest.fn().mockResolvedValue(profile) });
+    await expect(controller.getOwnProfile('s1')).resolves.toEqual(profile);
+    expect(service.getOwnProfile).toHaveBeenCalledWith('s1');
+  });
+
   it('DELETE picture delegates and returns its own message', async () => {
     const { controller, service } = build({ deleteProfilePicture: jest.fn().mockResolvedValue(undefined) });
     await expect(controller.deletePicture('s1')).resolves.toEqual({

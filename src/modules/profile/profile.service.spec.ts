@@ -22,6 +22,17 @@ describe('ProfileService', () => {
     expect(setProfileName).toHaveBeenCalledWith('New Name');
   });
 
+  it('getOwnProfile delegates to the engine', async () => {
+    const profile = { phone: '628', pushName: 'Ada', about: null, profilePictureUrl: null };
+    const getOwnProfile = jest.fn().mockResolvedValue(profile);
+    await expect(makeService({ getOwnProfile }).getOwnProfile('s1')).resolves.toEqual(profile);
+    expect(getOwnProfile).toHaveBeenCalledWith();
+  });
+
+  it('getOwnProfile throws 400 when the session is not started', () => {
+    expect(() => makeService(undefined).getOwnProfile('s1')).toThrow('Session is not started');
+  });
+
   it('setProfileStatus delegates to the engine (empty string clears the about)', async () => {
     const setProfileStatus = jest.fn().mockResolvedValue(undefined);
     await makeService({ setProfileStatus }).setProfileStatus('s1', '');
