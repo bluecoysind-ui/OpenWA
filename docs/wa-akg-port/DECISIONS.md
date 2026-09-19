@@ -4,16 +4,16 @@ Living log. Update when a WP lands a trade-off.
 
 Locked Q1–Q8 (2026-09-20):
 
-| ID | Decision |
-| --- | --- |
-| **Q1** | Text-list helper only, last item in WP2. **No** native `listMessage`. `LIST_MESSAGES` stays unused. |
-| **Q2** | One-shot scheduler in WP4. IANA timezone stored per row. Recurrence = WP4b later. |
-| **Q3** | Leave bulk crash-resume as-is (interrupted batches stay FAILED; cancel stays). |
-| **Q4** | Intended plugin, **spike failed** — see D4. Core module behind `BOT_COMMANDS` + per-session enabled. |
-| **Q5** | No universal `/send`. |
+| ID     | Decision                                                                                                                                                                    |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q1** | Text-list helper only, last item in WP2. **No** native `listMessage`. `LIST_MESSAGES` stays unused.                                                                         |
+| **Q2** | One-shot scheduler in WP4. IANA timezone stored per row. Recurrence = WP4b later.                                                                                           |
+| **Q3** | Leave bulk crash-resume as-is (interrupted batches stay FAILED; cancel stays).                                                                                              |
+| **Q4** | Intended plugin, **spike failed** — see D4. Core module behind `BOT_COMMANDS` + per-session enabled.                                                                        |
+| **Q5** | No universal `/send`.                                                                                                                                                       |
 | **Q6** | Yes: webhook delivery rows with status, HTTP code, duration, attempt, error snippet **only**. Never request/response bodies. Retention 30 days **or** last 500 per webhook. |
-| **Q7** | No Baileys rc.9 patch. |
-| **Q8** | Final UI is **`./frontend/`**, not `/dashboard`. |
+| **Q7** | No Baileys rc.9 patch.                                                                                                                                                      |
+| **Q8** | Final UI is **`./frontend/`**, not `/dashboard`.                                                                                                                            |
 
 ---
 
@@ -33,14 +33,16 @@ Auto-reply lands as **additive columns and matching logic on `AutomationRulesSer
 
 **Spike (2026-09-20), no product code.** `PluginContext` vs required (a)(b)(c):
 
-| Need | Result |
-| --- | --- |
-| (a) send **text** via MessageService with pacing | **Yes.** `ctx.messages.sendText` → `PluginMessagePort.sendText` → `MessageService.sendText` (pacing on that path). |
-| (a) send **sticker** | **No.** `PluginMessagingCapability` is only `sendText`/`reply`. `conversation.send` media types are `image\|file\|audio\|video\|voice` — **not sticker**. Extending the plugin surface is out of WP1 scope. |
-| (b) read bot-config | **No.** `ctx.config` is the plugin’s own manifest config. There is no session `bot_configs` table or capability. |
-| (c) run only when `BOT_COMMANDS=true` **and** per-session enabled | **No host hook.** Plugin enablement is plugin-session activation, not that pair of flags. |
+| Need                                                              | Result                                                                                                                                                                                                      |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (a) send **text** via MessageService with pacing                  | **Yes.** `ctx.messages.sendText` → `PluginMessagePort.sendText` → `MessageService.sendText` (pacing on that path).                                                                                          |
+| (a) send **sticker**                                              | **No.** `PluginMessagingCapability` is only `sendText`/`reply`. `conversation.send` media types are `image\|file\|audio\|video\|voice` — **not sticker**. Extending the plugin surface is out of WP1 scope. |
+| (b) read bot-config                                               | **No.** `ctx.config` is the plugin’s own manifest config. There is no session `bot_configs` table or capability.                                                                                            |
+| (c) run only when `BOT_COMMANDS=true` **and** per-session enabled | **No host hook.** Plugin enablement is plugin-session activation, not that pair of flags.                                                                                                                   |
 
-**Decision:** implement commands as a **core module** (`src/modules/bot/` in WP4) behind `BOT_COMMANDS=false` default **and** per-session `bot-config.enabled`. Sends still go through `MessageService` (pacing). Do not widen `PluginMessagingCapability` for this port. A later first-party plugin remains possible once (a)(b)(c) are true.
+**Decision:** implement commands as a **core module** (`src/modules/bot/` in WP4) behind `BOT_COMMANDS=false` default **and** per-session `bot-config.enabled`. Sends still go through `MessageService` (pacing). Do not widen `PluginMessagingCapability` for this port.
+
+**Inbound cost:** when `BOT_COMMANDS=false` the module must cost **nothing** on the inbound path — no `message:received` subscription, no per-message parse. WP4 must register the hook only after the flag is true (and still skip sessions whose bot-config is disabled). A later first-party plugin remains possible once (a)(b)(c) are true.
 
 ## D5 — Broadcast extends bulk send
 
@@ -102,14 +104,14 @@ Keep `X-OpenWA-Signature`, retries, filters, existing event names. Delivery hist
 
 ## D17 — Feature flags
 
-| Flag | Default | Notes |
-| --- | --- | --- |
-| `BOT_COMMANDS` | **off** | inbound auto-send |
-| `MEDIA_PERSIST` | **off** | |
-| `AUTO_REPLY_REGEX` | **off** | pattern length cap + truncated input |
-| `LIST_MESSAGES` | unused | native lists not shipped |
-| `SCHEDULED_MESSAGES` | **on** | inert until a job exists |
-| Inbound auto-reply / welcome / commands | per-session opt-in | access lists first |
+| Flag                                    | Default            | Notes                                |
+| --------------------------------------- | ------------------ | ------------------------------------ |
+| `BOT_COMMANDS`                          | **off**            | inbound auto-send                    |
+| `MEDIA_PERSIST`                         | **off**            |                                      |
+| `AUTO_REPLY_REGEX`                      | **off**            | pattern length cap + truncated input |
+| `LIST_MESSAGES`                         | unused             | native lists not shipped             |
+| `SCHEDULED_MESSAGES`                    | **on**             | inert until a job exists             |
+| Inbound auto-reply / welcome / commands | per-session opt-in | access lists first                   |
 
 ## D18 — Auth
 
@@ -117,14 +119,14 @@ Every new route uses `ApiKeyGuard`, `@RequireRole`, session scope. No WA-AKG use
 
 ## D19 — BotConfig fields that were omitted in first GAP
 
-| WA-AKG field | OpenWA decision |
-| --- | --- |
-| `autoRead` | Use existing `POST .../chats/:chatId/read` on inbound when bot-config says so. No second read API. |
-| `alwaysOnline` | Use existing `setOnlinePresence`. Session bot-config toggles it; respect engine 501. |
-| Welcome message | Hook `group.join` → `MessageService.sendText` through pacing. Per-session opt-in. |
-| Anti-spam | **Exists** via `SendPacingService`. Do not add a parallel limiter. |
-| Multipart media upload | **Skip** while base64 JSON works (frontend ~18 MiB cap, `BODY_SIZE_LIMIT` default 25mb). Ask if a needed file exceeds that. |
-| List/delete stored media | Only when `MEDIA_PERSIST=true`. |
+| WA-AKG field             | OpenWA decision                                                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `autoRead`               | Use existing `POST .../chats/:chatId/read` on inbound when bot-config says so. No second read API.                          |
+| `alwaysOnline`           | Use existing `setOnlinePresence`. Session bot-config toggles it; respect engine 501.                                        |
+| Welcome message          | Hook `group.join` → `MessageService.sendText` through pacing. Per-session opt-in.                                           |
+| Anti-spam                | **Exists** via `SendPacingService`. Do not add a parallel limiter.                                                          |
+| Multipart media upload   | **Skip** while base64 JSON works (frontend ~18 MiB cap, `BODY_SIZE_LIMIT` default 25mb). Ask if a needed file exceeds that. |
+| List/delete stored media | Only when `MEDIA_PERSIST=true`.                                                                                             |
 
 ## D20 — Regex auto-replies
 
@@ -133,3 +135,7 @@ Behind `AUTO_REPLY_REGEX`. Pattern length cap, truncated input. Ship **EXACT / C
 ## D21 — Migrations
 
 New entities live on the **`data` connection**. Each migration is created in the WP that first reads the table, and is tested on **SQLite and Postgres**.
+
+## D22 — CORS already allows frontend methods (verified WP1, before WP4)
+
+`configure-app.ts` enables `GET, POST, PUT, DELETE, PATCH, OPTIONS` and headers `Content-Type, X-API-Key, Authorization, X-Request-ID`. Do **not** change global CORS for the scheduler. Frontend origin still needs `CORS_ORIGINS` in production (dev allows `*`).
