@@ -52,6 +52,8 @@ export enum AuditAction {
   // and alert-worthy, so it is never sampled.
   SEND_PACING_BLOCKED = 'send_pacing_blocked',
   SEND_BREAKER_TRIPPED = 'send_breaker_tripped',
+  SCHEDULED_MESSAGE_SENT = 'scheduled_message_sent',
+  SCHEDULED_MESSAGE_FAILED = 'scheduled_message_failed',
 
   // Webhook events
   WEBHOOK_CREATED = 'webhook_created',

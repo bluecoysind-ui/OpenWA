@@ -155,3 +155,5 @@ New entities live on the **`data` connection**. Each migration is created in the
 `GET /chats/:chatId` is **not** added. `GET /sessions/:id/chats` already returns `ChatSummary` (id, name, kind, unread, lastMessage, archived, pinned, muted, muteExpiration) which is enough for a WP7 chat header/actions pane. History is `GET .../messages?chatId=` / `.../messages/:chatId/history`.
 
 Groups and labels: no new code. Inventory (list/get/join/leave/create, invite get+revoke, members, subject/description/picture, settings, ephemeral, label CRUD, chat labels, chats-by-label) is already on the existing controllers. Documented 501s stay: wwjs `createGroup`, wwjs group ephemeral, Baileys chats-by-label, wwjs label create/delete. See docs/29 and GAP 4.7–4.8.
+
+## D25 — WP4a sendAt is an ISO instant (offset required); IANA timezone stored for display. Naive wall-clock conversion refused (no tz lib). Send/fail webhooks are additive `scheduled.message.*`; DELETE cancels the row.

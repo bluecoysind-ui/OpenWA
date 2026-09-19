@@ -53,6 +53,10 @@ export function generateIdempotencyKey(event: string, data: Record<string, unkno
     case 'message.failed':
       return `failed_${toStr(data.sessionId)}_${toStr(data.id ?? data.messageId)}_${toStr(data.status ?? data.ack, '0')}`;
 
+    case 'scheduled.message.sent':
+    case 'scheduled.message.failed':
+      return `sched_${event}_${toStr(data.sessionId)}_${toStr(data.jobId)}`;
+
     case 'message.revoked':
       return `rev_${toStr(data.sessionId)}_${toStr(data.id ?? data.messageId)}`;
 
