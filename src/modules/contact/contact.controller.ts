@@ -12,6 +12,7 @@ import {
   ProfilePicturesResponseDto,
   ResolvedPhoneResponseDto,
 } from './dto/contact-response.dto';
+import { CheckNumbersDto, CheckNumbersResponseDto } from './dto/check-numbers.dto';
 import { ENGINE_NOT_READY_409 } from '../../common/openapi/engine-status-responses';
 
 @ApiTags('contacts')
@@ -137,6 +138,28 @@ export class ContactController {
       exists: whatsappId !== null,
       whatsappId,
     };
+  }
+
+  @Post('check')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check whether phone numbers exist on WhatsApp (bulk)',
+    description:
+      'Max 50 numbers, deduped after normalize. Invalid entries are per-item errors, not a 400 for the batch. ' +
+      'Per-session rate limit (CONTACT_CHECK_RATE_MAX / WINDOW_MS, default 10/min). GET check/:number is unchanged.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Per-number results', type: CheckNumbersResponseDto })
+  @ApiResponse({ status: 400, description: 'Session not started or more than 50 numbers' })
+  @ApiResponse({ status: 429, description: 'Per-session contact-check rate limit' })
+  @ApiResponse({ status: 409, description: ENGINE_NOT_READY_409 })
+  async checkNumbers(
+    @Param('sessionId') sessionId: string,
+    @Body() dto: CheckNumbersDto,
+  ): Promise<CheckNumbersResponseDto> {
+    const results = await this.contactService.checkNumbers(sessionId, dto.numbers);
+    return { results };
   }
 
   // ========== Gap Quick Wins: Profile Picture, Block/Unblock ==========

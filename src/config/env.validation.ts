@@ -277,6 +277,8 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'REQUEST_TIMEOUT_MS',
     'HEADERS_TIMEOUT_MS',
     'KEEPALIVE_TIMEOUT_MS',
+    'CONTACT_CHECK_RATE_MAX',
+    'CONTACT_CHECK_RATE_WINDOW_MS',
     'WEBHOOK_DISPATCH_CONCURRENCY',
     // 0 would reject every webhook dispatch (a total, silent webhook outage).
     'WEBHOOK_MAX_PAYLOAD_BYTES',

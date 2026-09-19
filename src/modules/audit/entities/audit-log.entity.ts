@@ -44,6 +44,7 @@ export enum AuditAction {
   // Multi-destination forward (N>1). One row per request, not per destination — the messages table
   // still holds each copy. Single-dest forwards stay unaudited (MESSAGE_SENT is intentionally unemitted).
   MESSAGE_MULTI_FORWARD = 'message_multi_forward',
+  CONTACT_NUMBERS_CHECKED = 'contact_numbers_checked',
   // Send-pacing enforcement. SEND_PACING_BLOCKED is sampled per session (at most one row per
   // session per minute, carrying the suppressed count) on the RATE_LIMIT_EXCEEDED precedent: a
   // session that hits its daily cap keeps being refused for the rest of the day, and one row per
