@@ -190,3 +190,18 @@ export function chatKind(jid: string): ChatKind {
       return 'unknown';
   }
 }
+
+/**
+ * Whether a string can address a chat a message can be sent to: an individual (phone or lid),
+ * a group, a channel, a broadcast list, or the status pseudo-JID. Rejects unknown domains and
+ * empty user-parts so new DTOs can share {@link parseWaId} instead of a second identity regex.
+ */
+export function isChatWid(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (isIndividualWid(trimmed)) return true;
+  const { kind, userPart } = parseWaId(trimmed);
+  if (kind === 'group' || kind === 'newsletter' || kind === 'broadcast') return userPart.length > 0;
+  if (kind === 'status') return trimmed.toLowerCase() === 'status@broadcast';
+  return false;
+}
