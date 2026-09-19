@@ -37,6 +37,7 @@ from ..types import (
     SendPollRequest,
     SendTemplateRequest,
     SendTextRequest,
+    SendTextListRequest,
     SuccessResult,
 )
 
@@ -53,6 +54,12 @@ class MessagesResource:
 
     def send_text(self, session_id: str, body: SendTextRequest) -> MessageResponse:
         return self._http.request("POST", f"/api/sessions/{quote_segment(session_id)}/messages/send-text", body=body)
+
+    def send_text_list(self, session_id: str, body: SendTextListRequest) -> MessageResponse:
+        """Send a numbered text list (formatted text, not a native WhatsApp list)."""
+        return self._http.request(
+            "POST", f"/api/sessions/{quote_segment(session_id)}/messages/send-text-list", body=body
+        )
 
     def send_image(self, session_id: str, body: SendMediaRequest) -> MessageResponse:
         return self._send_media(session_id, "send-image", body)

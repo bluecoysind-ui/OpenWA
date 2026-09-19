@@ -261,6 +261,15 @@ export interface SendTextRequest {
   quotedMessageId?: string;
 }
 
+export interface SendTextListRequest {
+  chatId: Jid;
+  title: string;
+  options: string[];
+  footer?: string;
+  quotedMessageId?: string;
+  mentions?: string[];
+}
+
 export interface SendMediaRequest {
   chatId: Jid;
   /** Mutually exclusive with `base64`. */
@@ -280,6 +289,10 @@ export interface SendMediaRequest {
   quotedMessageId?: string;
   /** WIDs to @mention; the caption must also contain the @<number> token. */
   mentions?: string[];
+  /** Sticker pack title (send-sticker). Honoured by whatsapp-web.js; ignored on Baileys until WP5. */
+  packName?: string;
+  /** Sticker pack author (send-sticker). */
+  author?: string;
 }
 
 export interface SendAudioRequest extends SendMediaRequest {
@@ -343,7 +356,9 @@ export interface ClickButtonRequest {
 
 export interface ForwardMessageRequest {
   fromChatId: Jid;
-  toChatId: Jid;
+  /** Required unless `toChatIds` is a non-empty array. */
+  toChatId?: Jid;
+  toChatIds?: Jid[];
   messageId: string;
 }
 
@@ -465,6 +480,8 @@ export interface SendPollRequest {
   options: string[];
   /** Allow voters to pick several options (default single choice). */
   allowMultipleAnswers?: boolean;
+  /** How many options a voter may pick. Conflicts with allowMultipleAnswers. */
+  selectableCount?: number;
   /**
    * Quote an earlier message, turning this send into a reply. Engine-specific: whatsapp-web.js
    * matches the serialized message id, Baileys the raw message key id of a message it has already
@@ -482,6 +499,8 @@ export interface ListMessagesQuery {
   after?: string;
   /** Set false to omit inline media payloads. The budget is per response, so a walk repays it per page. */
   inlineMedia?: boolean;
+  /** Substring search on body. Requires chatId. */
+  q?: string;
 }
 
 export interface MessageHistoryQuery {

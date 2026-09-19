@@ -34,6 +34,7 @@
                 "session_rebind_rejected",
                 "message_sent",
                 "message_failed",
+                "message_multi_forward",
                 "send_pacing_blocked",
                 "send_breaker_tripped",
                 "webhook_created",
@@ -2328,6 +2329,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Substring search on message body. Requires chatId. LIKE wildcards in the needle are escaped; page size is clamped to 50.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2416,6 +2426,69 @@
           }
         },
         "summary": "Send a text message",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/messages/send-text-list": {
+      "post": {
+        "description": "Formats `*title*` plus numbered options (and optional footer) and sends it through the ordinary send-text path, including pacing. Neither engine exposes a native list message.",
+        "operationId": "MessageController_sendTextList",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendTextListDto"
+              },
+              "examples": {
+                "minimal": {
+                  "summary": "Send a numbered text list",
+                  "value": {
+                    "chatId": "628123456789@c.us",
+                    "title": "Lunch",
+                    "options": [
+                      "Pizza",
+                      "Salad"
+                    ],
+                    "footer": "Kitchen closes at 3"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session not active or invalid request"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          }
+        },
+        "summary": "Send a numbered text list (formatted text, not a native WhatsApp list)",
         "tags": [
           "messages"
         ]
@@ -2863,7 +2936,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SendMediaMessageDto"
+                "$ref": "#/components/schemas/SendStickerMessageDto"
               },
               "examples": {
                 "fromUrl": {
@@ -3076,6 +3149,7 @@
     },
     "/api/sessions/{sessionId}/messages/forward": {
       "post": {
+        "description": "`toChatId` is required unless `toChatIds` is a non-empty array. Optional `toChatIds` adds destinations (unique combined cap 10). One destination returns the usual `{ messageId, timestamp }` at 201. More than one returns per-destination results: 201 all sent, 207 mixed, 502 all failed. Each dest is paced.",
         "operationId": "MessageController_forward",
         "parameters": [
           {
@@ -3100,7 +3174,7 @@
         },
         "responses": {
           "201": {
-            "description": "Message forwarded",
+            "description": "Message forwarded (single dest: MessageResponseDto; multi: all dests sent)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3108,6 +3182,9 @@
                 }
               }
             }
+          },
+          "207": {
+            "description": "Multi-dest: some dests sent, some failed. Body is ForwardManyResponseDto."
           },
           "400": {
             "description": "The request was rejected before anything was sent. Among the causes: the recipient could not be addressed — WhatsApp reports no deliverable id for that `chatId`, which is how it says the number is not on WhatsApp — as well as body validation and a session that is not active."
@@ -3117,6 +3194,9 @@
           },
           "409": {
             "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          },
+          "502": {
+            "description": "Multi-dest: every dest failed. Body is ForwardManyResponseDto."
           }
         },
         "summary": "Forward a message to another chat",
@@ -11652,6 +11732,51 @@
           "timestamp"
         ]
       },
+      "SendTextListDto": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "Chat ID (e.g. 628123456789@c.us)"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "footer": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "quotedMessageId": {
+            "type": "string",
+            "description": "Quote an earlier message, turning this send into a reply. The id is engine-specific: whatsapp-web.js matches the serialized message id, Baileys matches the raw message key id and can only quote a message it has already stored. An id that cannot be resolved fails the send rather than delivering it unquoted.",
+            "example": "true_628123456789@c.us_3EB0ABCD"
+          },
+          "mentions": {
+            "description": "WIDs to @mention (e.g. [\"62811@c.us\"]). The text/caption must also contain the @<number> token.",
+            "example": [
+              "628123456789@c.us"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "chatId",
+          "title",
+          "options"
+        ]
+      },
       "SendTemplateMessageDto": {
         "type": "object",
         "properties": {
@@ -11869,6 +11994,69 @@
           "contactNumber"
         ]
       },
+      "SendStickerMessageDto": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "WhatsApp chat ID",
+            "example": "628123456789@c.us"
+          },
+          "url": {
+            "type": "string",
+            "description": "Media URL (http/https)",
+            "example": "https://example.com/image.jpg"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64 encoded media data"
+          },
+          "mimetype": {
+            "type": "string",
+            "description": "Media MIME type (required when using base64)",
+            "example": "image/jpeg"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Filename for the media. Only rendered on document sends — defaults to 'file' when omitted (a URL-based document send on whatsapp-web.js first derives the URL basename)",
+            "example": "image.jpg"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption for the media",
+            "example": "Check out this image!",
+            "maxLength": 1024
+          },
+          "mentions": {
+            "description": "WIDs to @mention (e.g. [\"62811@c.us\"]). The text/caption must also contain the @<number> token.",
+            "example": [
+              "628123456789@c.us"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quotedMessageId": {
+            "type": "string",
+            "description": "Quote an earlier message, turning this send into a reply. The id is engine-specific: whatsapp-web.js matches the serialized message id, Baileys matches the raw message key id and can only quote a message it has already stored. An id that cannot be resolved fails the send rather than delivering it unquoted.",
+            "example": "true_628123456789@c.us_3EB0ABCD"
+          },
+          "packName": {
+            "type": "string",
+            "description": "Sticker pack title. Honoured by whatsapp-web.js (`stickerName`). Baileys has no EXIF writer in-tree; the sticker still sends and pack metadata is ignored until WP5.",
+            "maxLength": 128
+          },
+          "author": {
+            "type": "string",
+            "description": "Sticker pack author. Honoured by whatsapp-web.js (`stickerAuthor`). Baileys ignores this until WP5.",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "chatId"
+        ]
+      },
       "SendPollDto": {
         "type": "object",
         "properties": {
@@ -11897,6 +12085,12 @@
           "allowMultipleAnswers": {
             "type": "boolean",
             "description": "Allow voters to pick several options (default single choice)"
+          },
+          "selectableCount": {
+            "type": "number",
+            "description": "How many options a voter may pick. `1` = single choice; `0` = unlimited (Baileys). Conflicts with `allowMultipleAnswers` (HTTP 400). whatsapp-web.js only supports single vs multiple, so `selectableCount !== 1` is mapped to `allowMultipleAnswers: true`.",
+            "minimum": 0,
+            "maximum": 12
           },
           "quotedMessageId": {
             "type": "string",
@@ -11973,7 +12167,16 @@
             "type": "string"
           },
           "toChatId": {
-            "type": "string"
+            "type": "string",
+            "description": "Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged."
+          },
+          "toChatIds": {
+            "description": "Destinations (unique with `toChatId`). Required when `toChatId` is omitted. Combined unique set capped at 10. Each dest is paced independently. N>1 returns per-destination results (201 all sent, 207 mixed, 502 all failed).",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "messageId": {
             "type": "string"
@@ -11981,7 +12184,6 @@
         },
         "required": [
           "fromChatId",
-          "toChatId",
           "messageId"
         ]
       },

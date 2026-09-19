@@ -28,6 +28,7 @@ import com.rmyndharis.openwa.model.SendAudioRequest;
 import com.rmyndharis.openwa.model.SendPollRequest;
 import com.rmyndharis.openwa.model.SendTemplateRequest;
 import com.rmyndharis.openwa.model.SendTextRequest;
+import com.rmyndharis.openwa.model.SendTextListRequest;
 import com.rmyndharis.openwa.model.StarMessageRequest;
 import com.rmyndharis.openwa.model.VotePollRequest;
 import com.rmyndharis.openwa.model.SuccessResult;
@@ -61,6 +62,16 @@ public final class MessagesResource {
         return client.request(
             HttpMethod.POST,
             "/api/sessions/" + encodeSegment(sessionId) + "/messages/send-text",
+            null,
+            body,
+            MessageResponse.class);
+    }
+
+    /** Send a numbered text list (formatted text, not a native WhatsApp list). */
+    public MessageResponse sendTextList(String sessionId, SendTextListRequest body) {
+        return client.request(
+            HttpMethod.POST,
+            "/api/sessions/" + encodeSegment(sessionId) + "/messages/send-text-list",
             null,
             body,
             MessageResponse.class);

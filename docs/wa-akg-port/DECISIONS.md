@@ -139,3 +139,13 @@ New entities live on the **`data` connection**. Each migration is created in the
 ## D22 — CORS already allows frontend methods (verified WP1, before WP4)
 
 `configure-app.ts` enables `GET, POST, PUT, DELETE, PATCH, OPTIONS` and headers `Content-Type, X-API-Key, Authorization, X-Request-ID`. Do **not** change global CORS for the scheduler. Frontend origin still needs `CORS_ORIGINS` in production (dev allows `*`).
+
+## D23 — WP2 engine approximations
+
+- **Poll `selectableCount`:** Baileys passes the integer through (`0` = unlimited). whatsapp-web.js only has `allowMultipleAnswers`; `selectableCount !== 1` maps to that boolean. Conflict with `allowMultipleAnswers` is 400. `selectableCount: 3` with the flag omitted is multiple (OK); `1` + `allowMultipleAnswers: true` and `3` + `false` are 400.
+- **Sticker packName/author:** wwjs native (`stickerName`/`stickerAuthor`). Baileys EXIF deferred to WP5 — no new dependency added (sharp does not write WhatsApp sticker EXIF). Fields are accepted; Baileys still sends the sticker without pack metadata.
+- **GET messages `q`:** implemented only with `chatId`. The list endpoint has no `dateFrom`/`dateTo` (only `from`/`to` message-id cursors), so a time-window scope was not added. Unscoped `q` is 400. LIKE `%`/`_`/`\` escaped; page size capped at 50.
+- **Audit `action`:** `audit_logs.action` on the **main** connection is `varchar(50)` (SQLite; main is always SQLite). No CHECK, no Postgres enum. Adding `MESSAGE_MULTI_FORWARD` needs no migration.
+- **Multi-forward latency:** `SendPacingService` is a cap/breaker, not a sleep. Destinations run sequentially (engine RTT + persist). Typical ~0.3–2s each → ~6–40s for 20 dests. Worst-case is one engine hang × N (same class as a single forward). 202 + pollable would be a new batch pipeline (stop: big; send-bulk already does that). **Choice:** stay synchronous; lower unique dest cap **20 → 10** so typical totals stay near the ~20s HTTP budget.
+- **Multi-forward HTTP:** N=1 unchanged (201 or thrown 4xx/501). N>1 with `results[]`: **201** all sent, **207** mixed, **502** all failed.
+- **`toChatId`:** optional when `toChatIds` is non-empty; at least one dest required. `toChatId` alone is unchanged.

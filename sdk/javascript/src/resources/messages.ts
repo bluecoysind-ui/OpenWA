@@ -36,6 +36,7 @@ import type {
   SendPollRequest,
   SendTemplateRequest,
   SendTextRequest,
+  SendTextListRequest,
   SuccessResult,
 } from '../types.js';
 
@@ -56,6 +57,15 @@ export class MessagesResource {
     return this.client.request<MessageResponse>({
       method: 'POST',
       path: `/api/sessions/${encodeSegment(sessionId)}/messages/send-text`,
+      body,
+    });
+  }
+
+  /** Send a numbered text list (formatted text, not a native WhatsApp list). */
+  sendTextList(sessionId: string, body: SendTextListRequest): Promise<MessageResponse> {
+    return this.client.request<MessageResponse>({
+      method: 'POST',
+      path: `/api/sessions/${encodeSegment(sessionId)}/messages/send-text-list`,
       body,
     });
   }

@@ -252,6 +252,10 @@ socket is caught by the transport instead. No REST route: the session watchdog p
 | `sendChatState`       | ✅                  | ✅               | ✅              |
 | `sendSeen`            | ✅                  | ✅               | ✅              |
 
+whatsapp-web.js `Poll` only supports `allowMultipleAnswers` (boolean). OpenWA maps `selectableCount !== 1` (including `0` = unlimited) to that flag. Baileys honours the real count (`1` single, `0` unlimited, `2–N` capped). A conflict with `allowMultipleAnswers` is HTTP 400.
+
+`sendStickerMessage` pack metadata: wwjs `stickerName`/`stickerAuthor`. Baileys needs WebP EXIF; no in-tree dependency writes WhatsApp sticker EXIF (sharp converts only). Pack fields are accepted and ignored on Baileys until WP5 — the sticker still sends.
+
 ### 29.4.3 Message management
 
 | Method                | Baileys adapter 🔧⁵ | wwjs adapter 🔧¹ | OpenWA REST     |

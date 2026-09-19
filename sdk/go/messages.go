@@ -71,6 +71,11 @@ func (s *MessagesService) SendPoll(ctx context.Context, sessionID string, body S
 	return s.send(ctx, sessionID, "send-poll", body)
 }
 
+// SendTextList sends a numbered text list through the ordinary send-text path.
+func (s *MessagesService) SendTextList(ctx context.Context, sessionID string, body SendTextListRequest) (*MessageResponse, error) {
+	return s.send(ctx, sessionID, "send-text-list", body)
+}
+
 func (s *MessagesService) send(ctx context.Context, sessionID, segment string, body any) (*MessageResponse, error) {
 	var out MessageResponse
 	err := s.client.do(ctx, "POST", s.base(sessionID)+"/"+segment, nil, body, &out)

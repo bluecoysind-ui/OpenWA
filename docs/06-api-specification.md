@@ -1238,14 +1238,15 @@ Get persisted message history for a session from the local DB (paginated, filter
 
 **Query parameters**
 
-| Name        | Type    | Required | Default | Description                                                                                                                                                                                                                             |
-| ----------- | ------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| chatId      | string  | No       | —       | Filter by chat ID. Matched across `@c.us` / `@s.whatsapp.net` dialects via the lid-mapping table.                                                                                                                                       |
-| from        | string  | No       | —       | Filter by sender. A phone also matches any lid that resolves to it.                                                                                                                                                                     |
-| limit       | integer | No       | 50      | Clamped to `[1,100]`; a non-finite value falls back to 50.                                                                                                                                                                              |
-| offset      | integer | No       | 0       | Clamped to `>=0`; a non-finite value falls back to 0.                                                                                                                                                                                   |
-| after       | string  | No       | —       | Keyset cursor: the `id` of the last message of the previous page. Anchors the window to a row rather than a count, so a message arriving mid-walk cannot shift it. Takes precedence over `offset`. Unknown in this session gives `400`. |
-| inlineMedia | boolean | No       | true    | Set `false` (or `0`) to omit every inline media payload, leaving each row's `{ omitted, sizeBytes }` marker and the media endpoint. The budget below is per response, so a paged walk pulls it afresh on every page.                    |
+| Name        | Type    | Required | Default | Description                                                                                                                                                                                                                                                |
+| ----------- | ------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| chatId      | string  | No       | —       | Filter by chat ID. Matched across `@c.us` / `@s.whatsapp.net` dialects via the lid-mapping table.                                                                                                                                                          |
+| from        | string  | No       | —       | Filter by sender. A phone also matches any lid that resolves to it.                                                                                                                                                                                        |
+| limit       | integer | No       | 50      | Clamped to `[1,100]`; a non-finite value falls back to 50.                                                                                                                                                                                                 |
+| offset      | integer | No       | 0       | Clamped to `>=0`; a non-finite value falls back to 0.                                                                                                                                                                                                      |
+| after       | string  | No       | —       | Keyset cursor: the `id` of the last message of the previous page. Anchors the window to a row rather than a count, so a message arriving mid-walk cannot shift it. Takes precedence over `offset`. Unknown in this session gives `400`.                    |
+| inlineMedia | boolean | No       | true    | Set `false` (or `0`) to omit every inline media payload, leaving each row's `{ omitted, sizeBytes }` marker and the media endpoint. The budget below is per response, so a paged walk pulls it afresh on every page.                                       |
+| q           | string  | No       | —       | Substring search on `body`. **Requires `chatId`** (else `400`). LIKE wildcards `%`, `_`, and `\` in the needle are escaped. Page size is clamped to 50. Max 200 characters. There is no `dateFrom`/`dateTo` on this route; `chatId` is the required scope. |
 
 **Response** `200`
 
@@ -1276,7 +1277,7 @@ Each `Message`: `{ id (uuid), sessionId, waMessageId (string|null), chatId, from
 
 > **Inline media is carried up to a budget, then omitted.** `MESSAGE_LIST_INLINE_MEDIA_BUDGET_BYTES` (8 MiB of encoded base64 by default) bounds how much inline media one response may hold across its rows. A row is not a bounded object — `limit` is clamped to `[1,100]` but each row can carry its base64 in `metadata.media.data`, so a page of media rows could otherwise reach hundreds of megabytes and fail the read outright. The budget is spent newest-first, matching the `createdAt` DESC order above, so a page that cannot carry everything keeps the most recent media. Past it a payload is replaced with `{ mimetype, filename?, omitted: true, sizeBytes }` — the same marker the engine emits for inbound media over `MEDIA_DOWNLOAD_MAX_BYTES` — and the bytes remain available from [`GET /messages/:chatId/:messageId/media`](#get-apisessionssessionidmessageschatidmessageidmedia). Two rules bound the edges: the newest payload is always inlined even when it alone exceeds the budget (otherwise a single large photo would be permanently unreadable through this route), and a budget of `0` means "never inline" and grants no such allowance. The knob is validated at boot — `8MiB` would parse to 8 bytes — and is forwarded by both compose files. The MCP `MessageList` tool shares this path and the same budget.
 
-**Errors:** `400` `after` names no message in this session · `401` missing/invalid API key
+**Errors:** `400` `after` names no message in this session; `q` without `chatId`; `q` over 200 chars · `401` missing/invalid API key
 
 A blank `after` is treated as absent, the way a blank `limit` or `offset` already is, so a client
 templating a cursor it has not got yet keeps the unfiltered first page rather than a `400`.
@@ -1656,6 +1657,41 @@ rejected with `400` rather than guessing which half was meant.
 
 **Errors:** `400` unknown body field, validation failure, or session not active / blocked by a plugin hook · `401` missing/invalid API key · `403` key role below OPERATOR · `404` session not found · `500` engine error · `409` conflict or engine not ready (retryable) · `501` not supported on the active engine
 
+#### POST /api/sessions/:sessionId/messages/send-text-list
+
+Send a numbered text list. **Not a native WhatsApp list** — formats `*title*` plus `1. option` lines (and optional footer) and sends it through the ordinary `send-text` path, including pacing.
+
+**Auth:** API key (OPERATOR)
+
+**Path parameters**
+
+| Name      | Type   | Description |
+| --------- | ------ | ----------- |
+| sessionId | string | Session ID  |
+
+**Request body** — `SendTextListDto`
+
+| Field           | Type     | Required | Constraints        | Description                        |
+| --------------- | -------- | -------- | ------------------ | ---------------------------------- |
+| chatId          | string   | Yes      | WhatsApp chat id   | Target chat                        |
+| title           | string   | Yes      | max 255            | List title (rendered as `*title*`) |
+| options         | string[] | Yes      | 2–20, each max 200 | Numbered options                   |
+| footer          | string   | No       | max 255            | Trailing line                      |
+| quotedMessageId | string   | No       | non-empty          | Quote an earlier message           |
+| mentions        | string[] | No       | array of WIDs      | WIDs to @mention                   |
+
+```json
+{ "chatId": "628123456789@c.us", "title": "Lunch", "options": ["Pizza", "Salad"], "footer": "Kitchen closes at 3" }
+```
+
+**Response** `201`
+
+```json
+{ "messageId": "true_628123456789@c.us_3EB0ABCD", "timestamp": 1719312000 }
+```
+
+**Errors:** `400` validation failure / formatted list exceeds text cap / session not active · `401` · `403` · `409` engine not ready
+
 ##### Quoted sends
 
 Nine `send-*` routes accept an optional `quotedMessageId`: `send-text` above, and `send-image`,
@@ -1944,11 +1980,19 @@ Send a sticker (by URL or base64; typically webp). Reuses `SendMediaMessageDto`.
 | --------- | ------ | ----------- |
 | sessionId | string | Session ID  |
 
-**Request body** — `SendMediaMessageDto` (fields `chatId`, `url`, `base64`, `mimetype`, `filename`, `caption`, `quotedMessageId` — see `send-image`)
+**Request body** — `SendStickerMessageDto` (fields `chatId`, `url`, `base64`, `mimetype`, `filename`, `caption`, `quotedMessageId` — see `send-image` — plus optional `packName` / `author`)
 
 ```json
-{ "chatId": "628123456789@c.us", "url": "https://example.com/sticker.webp", "mimetype": "image/webp" }
+{
+  "chatId": "628123456789@c.us",
+  "url": "https://example.com/sticker.webp",
+  "mimetype": "image/webp",
+  "packName": "OpenWA",
+  "author": "Bot"
+}
 ```
+
+`packName` / `author` are honoured by whatsapp-web.js (`stickerName` / `stickerAuthor`). Baileys has no in-tree WebP EXIF writer (sharp converts; it does not write WhatsApp sticker EXIF). The sticker still sends; pack metadata on Baileys is deferred to WP5.
 
 **Response** `201`
 
@@ -1972,13 +2016,14 @@ Send a native WhatsApp poll.
 
 **Request body** — `SendPollDto`
 
-| Field                | Type     | Required | Constraints                               | Description                                                  |
-| -------------------- | -------- | -------- | ----------------------------------------- | ------------------------------------------------------------ |
-| chatId               | string   | Yes      | non-empty                                 | Target chat                                                  |
-| name                 | string   | Yes      | max 255                                   | Poll question / title                                        |
-| options              | string[] | Yes      | 2–12 items, each non-empty, max 100 chars | Options to vote on                                           |
-| allowMultipleAnswers | boolean  | No       | —                                         | Allow picking several options (default single choice)        |
-| quotedMessageId      | string   | No       | non-empty                                 | Quote an earlier message — see [Quoted sends](#quoted-sends) |
+| Field                | Type     | Required | Constraints                               | Description                                                                                                                                                                                                                                                                              |
+| -------------------- | -------- | -------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| chatId               | string   | Yes      | non-empty                                 | Target chat                                                                                                                                                                                                                                                                              |
+| name                 | string   | Yes      | max 255                                   | Poll question / title                                                                                                                                                                                                                                                                    |
+| options              | string[] | Yes      | 2–12 items, each non-empty, max 100 chars | Options to vote on                                                                                                                                                                                                                                                                       |
+| allowMultipleAnswers | boolean  | No       | —                                         | Allow picking several options (default single choice)                                                                                                                                                                                                                                    |
+| selectableCount      | integer  | No       | 0–12                                      | How many options a voter may pick. `1` = single; `0` = unlimited on Baileys. **400** if it conflicts with `allowMultipleAnswers` (`selectableCount === 1` XOR `allowMultipleAnswers`). whatsapp-web.js only has a boolean: `selectableCount !== 1` maps to `allowMultipleAnswers: true`. |
+| quotedMessageId      | string   | No       | non-empty                                 | Quote an earlier message — see [Quoted sends](#quoted-sends)                                                                                                                                                                                                                             |
 
 ```json
 {
@@ -2089,11 +2134,12 @@ Forward a message from one chat to another.
 
 **Request body** — `ForwardMessageDto`
 
-| Field      | Type   | Required | Constraints | Description                           |
-| ---------- | ------ | -------- | ----------- | ------------------------------------- |
-| fromChatId | string | Yes      | non-empty   | Source chat                           |
-| toChatId   | string | Yes      | non-empty   | Destination chat                      |
-| messageId  | string | Yes      | non-empty   | WhatsApp id of the message to forward |
+| Field      | Type     | Required | Constraints | Description                                                                                                                                                                                                |
+| ---------- | -------- | -------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| fromChatId | string   | Yes      | non-empty   | Source chat                                                                                                                                                                                                                                                                      |
+| toChatId   | string   | No*      | non-empty   | Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged.                                                                                                                                                            |
+| toChatIds  | string[] | No*      | max 10      | Destinations (unique with `toChatId`). Combined unique set capped at **10**. Each dest is paced (`assertSendAllowed`; no inter-dest sleep). N=1 keeps `{ messageId, timestamp }` at 201. N>1 returns `{ fromChatId, messageId, results[] }` at **201** all sent / **207** mixed / **502** all failed. N>1 is audited (`message_multi_forward`). |
+| messageId  | string   | Yes      | non-empty   | WhatsApp id of the message to forward                                                                                                                                                                                                                                            |
 
 ```json
 { "fromChatId": "628111111111@c.us", "toChatId": "628222222222@c.us", "messageId": "true_628111111111@c.us_3EB0XYZ" }
@@ -2107,7 +2153,9 @@ Forward a message from one chat to another.
 
 `messageId` may be an empty string when the engine could not recover the forwarded copy's id.
 
-**Errors:** `400` validation failure / session not active / unknown body field · `401` missing/invalid API key · `403` key role below OPERATOR · `500` engine error · `409` conflict or engine not ready (retryable)
+\* At least one of `toChatId` or `toChatIds` is required.
+
+**Errors:** `400` validation failure / session not active / unknown body field / neither dest field / over 10 unique dests · `401` missing/invalid API key · `403` key role below OPERATOR · `207` mixed multi-dest · `502` every multi-dest failed · `500` engine error (single dest) · `409` conflict or engine not ready (retryable)
 
 #### POST /api/sessions/:sessionId/messages/react
 

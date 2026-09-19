@@ -354,6 +354,15 @@ class SendTextRequest(TypedDict):
     quotedMessageId: NotRequired[str]
 
 
+class SendTextListRequest(TypedDict):
+    chatId: Jid
+    title: str
+    options: list[str]
+    footer: NotRequired[str]
+    quotedMessageId: NotRequired[str]
+    mentions: NotRequired[list[str]]
+
+
 class SendMediaRequest(TypedDict):
     chatId: Jid
     url: NotRequired[str]
@@ -418,7 +427,8 @@ class ReplyMessageRequest(TypedDict):
 
 class ForwardMessageRequest(TypedDict):
     fromChatId: Jid
-    toChatId: Jid
+    toChatId: NotRequired[Jid]
+    toChatIds: NotRequired[list[Jid]]
     messageId: str
 
 
@@ -464,6 +474,7 @@ class SendPollRequest(TypedDict):
     # Options to vote on (WhatsApp allows between 2 and 12).
     options: list[str]
     allowMultipleAnswers: NotRequired[bool]
+    selectableCount: NotRequired[int]
     # Quote an earlier message, turning this send into a reply. Engine-specific: whatsapp-web.js
     # matches the serialized message id, Baileys the raw key id of a message it has already stored.
     quotedMessageId: NotRequired[str]
@@ -473,7 +484,7 @@ class SendPollRequest(TypedDict):
 ListMessagesQuery = TypedDict(
     "ListMessagesQuery",
     # ``after`` is a keyset cursor: the id of the last message of the previous page.
-    {"chatId": Jid, "from": Jid, "limit": int, "offset": int, "after": str, "inlineMedia": bool},
+    {"chatId": Jid, "from": Jid, "limit": int, "offset": int, "after": str, "inlineMedia": bool, "q": str},
     total=False,
 )
 
