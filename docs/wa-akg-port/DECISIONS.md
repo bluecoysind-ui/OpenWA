@@ -1,0 +1,135 @@
+# Decisions (Phase 0)
+
+Living log. Update when a WP lands a trade-off.
+
+Locked Q1–Q8 (2026-09-20):
+
+| ID | Decision |
+| --- | --- |
+| **Q1** | Text-list helper only, last item in WP2. **No** native `listMessage`. `LIST_MESSAGES` stays unused. |
+| **Q2** | One-shot scheduler in WP4. IANA timezone stored per row. Recurrence = WP4b later. |
+| **Q3** | Leave bulk crash-resume as-is (interrupted batches stay FAILED; cancel stays). |
+| **Q4** | Intended plugin, **spike failed** — see D4. Core module behind `BOT_COMMANDS` + per-session enabled. |
+| **Q5** | No universal `/send`. |
+| **Q6** | Yes: webhook delivery rows with status, HTTP code, duration, attempt, error snippet **only**. Never request/response bodies. Retention 30 days **or** last 500 per webhook. |
+| **Q7** | No Baileys rc.9 patch. |
+| **Q8** | Final UI is **`./frontend/`**, not `/dashboard`. |
+
+---
+
+## D1 — Not a rewrite
+
+OpenWA stays NestJS + TypeORM + dual engines. WA-AKG is a **capability checklist**, not an architecture template. Next.js routes, Prisma, NextAuth, and React pages are not copied. `/dashboard` stays as-is (no WA-AKG screens). Additive UI is `./frontend/` (D15).
+
+## D2 — Spam / bomb is skipped
+
+`POST .../spam` in `_reference/WA-AKG` is an uncapped background loop. **Will not be ported**, even behind a flag, unless a future review explicitly asks for a hard-capped audited variant (then it would be bulk+pacing, not this handler).
+
+## D3 — No second rules engine
+
+Auto-reply lands as **additive columns and matching logic on `AutomationRulesService`**. Bot commands land as a **core module** (D4). Both read the same bot-config access lists. **Precedence:** bot-config access lists gate first, then rule conditions. Inbound messages still go Session projector → automation → webhooks as today.
+
+## D4 — Bot commands: plugin spike failed → core module
+
+**Spike (2026-09-20), no product code.** `PluginContext` vs required (a)(b)(c):
+
+| Need | Result |
+| --- | --- |
+| (a) send **text** via MessageService with pacing | **Yes.** `ctx.messages.sendText` → `PluginMessagePort.sendText` → `MessageService.sendText` (pacing on that path). |
+| (a) send **sticker** | **No.** `PluginMessagingCapability` is only `sendText`/`reply`. `conversation.send` media types are `image\|file\|audio\|video\|voice` — **not sticker**. Extending the plugin surface is out of WP1 scope. |
+| (b) read bot-config | **No.** `ctx.config` is the plugin’s own manifest config. There is no session `bot_configs` table or capability. |
+| (c) run only when `BOT_COMMANDS=true` **and** per-session enabled | **No host hook.** Plugin enablement is plugin-session activation, not that pair of flags. |
+
+**Decision:** implement commands as a **core module** (`src/modules/bot/` in WP4) behind `BOT_COMMANDS=false` default **and** per-session `bot-config.enabled`. Sends still go through `MessageService` (pacing). Do not widen `PluginMessagingCapability` for this port. A later first-party plugin remains possible once (a)(b)(c) are true.
+
+## D5 — Broadcast extends bulk send
+
+`BulkMessageService` already has delay, jitter, cancel, pacing, circuit breaker, and batch status. **Do not add `BroadcastLog` as a second mechanism.** Map "broadcast" UX to bulk batches.
+
+## D6 — Scheduler is a new module
+
+New `src/modules/scheduler/` + TypeORM entity + migrations on the **`data` connection** (SQLite + Postgres). Sends still go through `MessageService` + pacing. Create the migration in **WP4** (first WP that reads the table).
+
+### D6b — Scheduler semantics (at-most-once)
+
+- Mark `SENDING` **before** the send.
+- Claim with an **atomic conditional `UPDATE ... WHERE status=PENDING AND sendAt<=now`** and check **affected rows** (SQLite has no row locks).
+- Crash recovery: `SENDING` rows → `FAILED` or `UNKNOWN`. **Never auto-resend.**
+- Overdue after downtime: skip (fail) if later than **max-lateness**; do not send silently late.
+- On `SEND_PACING_LIMITED`: **reschedule with backoff**, do not fail the job.
+- Caps: per-session **pending job** max and **max horizon** (how far ahead `sendAt` may be).
+- `SCHEDULED_MESSAGES` **defaults on** but is **inert until a job exists**. Anything that auto-sends on inbound stays opt-in per session.
+
+## D7 — Dual WA-AKG scheduler loops are a bug, not a feature
+
+One claim loop (multi-instance safe via D6b). Recurrence is WP4b.
+
+## D8 — Universal send is not duplicated
+
+No mega-body `/send`. Clients call existing `send-*`.
+
+## D9 — WA-AKG list ≠ WhatsApp listMessage
+
+Text-list helper only, last in WP2. Native lists not in this port.
+
+## D10 — Status/Stories
+
+Keep OpenWA `StatusController`. Do not add WA-AKG's `/status/.../update`.
+
+## D11 — LID
+
+Reuse `src/engine/identity/wa-id.ts` and `lid_mappings`. New DTOs parse through these helpers.
+
+## D12 — Media persist is opt-in
+
+`MEDIA_PERSIST=false` default. When true, `StorageService` session-prefixed keys. **List/delete of stored media only with this flag.** Global unscoped `/api/media/:filename` is not the OpenWA shape.
+
+## D13 — remove.bg
+
+Env `REMOVE_BG_API_KEY` default unset. Do not log the key.
+
+## D14 — Baileys patch
+
+Do not vendor the rc.9 patch (Q7).
+
+## D15 — UI is `./frontend/`, dashboard frozen
+
+WP7 is additive screens in **`./frontend/`**. Existing frontend stays as-is except minimal registration (logged in FRONTEND_CHANGES.md). **`git diff -- dashboard` must be empty at every WP.** Do not add features to `/dashboard`.
+
+## D16 — Webhook contract
+
+Keep `X-OpenWA-Signature`, retries, filters, existing event names. Delivery history (Q6): metadata only, 30 days or last 500 per hook.
+
+## D17 — Feature flags
+
+| Flag | Default | Notes |
+| --- | --- | --- |
+| `BOT_COMMANDS` | **off** | inbound auto-send |
+| `MEDIA_PERSIST` | **off** | |
+| `AUTO_REPLY_REGEX` | **off** | pattern length cap + truncated input |
+| `LIST_MESSAGES` | unused | native lists not shipped |
+| `SCHEDULED_MESSAGES` | **on** | inert until a job exists |
+| Inbound auto-reply / welcome / commands | per-session opt-in | access lists first |
+
+## D18 — Auth
+
+Every new route uses `ApiKeyGuard`, `@RequireRole`, session scope. No WA-AKG user table.
+
+## D19 — BotConfig fields that were omitted in first GAP
+
+| WA-AKG field | OpenWA decision |
+| --- | --- |
+| `autoRead` | Use existing `POST .../chats/:chatId/read` on inbound when bot-config says so. No second read API. |
+| `alwaysOnline` | Use existing `setOnlinePresence`. Session bot-config toggles it; respect engine 501. |
+| Welcome message | Hook `group.join` → `MessageService.sendText` through pacing. Per-session opt-in. |
+| Anti-spam | **Exists** via `SendPacingService`. Do not add a parallel limiter. |
+| Multipart media upload | **Skip** while base64 JSON works (frontend ~18 MiB cap, `BODY_SIZE_LIMIT` default 25mb). Ask if a needed file exceeds that. |
+| List/delete stored media | Only when `MEDIA_PERSIST=true`. |
+
+## D20 — Regex auto-replies
+
+Behind `AUTO_REPLY_REGEX`. Pattern length cap, truncated input. Ship **EXACT / CONTAINS / STARTS_WITH** first (WP4). Regex later under the flag.
+
+## D21 — Migrations
+
+New entities live on the **`data` connection**. Each migration is created in the WP that first reads the table, and is tested on **SQLite and Postgres**.
