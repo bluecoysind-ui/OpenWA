@@ -1917,6 +1917,53 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/webhooks/{id}/deliveries": {
+      "get": {
+        "operationId": "WebhookController_listDeliveries",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Webhook ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent attempts, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookDeliveryAttemptDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "summary": "List recent delivery attempts for a webhook (status, HTTP code, duration, attempt, error snippet)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/webhooks/{id}/test": {
       "post": {
         "operationId": "WebhookController_test",
@@ -2264,6 +2311,297 @@
         "summary": "Delete an autoreply rule",
         "tags": [
           "automation"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert": {
+      "get": {
+        "operationId": "MediaController_conversionStatus",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports whether conversion is switched on AND the ffmpeg binary can be run, so a client can decide between converting here and converting before it sends.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether server-side media conversion is available",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/voice": {
+      "post": {
+        "operationId": "MediaController_convertVoice",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted bytes, ready to post to send-audio with ptt=true. WhatsApp only renders a playable mic bubble for Ogg/Opus; other formats arrive as an audio file that will not play.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither url nor base64 given, or ffmpeg refused the input."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "503": {
+            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+          }
+        },
+        "summary": "Convert audio into a WhatsApp voice note (Ogg/Opus)",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/video": {
+      "post": {
+        "operationId": "MediaController_convertVideo",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted bytes: baseline H.264 with AAC audio, long edge bounded at 1280, index moved to the front so the recipient can start playing before the whole file arrives.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither url nor base64 given, or ffmpeg refused the input."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "503": {
+            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+          }
+        },
+        "summary": "Convert video into a WhatsApp-compatible MP4",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/sticker": {
+      "post": {
+        "operationId": "MediaController_convertSticker",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertStickerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted 512×512 WebP sticker bytes, ready to post to send-sticker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "503": {
+            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+          }
+        },
+        "summary": "Convert image or video into a WhatsApp WebP sticker",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/files": {
+      "get": {
+        "operationId": "MediaController_listStoredFiles",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored files for this session (empty when none)."
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or the session has no stored files index."
+          }
+        },
+        "summary": "List inbound files stored when MEDIA_PERSIST is on",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/files/{messageId}": {
+      "get": {
+        "operationId": "MediaController_getStoredFile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The stored bytes as an attachment.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or no stored file for this message."
+          }
+        },
+        "summary": "Fetch stored inbound media bytes for a message",
+        "tags": [
+          "media"
+        ]
+      },
+      "delete": {
+        "operationId": "MediaController_deleteStoredFile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "File deleted"
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or no stored file for this message."
+          }
+        },
+        "summary": "Delete a stored inbound media file",
+        "tags": [
+          "media"
         ]
       }
     },
@@ -8153,191 +8491,6 @@
         ]
       }
     },
-    "/api/sessions/{sessionId}/media/convert": {
-      "get": {
-        "operationId": "MediaController_conversionStatus",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "required": true,
-            "in": "path",
-            "description": "Session ID the API key must be authorized for",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reports whether conversion is switched on AND the ffmpeg binary can be run, so a client can decide between converting here and converting before it sends.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConversionStatusResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Whether server-side media conversion is available",
-        "tags": [
-          "media"
-        ]
-      }
-    },
-    "/api/sessions/{sessionId}/media/convert/voice": {
-      "post": {
-        "operationId": "MediaController_convertVoice",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "required": true,
-            "in": "path",
-            "description": "Session ID the API key must be authorized for",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConvertMediaDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Converted bytes, ready to post to send-audio with ptt=true. WhatsApp only renders a playable mic bubble for Ogg/Opus; other formats arrive as an audio file that will not play.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Neither url nor base64 given, or ffmpeg refused the input."
-          },
-          "413": {
-            "description": "The supplied media is above the media size cap."
-          },
-          "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
-          }
-        },
-        "summary": "Convert audio into a WhatsApp voice note (Ogg/Opus)",
-        "tags": [
-          "media"
-        ]
-      }
-    },
-    "/api/sessions/{sessionId}/media/convert/video": {
-      "post": {
-        "operationId": "MediaController_convertVideo",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "required": true,
-            "in": "path",
-            "description": "Session ID the API key must be authorized for",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConvertMediaDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Converted bytes: baseline H.264 with AAC audio, long edge bounded at 1280, index moved to the front so the recipient can start playing before the whole file arrives.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Neither url nor base64 given, or ffmpeg refused the input."
-          },
-          "413": {
-            "description": "The supplied media is above the media size cap."
-          },
-          "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
-          }
-        },
-        "summary": "Convert video into a WhatsApp-compatible MP4",
-        "tags": [
-          "media"
-        ]
-      }
-    },
-    "/api/sessions/{sessionId}/media/convert/sticker": {
-      "post": {
-        "operationId": "MediaController_convertSticker",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "required": true,
-            "in": "path",
-            "description": "Session ID the API key must be authorized for",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConvertStickerDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Converted 512×512 WebP sticker bytes, ready to post to send-sticker.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true."
-          },
-          "413": {
-            "description": "The supplied media is above the media size cap."
-          },
-          "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
-          }
-        },
-        "summary": "Convert image or video into a WhatsApp WebP sticker",
-        "tags": [
-          "media"
-        ]
-      }
-    },
     "/api/sessions/{sessionId}/scheduled-messages": {
       "post": {
         "operationId": "SchedulerController_create",
@@ -11475,6 +11628,7 @@
                 "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -11573,6 +11727,7 @@
                 "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -11651,6 +11806,50 @@
           "updatedAt"
         ]
       },
+      "WebhookDeliveryAttemptDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          },
+          "httpCode": {
+            "type": "number",
+            "nullable": true,
+            "description": "HTTP status when an exchange completed."
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "Wall-clock duration of this attempt in milliseconds."
+          },
+          "attempt": {
+            "type": "number",
+            "description": "1-based attempt number."
+          },
+          "errorSnippet": {
+            "type": "string",
+            "nullable": true,
+            "description": "Truncated error text. Never a body."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "durationMs",
+          "attempt",
+          "createdAt"
+        ]
+      },
       "UpdateWebhookDto": {
         "type": "object",
         "properties": {
@@ -11673,6 +11872,7 @@
                 "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -12023,6 +12223,89 @@
           "replyMediaUrl": {
             "type": "object",
             "nullable": true
+          }
+        }
+      },
+      "ConversionStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "True only when conversion is switched on AND the ffmpeg binary is runnable. False means a convert call will be refused, so check this before offering conversion in a UI.",
+            "example": true
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "ConvertMediaDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
+            "example": "https://example.com/note.m4a"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
+            "example": "SUQzBAAAAAAA..."
+          }
+        }
+      },
+      "ConvertedMediaResponseDto": {
+        "type": "object",
+        "properties": {
+          "base64": {
+            "type": "string",
+            "description": "The converted bytes, ready to hand straight to a send endpoint's `base64` field.",
+            "example": "T2dnUwACAAAAAAAAAAA..."
+          },
+          "mimetype": {
+            "type": "string",
+            "description": "The type the bytes now are — not the type they were.",
+            "example": "audio/ogg; codecs=opus"
+          },
+          "bytes": {
+            "type": "number",
+            "description": "Decoded size, so a caller can check a send limit without decoding.",
+            "example": 20480
+          }
+        },
+        "required": [
+          "base64",
+          "mimetype",
+          "bytes"
+        ]
+      },
+      "ConvertStickerDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
+            "example": "https://example.com/note.m4a"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
+            "example": "SUQzBAAAAAAA..."
+          },
+          "packName": {
+            "type": "string",
+            "description": "Sticker pack display name (WebP EXIF).",
+            "maxLength": 128
+          },
+          "author": {
+            "type": "string",
+            "description": "Sticker pack author (WebP EXIF).",
+            "maxLength": 128
+          },
+          "removeBg": {
+            "type": "boolean",
+            "description": "Strip the background via remove.bg before converting. Requires REMOVE_BG_API_KEY.",
+            "default": false
           }
         }
       },
@@ -17058,89 +17341,6 @@
         "required": [
           "message"
         ]
-      },
-      "ConversionStatusResponseDto": {
-        "type": "object",
-        "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "True only when conversion is switched on AND the ffmpeg binary is runnable. False means a convert call will be refused, so check this before offering conversion in a UI.",
-            "example": true
-          }
-        },
-        "required": [
-          "available"
-        ]
-      },
-      "ConvertMediaDto": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
-            "example": "https://example.com/note.m4a"
-          },
-          "base64": {
-            "type": "string",
-            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
-            "example": "SUQzBAAAAAAA..."
-          }
-        }
-      },
-      "ConvertedMediaResponseDto": {
-        "type": "object",
-        "properties": {
-          "base64": {
-            "type": "string",
-            "description": "The converted bytes, ready to hand straight to a send endpoint's `base64` field.",
-            "example": "T2dnUwACAAAAAAAAAAA..."
-          },
-          "mimetype": {
-            "type": "string",
-            "description": "The type the bytes now are — not the type they were.",
-            "example": "audio/ogg; codecs=opus"
-          },
-          "bytes": {
-            "type": "number",
-            "description": "Decoded size, so a caller can check a send limit without decoding.",
-            "example": 20480
-          }
-        },
-        "required": [
-          "base64",
-          "mimetype",
-          "bytes"
-        ]
-      },
-      "ConvertStickerDto": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
-            "example": "https://example.com/note.m4a"
-          },
-          "base64": {
-            "type": "string",
-            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
-            "example": "SUQzBAAAAAAA..."
-          },
-          "packName": {
-            "type": "string",
-            "description": "Sticker pack display name (WebP EXIF).",
-            "maxLength": 128
-          },
-          "author": {
-            "type": "string",
-            "description": "Sticker pack author (WebP EXIF).",
-            "maxLength": 128
-          },
-          "removeBg": {
-            "type": "boolean",
-            "description": "Strip the background via remove.bg before converting. Requires REMOVE_BG_API_KEY.",
-            "default": false
-          }
-        }
       },
       "CreateScheduledMessageDto": {
         "type": "object",

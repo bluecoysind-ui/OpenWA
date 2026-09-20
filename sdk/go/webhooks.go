@@ -79,3 +79,11 @@ func (s *WebhooksService) Test(ctx context.Context, sessionID, webhookID string)
 	}
 	return &out, nil
 }
+
+// Deliveries returns recent HTTP attempts for a webhook (status, HTTP code, duration, attempt,
+// error snippet). Requires an OPERATOR-level key.
+func (s *WebhooksService) Deliveries(ctx context.Context, sessionID, webhookID string) ([]WebhookDeliveryAttempt, error) {
+	var out []WebhookDeliveryAttempt
+	err := s.client.do(ctx, "GET", s.base(sessionID)+"/"+pathEscape(webhookID)+"/deliveries", nil, nil, &out)
+	return out, err
+}

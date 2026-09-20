@@ -79,6 +79,22 @@ class MediaResource:
             body=body,
         )
 
+    def list_files(self, session_id: str) -> list:
+        """List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off."""
+        return self._http.request("GET", f"/api/sessions/{quote_segment(session_id)}/media/files")
+
+    def get_file(self, session_id: str, message_id: str) -> dict:
+        """Fetch stored inbound media bytes. 404 when MEDIA_PERSIST is off or the file is missing."""
+        data, content_type = self._http.request_bytes(
+            "GET",
+            f"/api/sessions/{quote_segment(session_id)}/media/files/{quote_segment(message_id)}",
+        )
+        return {"data": data, "contentType": content_type}
+
+    def delete_file(self, session_id: str, message_id: str) -> None:
+        """Delete a stored inbound media file. OPERATOR."""
+        self._http.request("DELETE", f"/api/sessions/{quote_segment(session_id)}/media/files/{quote_segment(message_id)}")
+
 
 def _conversion_body(url: Optional[str], base64: Optional[str]) -> dict:
     """Send only the field that was given: a blank one reads as supplied-but-empty."""

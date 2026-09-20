@@ -7,6 +7,7 @@ import com.rmyndharis.openwa.http.HttpMethod;
 import com.rmyndharis.openwa.model.DeliveryFailureQuery;
 import com.rmyndharis.openwa.model.CreateWebhookRequest;
 import com.rmyndharis.openwa.model.UpdateWebhookRequest;
+import com.rmyndharis.openwa.model.WebhookDeliveryAttempt;
 import com.rmyndharis.openwa.model.WebhookDeliveryFailure;
 import com.rmyndharis.openwa.model.WebhookResponse;
 import com.rmyndharis.openwa.model.WebhookTestResult;
@@ -85,5 +86,15 @@ public final class WebhooksResource {
             null,
             null,
             WebhookTestResult.class);
+    }
+
+    /** Recent delivery attempts (status, HTTP code, duration, attempt, error snippet). OPERATOR. */
+    public List<WebhookDeliveryAttempt> deliveries(String sessionId, String id) {
+        return client.requestList(
+            HttpMethod.GET,
+            "/api/sessions/" + encodeSegment(sessionId) + "/webhooks/" + encodeSegment(id) + "/deliveries",
+            null,
+            null,
+            WebhookDeliveryAttempt.class);
     }
 }

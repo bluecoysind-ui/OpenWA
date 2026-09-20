@@ -190,6 +190,21 @@ describe('MediaResource — exact paths', () => {
       author: 'Author',
     });
   });
+
+  it('listFiles / getFile / deleteFile hit MEDIA_PERSIST routes', async () => {
+    const t = new MockTransport()
+      .on('GET', /\/media\/files$/, { body: [] })
+      .on('GET', /\/media\/files\/m1$/, { text: 'BYTES', contentType: 'application/octet-stream' })
+      .on('DELETE', /\/media\/files\/m1$/, { status: 204 });
+    const c = client(t);
+    await c.media.listFiles('s');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/files');
+    const file = await c.media.getFile('s', 'm1');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/files/m1');
+    expect(new TextDecoder().decode(file.data)).toBe('BYTES');
+    await c.media.deleteFile('s', 'm1');
+    expect(t.lastCall!.method).toBe('DELETE');
+  });
 });
 
 describe('ContactsResource — exact paths', () => {
@@ -267,10 +282,13 @@ describe('WebhooksResource — exact paths', () => {
         body: { id: 'w1', sessionId: 's', url: 'u', events: ['*'], active: false, createdAt: '', updatedAt: '' },
       })
       .on('DELETE', /\/webhooks\/w1$/, { status: 204 })
-      .on('POST', /\/webhooks\/w1\/test$/, { body: { success: true } });
+      .on('POST', /\/webhooks\/w1\/test$/, { body: { success: true } })
+      .on('GET', /\/webhooks\/w1\/deliveries$/, { body: [] });
     const c = client(t);
     await c.webhooks.list('s');
     await c.webhooks.get('s', 'w1');
+    await c.webhooks.deliveries('s', 'w1');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/webhooks/w1/deliveries');
     // Server DTO field is `retryCount` (NOT `retries`) — body must forward verbatim.
     const created = await c.webhooks.create('s', { url: 'u', events: ['*'], retryCount: 5 });
     expect(t.lastCall!.body).toEqual({ url: 'u', events: ['*'], retryCount: 5 });

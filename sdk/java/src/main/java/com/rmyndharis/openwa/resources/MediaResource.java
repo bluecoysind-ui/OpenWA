@@ -3,10 +3,13 @@ package com.rmyndharis.openwa.resources;
 import static com.rmyndharis.openwa.http.Http.encodeSegment;
 
 import com.rmyndharis.openwa.OpenWAClient;
+import com.rmyndharis.openwa.http.BinaryResponse;
 import com.rmyndharis.openwa.http.HttpMethod;
 import com.rmyndharis.openwa.model.ConvertMediaRequest;
 import com.rmyndharis.openwa.model.ConvertedMedia;
 import com.rmyndharis.openwa.model.MediaConversionAvailability;
+import com.rmyndharis.openwa.model.StoredMediaFile;
+import java.util.List;
 
 /** Media resource — server-side conversion into the formats WhatsApp plays. */
 public final class MediaResource {
@@ -68,5 +71,32 @@ public final class MediaResource {
             null,
             media,
             ConvertedMedia.class);
+    }
+
+    /** List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. OPERATOR. */
+    public List<StoredMediaFile> listFiles(String sessionId) {
+        return client.requestList(
+            HttpMethod.GET,
+            "/api/sessions/" + encodeSegment(sessionId) + "/media/files",
+            null,
+            null,
+            StoredMediaFile.class);
+    }
+
+    /** Fetch stored inbound media bytes. 404 when MEDIA_PERSIST is off or the file is missing. */
+    public BinaryResponse getFile(String sessionId, String messageId) {
+        return client.requestBytes(
+            HttpMethod.GET,
+            "/api/sessions/" + encodeSegment(sessionId) + "/media/files/" + encodeSegment(messageId),
+            null);
+    }
+
+    /** Delete a stored inbound media file. OPERATOR. */
+    public void deleteFile(String sessionId, String messageId) {
+        client.requestVoid(
+            HttpMethod.DELETE,
+            "/api/sessions/" + encodeSegment(sessionId) + "/media/files/" + encodeSegment(messageId),
+            null,
+            null);
     }
 }

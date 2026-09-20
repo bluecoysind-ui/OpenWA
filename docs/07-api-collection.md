@@ -1116,6 +1116,15 @@ curl -X GET "$BASE/api/sessions/$SESSION_ID/webhooks" \
   -H "X-API-Key: $API_KEY"
 ```
 
+#### GET /api/sessions/:sessionId/webhooks/:id/deliveries
+
+Recent HTTP attempts against this webhook (OPERATOR). Status, HTTP code, duration, attempt, error snippet only — never bodies.
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/webhooks/f1e2d3c4-b5a6-7890-1234-567890abcdef/deliveries" \
+  -H "X-API-Key: $API_KEY"
+```
+
 #### GET /api/sessions/:sessionId/webhooks/:id
 
 Get a single webhook by ID, scoped to the session.
@@ -1785,6 +1794,34 @@ curl -X POST "$BASE/api/sessions/$SESSION_ID/media/convert/sticker" \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "url": "https://example.com/pic.png", "packName": "OpenWA", "author": "OpenWA" }'
+```
+
+#### GET /api/sessions/:sessionId/media/files
+
+List inbound files stored when `MEDIA_PERSIST=true` (OPERATOR; 404 when the flag is off).
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/media/files" \
+  -H "X-API-Key: $API_KEY"
+```
+
+#### GET /api/sessions/:sessionId/media/files/:messageId
+
+Fetch stored inbound media bytes (OPERATOR; 404 when the flag is off or the file is missing).
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/media/files/true_628123456789@c.us_3EB0ABCD" \
+  -H "X-API-Key: $API_KEY" \
+  -o stored.bin
+```
+
+#### DELETE /api/sessions/:sessionId/media/files/:messageId
+
+Delete a stored inbound file (OPERATOR; 404 when the flag is off or the file is missing).
+
+```bash
+curl -X DELETE "$BASE/api/sessions/$SESSION_ID/media/files/true_628123456789@c.us_3EB0ABCD" \
+  -H "X-API-Key: $API_KEY"
 ```
 
 ### 07.17 Real-time (WebSocket)

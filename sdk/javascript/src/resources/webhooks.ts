@@ -15,6 +15,16 @@ import type {
   WebhookTestResult,
 } from '../types.js';
 
+export interface WebhookDeliveryAttempt {
+  id: string;
+  status: 'success' | 'failed';
+  httpCode: number | null;
+  durationMs: number;
+  attempt: number;
+  errorSnippet: string | null;
+  createdAt: string;
+}
+
 /** Pagination for the cross-session webhook list and the delivery-failure log. */
 export interface WebhookListQuery {
   limit?: number;
@@ -65,6 +75,14 @@ export class WebhooksResource {
     return this.client.request<WebhookResponse>({
       method: 'GET',
       path: `/api/sessions/${encodeSegment(sessionId)}/webhooks/${encodeSegment(id)}`,
+    });
+  }
+
+  /** Recent delivery attempts (status, HTTP code, duration, attempt, error snippet). OPERATOR. */
+  deliveries(sessionId: string, id: string): Promise<WebhookDeliveryAttempt[]> {
+    return this.client.request<WebhookDeliveryAttempt[]>({
+      method: 'GET',
+      path: `/api/sessions/${encodeSegment(sessionId)}/webhooks/${encodeSegment(id)}/deliveries`,
     });
   }
 

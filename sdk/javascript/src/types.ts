@@ -919,6 +919,7 @@ export type WebhookEvent =
   | 'scheduled.message.failed'
   | 'message.revoked'
   | 'message.reaction'
+  | 'message.poll_vote'
   | 'message.edited'
   | 'session.status'
   | 'session.qr'

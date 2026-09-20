@@ -44,7 +44,7 @@ This document describes existing behavior. It is not a proposal.
 
 Neutral inbound types include `text|image|video|audio|voice|document|sticker|location|contact|poll|call|revoked|order|product|masked|unknown`.
 
-`IncomingMessage` (`whatsapp-engine.interface.ts`) already carries `kind`, `fromMe`, `isLidSender`, `senderPhone`, `contact`, `quotedMessage: { id, body }`, `media`, `location`. Quoted payload does **not** currently include type / caption / media URL.
+`IncomingMessage` (`whatsapp-engine.interface.ts`) already carries `kind`, `fromMe`, `isLidSender`, `senderPhone`, `contact`, `quotedMessage: { id, body, type?, caption?, hasMedia?, fileUrl? }`, additive `remoteJidAlt`/`participantAlt`, `media`, `location`. `quotedMessage.fileUrl` is set only when `MEDIA_PERSIST` already stored that quoted message.
 
 ### Known engine asymmetries (messaging-adjacent)
 
@@ -133,7 +133,7 @@ Ack path: engine ack → `deliveryStatusToMessageStatus` → DB + `message.ack` 
 
 ```
 message.received | message.sent | message.ack | message.failed
-message.revoked | message.reaction | message.edited
+message.revoked | message.reaction | message.poll_vote | message.edited
 status.received
 session.status | session.qr | session.authenticated | session.disconnected
 session.reconnect_loop | session.restriction
@@ -144,9 +144,9 @@ call.received | call.accepted | call.rejected | call.missed
 
 Wildcard `*` allowed. HMAC: `X-OpenWA-Signature: sha256=<hex>`. Also `X-OpenWA-Event`, `X-OpenWA-Idempotency-Key`, `X-OpenWA-Delivery-Id`, `X-OpenWA-Retry-Count`. Default `retryCount` 3. Optional BullMQ when `QUEUE_ENABLED=true`. Smart filters share `WebhookFilters` with automation (`sender`, `recipient`, `chatId`, `body`, `type`, `isGroup`, `kind`, `fromMe`, `hasMedia`, `mentions`; operators `is|isNot|contains|equals`).
 
-**Not in catalog:** poll-vote, contact.update, label events, a WA-AKG-style `connection.update` (OpenWA uses `session.*`).
+**Not in catalog:** contact.update, label events, a WA-AKG-style `connection.update` (OpenWA uses `session.*`). `message.poll_vote` is now in the webhook catalog behind `POLL_VOTE_EVENTS` (webhook-only).
 
-Delivery records: outbox + failure table. There is **no** per-webhook attempt history API like WA-AKG `GET .../webhooks/:id/logs`.
+Delivery records: outbox + failure table + `GET .../webhooks/:id/deliveries` (attempt log, no bodies).
 
 ---
 

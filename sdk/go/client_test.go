@@ -1016,6 +1016,7 @@ func TestWebhookEventWireValues(t *testing.T) {
 		EventScheduledMessageFailed: "scheduled.message.failed",
 		EventMessageRevoked:         "message.revoked",
 		EventMessageReaction:      "message.reaction",
+		EventMessagePollVote:      "message.poll_vote",
 		EventMessageEdited:        "message.edited",
 		EventSessionStatus:        "session.status",
 		EventSessionQR:            "session.qr",

@@ -32,7 +32,7 @@ All five SDKs expose the same fluent surface:
 | `messages`  | list, sendText, sendTextList, sendImage/Video/Audio/Document/Sticker, sendLocation, sendContact, sendTemplate, sendPoll, reply, forward, clickButton, react, delete, editMessage, history, reactions, media, pin, unpin, star, votePoll, sendBulk, batchStatus, cancelBatch                              |
 | `contacts`  | list, get, check, checkNumbers, profilePicture, profilePictures, phone, upsert, delete, block, unblock, listBlocked                                                                                                                                                                                     |
 | `groups`    | list, get, create, joinInfo, joinGroup, add/remove/promote/demoteParticipants, setSubject, setDescription, getGroupSettings, updateGroupSettings, leave, getPicture, setPicture, deletePicture, inviteCode, revokeInviteCode, getMembershipRequests, approveMembershipRequests, rejectMembershipRequests |
-| `webhooks`  | list, listAll, deliveryFailures, get, create, update, delete, test                                                                                                                                                                                                                                       |
+| `webhooks`  | list, listAll, deliveryFailures, get, deliveries, create, update, delete, test                                                                                                                                                                                                                           |
 | `chats`     | list, subscribePresence, getPresence, markRead, markUnread, archive, pin, mute, clearMessages, delete, sendState                                                                                                                                                                                         |
 | `labels`    | list, get, chats, upsert, delete, forChat, addToChat, removeFromChat _(WhatsApp Business)_                                                                                                                                                                                                               |
 | `channels`  | list, get, messages, create, delete, mute, subscribe, unsubscribe, demoteAdmin, transferOwnership _(Newsletters)_                                                                                                                                                                                        |
@@ -42,7 +42,7 @@ All five SDKs expose the same fluent surface:
 | `templates` | list, get, create, update, delete                                                                                                                                                                                                                                                                        |
 | `profile`   | setProfileName, setProfileStatus, setProfilePicture, deleteProfilePicture                                                                                                                                                                                                                                |
 | `calls`     | rejectCall, createLink                                                                                                                                                                                                                                                                                   |
-| `media`     | conversionStatus, convertVoice, convertVideo, convertSticker _(OPERATOR)_                                                                                                                                                                                                                                                |
+| `media`     | conversionStatus, convertVoice, convertVideo, convertSticker, listFiles, getFile, deleteFile _(OPERATOR)_                                                                                                                                                                                                |
 | `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
 | `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                                                |
 | `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
@@ -249,6 +249,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `deliveryFailures` | `deliveryFailures(query?)`    | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`             | `list(sessionId)`             | List all webhooks for a session. **OPERATOR**                                                                                                                          |
 | `get`              | `get(sessionId, id)`          | Get a single webhook by id. **OPERATOR**                                                                                                                               |
+| `deliveries`       | `deliveries(sessionId, id)`   | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`           | `create(sessionId, body)`     | Create a new webhook. **OPERATOR**                                                                                                                                     |
 | `update`           | `update(sessionId, id, body)` | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`           | `delete(sessionId, id)`       | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -346,6 +347,9 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `convertVoice`     | `convertVoice(sessionId, input)` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convertVideo`     | `convertVideo(sessionId, input)`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
 | `convertSticker`   | `convertSticker(sessionId, input)` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
+| `listFiles`        | `listFiles(sessionId)`             | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR**  |
+| `getFile`          | `getFile(sessionId, messageId)`    | Fetch stored inbound media bytes. **OPERATOR**                                              |
+| `deleteFile`       | `deleteFile(sessionId, messageId)` | Delete a stored inbound media file. **OPERATOR**                                            |
 
 #### `scheduled-messages`
 
@@ -642,6 +646,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `delivery_failures` | `delivery_failures(query=None) -> list[WebhookDeliveryFailure]` | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`              | `list(session_id) -> list[WebhookResponse]`                     | List webhooks. **OPERATOR**                                                                                                                                            |
 | `get`               | `get(session_id, webhook_id) -> WebhookResponse`                | Get one webhook. **OPERATOR**                                                                                                                                          |
+| `deliveries`        | `deliveries(session_id, webhook_id) -> list`                    | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`            | `create(session_id, body) -> WebhookResponse`                   | Create a webhook. **OPERATOR**                                                                                                                                         |
 | `update`            | `update(session_id, webhook_id, body) -> WebhookResponse`       | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`            | `delete(session_id, webhook_id) -> None`                        | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -737,6 +742,9 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `convert_voice`     | `convert_voice(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convert_video`     | `convert_video(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
 | `convert_sticker`   | `convert_sticker(session_id, *, url=None, base64=None, pack_name=None, author=None, remove_bg=None) -> ConvertedMedia` | Convert image or video into a 512×512 WebP sticker. **OPERATOR** |
+| `list_files`        | `list_files(session_id)`                                        | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR** |
+| `get_file`          | `get_file(session_id, message_id)`                              | Fetch stored inbound media bytes. **OPERATOR** |
+| `delete_file`       | `delete_file(session_id, message_id) -> None`                   | Delete a stored inbound media file. **OPERATOR** |
 
 #### `client.scheduled-messages`
 
@@ -1008,6 +1016,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `deliveryFailures` | `deliveryFailures(array $query = [])`                       | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`             | `list(string $sessionId): array`                            | List webhooks. **OPERATOR**                                                                                                                                            |
 | `get`              | `get(string $sessionId, string $id): array`                 | Get one webhook. **OPERATOR**                                                                                                                                          |
+| `deliveries`       | `deliveries(string $sessionId, string $id): array`          | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`           | `create(string $sessionId, array $body): array`             | Create a webhook. **OPERATOR**                                                                                                                                         |
 | `update`           | `update(string $sessionId, string $id, array $body): array` | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`           | `delete(string $sessionId, string $id): void`               | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -1103,6 +1112,9 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `convertVoice`     | `convertVoice(string $sessionId, array $media): array` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convertVideo`     | `convertVideo(string $sessionId, array $media): array`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
 | `convertSticker`   | `convertSticker(string $sessionId, array $media): array` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
+| `listFiles`        | `listFiles(string $sessionId): array`                    | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR**   |
+| `getFile`          | `getFile(string $sessionId, string $messageId): array`   | Fetch stored inbound media bytes. **OPERATOR**                                               |
+| `deleteFile`       | `deleteFile(string $sessionId, string $messageId): void` | Delete a stored inbound media file. **OPERATOR**                                             |
 
 #### `scheduled-messages`
 
