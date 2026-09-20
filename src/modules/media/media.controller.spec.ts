@@ -16,12 +16,20 @@ describe('MediaController', () => {
   const convertToVideo = jest.fn().mockResolvedValue({ base64: 'b', mimetype: 'video/mp4', bytes: 1 });
   const convertToSticker = jest.fn().mockResolvedValue({ base64: 'b', mimetype: 'image/webp', bytes: 1 });
   const isAvailable = jest.fn().mockResolvedValue(true);
-  const controller = new MediaController({
-    convertToVoice,
-    convertToVideo,
-    convertToSticker,
-    isAvailable,
-  } as unknown as MediaConversionService);
+  const persist = {
+    list: jest.fn().mockResolvedValue([]),
+    get: jest.fn().mockResolvedValue(Buffer.from('x')),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
+  const controller = new MediaController(
+    {
+      convertToVoice,
+      convertToVideo,
+      convertToSticker,
+      isAvailable,
+    } as unknown as MediaConversionService,
+    persist as never,
+  );
 
   afterEach(() => jest.clearAllMocks());
 
@@ -54,6 +62,9 @@ describe('MediaController', () => {
       expect(Reflect.getMetadata(METHOD_METADATA, handler('convertVideo'))).toBe(RequestMethod.POST);
       expect(Reflect.getMetadata(METHOD_METADATA, handler('convertSticker'))).toBe(RequestMethod.POST);
       expect(Reflect.getMetadata(METHOD_METADATA, handler('conversionStatus'))).toBe(RequestMethod.GET);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler('listStoredFiles'))).toBe(RequestMethod.GET);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler('getStoredFile'))).toBe(RequestMethod.GET);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler('deleteStoredFile'))).toBe(RequestMethod.DELETE);
     });
   });
 
@@ -63,6 +74,9 @@ describe('MediaController', () => {
       expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertVoice'))).toBe(ApiKeyRole.OPERATOR);
       expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertVideo'))).toBe(ApiKeyRole.OPERATOR);
       expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertSticker'))).toBe(ApiKeyRole.OPERATOR);
+      expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('listStoredFiles'))).toBe(ApiKeyRole.OPERATOR);
+      expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('getStoredFile'))).toBe(ApiKeyRole.OPERATOR);
+      expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('deleteStoredFile'))).toBe(ApiKeyRole.OPERATOR);
     });
 
     // Asking whether the feature exists reveals nothing, and a read-only key needs the answer to

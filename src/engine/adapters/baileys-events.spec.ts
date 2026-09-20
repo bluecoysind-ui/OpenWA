@@ -338,6 +338,9 @@ describe('BaileysEvents.mapMessage', () => {
 
     expect(incoming.quotedMessage?.id).toBe('wamid.original2');
     expect(incoming.quotedMessage?.body).toBe('quoted image caption');
+    expect(incoming.quotedMessage?.type).toBe('image');
+    expect(incoming.quotedMessage?.hasMedia).toBe(true);
+    expect(incoming.quotedMessage?.caption).toBe('quoted image caption');
     expect(incoming.ephemeralDuration).toBe(604800);
     expect(incoming.mentionedIds).toEqual(['15559998888@s.whatsapp.net']);
   });

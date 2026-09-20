@@ -278,6 +278,7 @@ describe('validateEnv', () => {
     'CHAT_MEDIA_ARCHIVE_ENABLED',
     'CHAT_MEDIA_ARCHIVE_OUTBOUND',
     'MEDIA_PERSIST',
+    'POLL_VOTE_EVENTS',
     'BOT_COMMANDS',
     'AUTO_REPLY_REGEX',
     'SCHEDULED_MESSAGES',
@@ -498,5 +499,7 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ MEDIA_CONVERSION_MAX_OUTPUT_BYTES: '52428800' })).not.toThrow();
     expect(() => validateEnv({ STICKER_MAX_DURATION_SEC: '0' })).toThrow(/positive integer/);
     expect(() => validateEnv({ STICKER_MAX_DURATION_SEC: '8' })).not.toThrow();
+    expect(() => validateEnv({ MEDIA_PERSIST_TTL_DAYS: '0' })).toThrow(/positive integer/);
+    expect(() => validateEnv({ MEDIA_PERSIST_TTL_DAYS: '30' })).not.toThrow();
   });
 });

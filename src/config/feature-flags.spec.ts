@@ -13,6 +13,7 @@ describe('feature-flags', () => {
         simulateTyping: true, // opt-out
         simulateTypingMaxMs: 5000,
         mediaPersist: false,
+        pollVoteEvents: false,
         botCommands: false,
         autoReplyRegex: false,
         scheduledMessages: true, // opt-out; inert until a job exists
@@ -43,10 +44,12 @@ describe('feature-flags', () => {
 
     it('treats WA-AKG port opt-in flags as ON only for the exact string "true"', () => {
       expect(computeFeatureFlags({ MEDIA_PERSIST: 'true' }).mediaPersist).toBe(true);
+      expect(computeFeatureFlags({ POLL_VOTE_EVENTS: 'true' }).pollVoteEvents).toBe(true);
       expect(computeFeatureFlags({ BOT_COMMANDS: 'true' }).botCommands).toBe(true);
       expect(computeFeatureFlags({ AUTO_REPLY_REGEX: 'true' }).autoReplyRegex).toBe(true);
       for (const v of ['false', 'TRUE', '1', 'yes', '']) {
         expect(computeFeatureFlags({ MEDIA_PERSIST: v }).mediaPersist).toBe(false);
+        expect(computeFeatureFlags({ POLL_VOTE_EVENTS: v }).pollVoteEvents).toBe(false);
         expect(computeFeatureFlags({ BOT_COMMANDS: v }).botCommands).toBe(false);
         expect(computeFeatureFlags({ AUTO_REPLY_REGEX: v }).autoReplyRegex).toBe(false);
       }
