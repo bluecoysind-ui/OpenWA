@@ -22,6 +22,16 @@ type HealthReadyResponse struct {
 	Details map[string]DependencyStatus `json:"details,omitempty"`
 }
 
+// FeatureFlagsResponse is GET /api/features — booleans only, no secrets.
+type FeatureFlagsResponse struct {
+	Scheduler          bool `json:"scheduler"`
+	BotCommands        bool `json:"botCommands"`
+	MediaPersist       bool `json:"mediaPersist"`
+	RemoveBgConfigured bool `json:"removeBgConfigured"`
+	RegexRules         bool `json:"regexRules"`
+	PollVoteEvents     bool `json:"pollVoteEvents"`
+}
+
 // ── Auth ─────────────────────────────────────────────────
 
 // AuthValidateResponse reports whether the API key is valid and its role.

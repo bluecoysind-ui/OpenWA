@@ -5145,6 +5145,25 @@ Readiness probe — verifies the `main` (auth/audit) and `data` TypeORM datasour
 
 During shutdown the `details` instead read `{ "shutdown": { "status": "draining" } }`. Probes run in parallel via `Promise.all`. There is no `health/detailed` route.
 
+#### GET /api/features
+
+Boolean feature flags for UI gating. **Auth:** API key (VIEWER). Deployment-wide; session-scoped keys may read the same booleans. Never returns secrets.
+
+**Response** `200`
+
+```json
+{
+  "scheduler": true,
+  "botCommands": false,
+  "mediaPersist": false,
+  "removeBgConfigured": false,
+  "regexRules": false,
+  "pollVoteEvents": false
+}
+```
+
+`removeBgConfigured` is true only when `REMOVE_BG_API_KEY` is non-empty; the key itself is never returned.
+
 #### GET /api/metrics
 
 Prometheus exposition scrape of OpenWA process + session + message metrics; gated by a `METRICS_TOKEN` bearer (disabled when the token is unset).

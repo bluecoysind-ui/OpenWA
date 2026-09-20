@@ -45,7 +45,7 @@ All five SDKs expose the same fluent surface:
 | `media`     | conversionStatus, convertVoice, convertVideo, convertSticker, listFiles, getFile, deleteFile _(OPERATOR)_                                                                                                                                                                                                |
 | `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
 | `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                                                |
-| `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
+| `health`    | check, live, ready, features                                                                                                                                                                                                                                                                                       |
 
 > The SDKs cover the user-facing resources above and stop there. The administrative and operational surfaces are deliberately left out — `auth/api-keys`, `audit`, `settings`, `stats`, `automation`, `infra`, `plugins` and the `integration` management routes are predominantly `ADMIN`-gated; `metrics` is a `@Public()` Prometheus scrape gated by `METRICS_TOKEN` rather than by role; `mcp` is a Streamable-HTTP transport mounted straight onto the Express adapter; and `ingress` is the `@Public()` receiver that integration providers post into. `docker` has no HTTP surface at all — it is an internal service module. Methods that require an `OPERATOR`-level key are annotated **OPERATOR** in the per-language tables below.
 
@@ -375,6 +375,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `check` | `check()` | General health (also returns the running version).       |
 | `live`  | `live()`  | Kubernetes liveness probe (`{ status }`).                |
 | `ready` | `ready()` | Kubernetes readiness probe — checks both DB connections. |
+| `features` | `features()` | Boolean feature flags for UI gating (VIEWER; no secrets). |
 
 ### Error Handling
 
@@ -770,6 +771,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `check` | `check() -> HealthResponse`      | Aggregate health check. |
 | `live`  | `live() -> dict[str, str]`       | Liveness probe.         |
 | `ready` | `ready() -> HealthReadyResponse` | Readiness probe.        |
+| `features` | `features() -> dict`          | Boolean feature flags (VIEWER; no secrets). |
 
 ### Error Handling
 
@@ -1140,6 +1142,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `check` | `check(): array` | `GET /api/health`. |
 | `live`  | `live(): array`  | Liveness probe.    |
 | `ready` | `ready(): array` | Readiness probe.   |
+| `features` | `features(): array` | Boolean feature flags (VIEWER; no secrets). |
 
 ### Error Handling
 

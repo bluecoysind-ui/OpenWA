@@ -762,12 +762,14 @@ class TestChatsAndHealth:
         backend.on("GET", "/api/health", body={"status": "ok", "version": "0.7.2"})
         backend.on("GET", "/live", body={"status": "ok"})
         backend.on("GET", "/ready", body={"status": "ok", "details": {}})
+        backend.on("GET", "/features", body={"scheduler": True})
         backend.on("POST", "/validate", body={"valid": True, "role": "admin"})
         client = make_client(backend)
         client.health.check()
         assert backend.calls[-1].url == "http://localhost:2785/api/health"
         client.health.live()
         client.health.ready()
+        client.health.features()
         client.auth()
         assert backend.calls[-1].method == "POST"
         assert "/auth/validate" in backend.calls[-1].url

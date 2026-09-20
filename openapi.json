@@ -39,6 +39,8 @@
                 "contact_numbers_checked",
                 "send_pacing_blocked",
                 "send_breaker_tripped",
+                "scheduled_message_created",
+                "scheduled_message_cancelled",
                 "scheduled_message_sent",
                 "scheduled_message_failed",
                 "webhook_created",
@@ -4558,6 +4560,29 @@
           "health"
         ],
         "security": []
+      }
+    },
+    "/api/features": {
+      "get": {
+        "description": "Deployment-wide booleans only. Scoped keys may read them (same values for every session). Never returns secrets, env dumps, or configuration objects.",
+        "operationId": "FeaturesController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Boolean flags only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Boolean feature flags for UI gating",
+        "tags": [
+          "features"
+        ]
       }
     },
     "/api/settings": {
@@ -14103,6 +14128,43 @@
         "required": [
           "status",
           "details"
+        ]
+      },
+      "FeaturesResponseDto": {
+        "type": "object",
+        "properties": {
+          "scheduler": {
+            "type": "boolean",
+            "description": "SCHEDULED_MESSAGES is on (default on; inert until a job exists)."
+          },
+          "botCommands": {
+            "type": "boolean",
+            "description": "BOT_COMMANDS is on (opt-in). Per-session bot-config must also enable commands."
+          },
+          "mediaPersist": {
+            "type": "boolean",
+            "description": "MEDIA_PERSIST is on (opt-in). List/delete stored inbound files only when true."
+          },
+          "removeBgConfigured": {
+            "type": "boolean",
+            "description": "REMOVE_BG_API_KEY is non-empty. Never the key itself."
+          },
+          "regexRules": {
+            "type": "boolean",
+            "description": "AUTO_REPLY_REGEX is on (opt-in). EXACT/CONTAINS/STARTS_WITH need no flag."
+          },
+          "pollVoteEvents": {
+            "type": "boolean",
+            "description": "POLL_VOTE_EVENTS is on (opt-in). Webhook-only; not socket-subscribable."
+          }
+        },
+        "required": [
+          "scheduler",
+          "botCommands",
+          "mediaPersist",
+          "removeBgConfigured",
+          "regexRules",
+          "pollVoteEvents"
         ]
       },
       "SettingsGeneralDto": {

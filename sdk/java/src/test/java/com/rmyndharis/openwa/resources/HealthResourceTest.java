@@ -40,4 +40,12 @@ class HealthResourceTest {
         assertEquals(HttpMethod.GET, tx.lastRequest().method());
         assertEquals("up", res.details().mainDatabase());
     }
+
+    @Test
+    void featuresHitsFeaturesPath() {
+        tx.respond(200, "{\"scheduler\":true,\"botCommands\":false,\"mediaPersist\":false,\"removeBgConfigured\":false,\"regexRules\":false,\"pollVoteEvents\":false}");
+        client.health.features();
+        assertEquals("http://h/api/features", tx.lastRequest().url());
+        assertEquals(HttpMethod.GET, tx.lastRequest().method());
+    }
 }

@@ -495,14 +495,16 @@ class ResourcesTest extends TestCase
         $backend->on(200, ['status' => 'ok', 'version' => '0.7.2']);
         $backend->on(200, ['status' => 'ok']);
         $backend->on(200, ['status' => 'ok', 'details' => []]);
+        $backend->on(200, ['scheduler' => true]);
         $backend->on(200, ['valid' => true, 'role' => 'admin']);
         $client = $backend->makeClient();
         $client->health->check();
         $this->assertSame('/api/health', $backend->calls()[0]['path']);
         $client->health->live();
         $client->health->ready();
+        $client->health->features();
         $client->auth();
-        $this->assertSame('POST', $backend->calls()[3]['method']);
+        $this->assertSame('POST', $backend->calls()[4]['method']);
         $this->assertStringContainsString('/auth/validate', $backend->calls()[3]['url']);
     }
 

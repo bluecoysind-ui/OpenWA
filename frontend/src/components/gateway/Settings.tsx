@@ -1,5 +1,8 @@
 import {
   Activity,
+  Bot,
+  CalendarClock,
+  FolderOpen,
   KeyRound,
   Puzzle,
   ScrollText,
@@ -7,6 +10,7 @@ import {
   Server,
   FileText,
   Smartphone,
+  UserCircle,
   Webhook,
 } from "lucide-react";
 import { useGateway, type SettingsPanel } from "@/store/gateway-store";
@@ -20,6 +24,10 @@ import { PluginsPanel } from "./settings/PluginsPanel";
 import { InfraPanel } from "./settings/InfraPanel";
 import { LogsPanel } from "./settings/LogsPanel";
 import { MessageTesterPanel } from "./settings/MessageTesterPanel";
+import { SchedulerPanel } from "./akg/SchedulerPanel";
+import { AutomationPanel } from "./akg/AutomationPanel";
+import { MediaFilesPanel } from "./akg/MediaFilesPanel";
+import { ProfilePanel } from "./akg/ProfilePanel";
 
 const NAV: Array<{ id: SettingsPanel; title: string; sub: string; icon: typeof Webhook }> = [
   { id: "overview", title: "Overview", sub: "Stats, charts, and session health", icon: Activity },
@@ -31,6 +39,10 @@ const NAV: Array<{ id: SettingsPanel; title: string; sub: string; icon: typeof W
   { id: "infra", title: "Infrastructure", sub: "Database, Redis, engine, storage", icon: Server },
   { id: "logs", title: "Logs", sub: "Audit trail + CSV export", icon: ScrollText },
   { id: "message-tester", title: "Message tester", sub: "Every send type + bulk batch", icon: Send },
+  { id: "scheduler", title: "Scheduler", sub: "One-shot delayed sends", icon: CalendarClock },
+  { id: "automation", title: "Bot & auto-reply", sub: "Rules, access lists, welcome", icon: Bot },
+  { id: "media-files", title: "Media files", sub: "Stored inbound files (MEDIA_PERSIST)", icon: FolderOpen },
+  { id: "profile", title: "Own profile", sub: "Name, about, picture", icon: UserCircle },
 ];
 
 export function SettingsHub() {
@@ -77,6 +89,10 @@ export function SettingsHub() {
       {panel === "infra" ? <InfraPanel /> : null}
       {panel === "logs" ? <LogsPanel /> : null}
       {panel === "message-tester" ? <MessageTesterPanel /> : null}
+      {panel === "scheduler" ? <SchedulerPanel /> : null}
+      {panel === "automation" ? <AutomationPanel /> : null}
+      {panel === "media-files" ? <MediaFilesPanel /> : null}
+      {panel === "profile" ? <ProfilePanel /> : null}
     </div>
   );
 }

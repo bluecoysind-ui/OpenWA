@@ -2,6 +2,7 @@ package com.rmyndharis.openwa.resources;
 
 import com.rmyndharis.openwa.OpenWAClient;
 import com.rmyndharis.openwa.http.HttpMethod;
+import com.rmyndharis.openwa.model.FeatureFlagsResponse;
 import com.rmyndharis.openwa.model.HealthReadyResponse;
 import com.rmyndharis.openwa.model.HealthResponse;
 
@@ -26,5 +27,10 @@ public final class HealthResource {
     /** Kubernetes readiness probe — checks both DB connections. */
     public HealthReadyResponse ready() {
         return client.request(HttpMethod.GET, "/api/health/ready", null, null, HealthReadyResponse.class);
+    }
+
+    /** Boolean feature flags for UI gating. VIEWER. No secrets. */
+    public FeatureFlagsResponse features() {
+        return client.request(HttpMethod.GET, "/api/features", null, null, FeatureFlagsResponse.class);
     }
 }

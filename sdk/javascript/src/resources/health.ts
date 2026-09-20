@@ -9,6 +9,15 @@ import { encodeSegment } from '../http.js';
 import type { OpenWAClient } from '../client.js';
 import type { HealthReadyResponse, HealthResponse } from '../types.js';
 
+export interface FeatureFlagsResponse {
+  scheduler: boolean;
+  botCommands: boolean;
+  mediaPersist: boolean;
+  removeBgConfigured: boolean;
+  regexRules: boolean;
+  pollVoteEvents: boolean;
+}
+
 export class HealthResource {
   constructor(private readonly client: OpenWAClient) {}
 
@@ -25,5 +34,10 @@ export class HealthResource {
   /** Kubernetes readiness probe — checks both DB connections. */
   ready(): Promise<HealthReadyResponse> {
     return this.client.request<HealthReadyResponse>({ method: 'GET', path: '/api/health/ready' });
+  }
+
+  /** Boolean feature flags for UI gating. VIEWER. No secrets. */
+  features(): Promise<FeatureFlagsResponse> {
+    return this.client.request<FeatureFlagsResponse>({ method: 'GET', path: '/api/features' });
   }
 }

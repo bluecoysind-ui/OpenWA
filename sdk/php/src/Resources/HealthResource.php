@@ -37,4 +37,10 @@ class HealthResource
     {
         return $this->http->request('GET', '/api/health/ready') ?? [];
     }
+
+    /** @return array<string,mixed> */
+    public function features(): array
+    {
+        return $this->http->request('GET', '/api/features') ?? [];
+    }
 }

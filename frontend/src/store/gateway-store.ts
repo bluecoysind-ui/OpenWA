@@ -172,7 +172,11 @@ export type SettingsPanel =
   | "plugins"
   | "infra"
   | "logs"
-  | "message-tester";
+  | "message-tester"
+  | "scheduler"
+  | "automation"
+  | "media-files"
+  | "profile";
 
 /** Paging state of one loaded conversation. */
 type ThreadMeta = { cursor: string | null; hasMore: boolean; loading: boolean };

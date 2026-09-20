@@ -160,6 +160,7 @@ func TestRouting(t *testing.T) {
 		{"Health.Check", func(c *Client) { c.Health.Check(ctx) }, "GET", "/api/health"},
 		{"Health.Live", func(c *Client) { c.Health.Live(ctx) }, "GET", "/api/health/live"},
 		{"Health.Ready", func(c *Client) { c.Health.Ready(ctx) }, "GET", "/api/health/ready"},
+		{"Health.Features", func(c *Client) { c.Health.Features(ctx) }, "GET", "/api/features"},
 
 		{"Search.Search", func(c *Client) { c.Search.Search(ctx, SearchQuery{Q: "hi"}) }, "GET", "/api/search"},
 		{"Auth.Validate", func(c *Client) { c.Auth.Validate(ctx) }, "POST", "/api/auth/validate"},

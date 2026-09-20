@@ -496,12 +496,14 @@ describe('HealthResource + auth — exact paths', () => {
       .on('GET', /\/health$/, { body: { status: 'ok', version: '0.7.2' } })
       .on('GET', /\/health\/live$/, { body: { status: 'ok' } })
       .on('GET', /\/health\/ready$/, { body: { status: 'ok', details: {} } })
+      .on('GET', /\/features$/, { body: { scheduler: true, botCommands: false, mediaPersist: false, removeBgConfigured: false, regexRules: false, pollVoteEvents: false } })
       .on('POST', /\/auth\/validate$/, { body: { valid: true, role: 'admin' } });
     const c = client(t);
     await c.health.check();
     expect(t.lastCall!.url).toBe('http://x/api/health');
     await c.health.live();
     await c.health.ready();
+    await c.health.features();
     await c.auth();
     expect(t.lastCall!.method).toBe('POST');
     expect(t.lastCall!.url).toBe('http://x/api/auth/validate');

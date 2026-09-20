@@ -41,7 +41,7 @@ All five SDKs expose the same fluent resource surface:
 | `media`     | conversionStatus, convertVoice, convertVideo, convertSticker, listFiles, getFile, deleteFile _(OPERATOR)_                                                                                                                                                                                                                                  |
 | `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                       |
 | `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                             |
-| `health`    | check, live, ready                                                                                                                                                                                                                                                                         |
+| `health`    | check, live, ready, features                                                                                                                                                                                                                                                                         |
 
 > ⚠️ Endpoints requiring an `OPERATOR`-level API key are noted in the inline
 > docs. Deliberately **not** exposed, matching `docs/18-sdk-design.md` exactly:

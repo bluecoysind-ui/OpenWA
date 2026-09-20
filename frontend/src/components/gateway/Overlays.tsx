@@ -4,6 +4,7 @@ import { TEMPLATES } from "@/lib/templates";
 import { useGateway } from "@/store/gateway-store";
 import { cn } from "@/lib/cn";
 import { BulkComposer } from "./Broadcast";
+import { StickerTool } from "./akg/StickerTool";
 
 export function Overlays() {
   const overlay = useGateway((s) => s.overlay);
@@ -469,6 +470,7 @@ export function ToolsPanel() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-4">
+        <StickerTool />
         <section className="glass rounded-2xl p-4">
           <h3 className="mb-3 text-sm font-semibold">Sections</h3>
           <div className="flex flex-wrap gap-2">

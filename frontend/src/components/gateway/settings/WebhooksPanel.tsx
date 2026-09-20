@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Loader2, Play, Plus, Trash2 } from "lucide-react";
 import { testWebhook, type OpenWAWebhook, type WebhookFilters } from "@/lib/openwa-api";
+import { AKG_WEBHOOK_EVENTS } from "@/lib/openwa/akg-api";
+import { WebhookDeliveries } from "../akg/WebhookDeliveries";
 import { useAppToast } from "@/lib/openwa/useToast";
 import {
   useChatsQuery,
@@ -38,6 +40,7 @@ const EVENT_NAMES = [
   "call.missed",
   "status.received",
   "*",
+  ...AKG_WEBHOOK_EVENTS,
 ] as const;
 
 const supportsFilters = (events: string[]) => events.some((e) => e === "*" || e.startsWith("message."));
@@ -133,6 +136,7 @@ export function WebhooksPanel() {
             <button type="button" className={ghost} onClick={() => remove.mutate({ id: hook.id, sessionId: hook.sessionId })}>
               <Trash2 size={12} /> Delete
             </button>
+            <WebhookDeliveries sessionId={hook.sessionId} webhookId={hook.id} />
           </div>
         </Card>
       ))}
