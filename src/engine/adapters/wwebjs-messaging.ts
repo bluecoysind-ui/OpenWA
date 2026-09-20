@@ -19,7 +19,7 @@ import { loadRemoteMediaBuffer } from '../../common/media/load-remote-media';
 import { chatKind, userPart } from '../identity/wa-id';
 import { chatHistoryMediaBudgetBytes, coerceDeclaredSize, ingestMediaBudgetBytes } from './inbound-media-cap';
 import { buildIncomingMessageBase, mapWwebjsMessageType } from './message-mapper';
-import { quotedCaption } from '../quoted-payload';
+import { buildQuotedMessage, quotedCaption } from '../quoted-payload';
 import { buildVCard } from './vcard';
 import { EngineNotSupportedError } from '../../common/errors/engine-not-supported.error';
 import { RecipientUnreachableError } from '../../common/errors/recipient-unreachable.error';
@@ -741,13 +741,13 @@ export class WwebjsMessaging {
         try {
           const quoted = await msg.getQuotedMessage();
           const caption = quotedCaption(quoted);
-          out.quotedMessage = {
+          out.quotedMessage = buildQuotedMessage({
             id: quoted.id._serialized,
             body: quoted.body,
-            type: mapWwebjsMessageType(String(quoted.type)),
-            hasMedia: Boolean(quoted.hasMedia),
+            type: quoted.type ? mapWwebjsMessageType(String(quoted.type)) : undefined,
+            hasMedia: quoted.hasMedia ? true : undefined,
             ...(caption ? { caption } : {}),
-          };
+          });
         } catch (error) {
           this.host.logger.warn(`Failed to resolve quoted message for ${msg.id._serialized}: ${String(error)}`);
         }

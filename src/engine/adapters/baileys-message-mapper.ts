@@ -1,6 +1,6 @@
 import { DeliveryStatus, IncomingMessage, MessageType } from '../interfaces/whatsapp-engine.interface';
 import { chatKind } from '../identity/wa-id';
-import { quotedHasMedia } from '../quoted-payload';
+import { buildQuotedMessage } from '../quoted-payload';
 
 /**
  * Map a Baileys message content-type token (from `getContentType`) to the engine-neutral
@@ -807,13 +807,12 @@ export function extractBaileysContext(content: BaileysContextContent): BaileysMe
     const qm = contextInfo.quotedMessage as BaileysBodyContent;
     const quotedType = mapBaileysMessageType(quotedContentType(qm));
     const caption = qm.imageMessage?.caption ?? qm.videoMessage?.caption ?? qm.documentMessage?.caption ?? undefined;
-    context.quotedMessage = {
+    context.quotedMessage = buildQuotedMessage({
       id: contextInfo.stanzaId,
       body: extractBaileysBody(qm),
       type: quotedType,
-      hasMedia: quotedHasMedia(quotedType),
       ...(caption ? { caption } : {}),
-    };
+    });
   }
 
   return context;

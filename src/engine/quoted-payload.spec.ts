@@ -3,6 +3,12 @@ import { buildQuotedMessage, quotedHasMedia } from './quoted-payload';
 describe('quoted-payload', () => {
   it('keeps id+body and adds type/hasMedia/caption only when known', () => {
     expect(buildQuotedMessage({ id: 'q1', body: 'hi' })).toEqual({ id: 'q1', body: 'hi' });
+    expect(buildQuotedMessage({ id: 'q1', body: 'hi', type: 'text', hasMedia: false })).toEqual({
+      id: 'q1',
+      body: 'hi',
+      type: 'text',
+    });
+    expect(buildQuotedMessage({ id: 'q1', body: 'x', type: 'unknown' })).toEqual({ id: 'q1', body: 'x' });
     expect(buildQuotedMessage({ id: 'q1', body: 'cap', type: 'image', caption: 'cap' })).toEqual({
       id: 'q1',
       body: 'cap',

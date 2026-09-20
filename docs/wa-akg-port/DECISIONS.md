@@ -162,7 +162,7 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 
 ## D27 — WP5 sticker-pack EXIF is an in-repo WebP writer (no node-webpmux). Existing WebP stays byte-identical unless packName/packAuthor are set. Empty REMOVE_BG_API_KEY with removeBg=true is 400, never 500; the key is never logged.
 
-## D28 — quoted.fileUrl is set only when MEDIA_PERSIST already stored that quoted message's bytes (no extra WhatsApp download). Stored files are addressed by messageId under `sessions/{id}/chat/`. GET/DELETE/list are OPERATOR and 404 when the flag is off. MEDIA_PERSIST_TTL_DAYS default 30. webhook_deliveries and media_objects are excluded from backup.
+## D28 — quoted.fileUrl is set only when MEDIA_PERSIST already stored that quoted message's bytes (no extra WhatsApp download). Stored files are addressed by messageId under `sessions/{id}/chat/`. GET/DELETE/list are OPERATOR and 404 when the flag is off. MEDIA_PERSIST_TTL_DAYS default 30. webhook_deliveries and media_objects are excluded from backup. `hasMedia` omitted when false; `type` omitted when unknown so `{id,body}`-only quotes stay identical.
 
 ## D29 — message.poll_vote is webhook-only (not in SUBSCRIBABLE_EVENTS). Deliveries GET is OPERATOR. Poll votes are not decrypted (selectedOptions omitted).
 

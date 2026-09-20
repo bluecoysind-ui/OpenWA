@@ -2796,7 +2796,7 @@ describe('BaileysAdapter inbound fan-out', () => {
       quotedMessage: { id: string; body: string };
     };
     expect(msg.body).toBe('reply text');
-    expect(msg.quotedMessage).toEqual({ id: 'QUOTED_ID', body: 'original message' });
+    expect(msg.quotedMessage).toEqual({ id: 'QUOTED_ID', body: 'original message', type: 'text' });
   });
 
   it('REVOKE protocolMessage: fires onMessageRevoked and NOT onMessage', async () => {
