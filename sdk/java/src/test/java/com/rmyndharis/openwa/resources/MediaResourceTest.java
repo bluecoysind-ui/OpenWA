@@ -57,4 +57,16 @@ class MediaResourceTest {
         assertEquals("video/mp4", client.media.convertVideo("s", ConvertMediaRequest.ofUrl("http://x/a.mov")).mimetype());
         assertEquals("http://h/api/sessions/s/media/convert/video", tx.lastRequest().url());
     }
+
+    @Test
+    void convertStickerHitsStickerPath() {
+        tx.respond(200, "{\"base64\":\"UklGRg==\",\"mimetype\":\"image/webp\",\"bytes\":8}");
+        ConvertedMedia res = client.media.convertSticker(
+            "s", new ConvertMediaRequest("https://example.com/p.png", null, "Pack", "Author", null));
+        assertEquals("image/webp", res.mimetype());
+        assertEquals("http://h/api/sessions/s/media/convert/sticker", tx.lastRequest().url());
+        assertEquals(HttpMethod.POST, tx.lastRequest().method());
+        assertTrue(tx.lastRequest().body().contains("\"packName\":\"Pack\""));
+        assertFalse(tx.lastRequest().body().contains("null"));
+    }
 }

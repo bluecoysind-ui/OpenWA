@@ -588,7 +588,7 @@ login: the user name travels as the connect request's user id and the password i
 says at session start. Use `socks5`, `http` or `https` for a proxy that needs a password.
 
 A URL **you** supply is fetched through the session proxy too, on both engines: the media URL of a send, the
-`url` of `POST /api/sessions/:sessionId/media/convert/voice|video`, and the link preview of a text send. The
+`url` of `POST /api/sessions/:sessionId/media/convert/voice|video|sticker`, and the link preview of a text send. The
 session named in the request decides which proxy that is: the one its running engine started with, or, when
 the session is not running, the one stored on its row. Set `SESSION_PROXY_URL_FETCH=false` to fetch those URLs
 from the gateway's own address instead, for a proxy that only routes to WhatsApp. The SSRF guard applies
@@ -6598,6 +6598,34 @@ file arrives.
 **Size note.** Both endpoints return the converted media inline, so the response is bounded by the
 same `MEDIA_CONVERSION_MAX_OUTPUT_BYTES` cap (default 50 MiB) — and a client posting it onward is
 still bound by `BODY_SIZE_LIMIT` (default 25 MiB) on that next request.
+
+#### POST /api/sessions/:sessionId/media/convert/sticker
+
+Convert image or short video into a 512×512 WebP sticker. Duration is capped by
+`STICKER_MAX_DURATION_SEC` (default 8). Optional `packName` / `author` are written into WebP EXIF.
+`removeBg: true` calls remove.bg first and answers `400` when `REMOVE_BG_API_KEY` is unset (never `500`).
+
+**Auth:** API key (OPERATOR)
+
+**Request body**
+
+| Name     | Type    | Description                                             |
+| -------- | ------- | ------------------------------------------------------- |
+| url      | string  | Public http(s) URL to fetch (server-side, SSRF-guarded) |
+| base64   | string  | Inline bytes. Takes precedence when both are given      |
+| packName | string  | Sticker pack display name (WebP EXIF)                   |
+| author   | string  | Sticker pack author (WebP EXIF)                         |
+| removeBg | boolean | Strip background via remove.bg (requires API key)       |
+
+Exactly one of `url` / `base64` is required.
+
+**Response** `200`
+
+```json
+{ "base64": "UklGRg==", "mimetype": "image/webp", "bytes": 2048 }
+```
+
+**Errors:** `400` neither field given, ffmpeg refused the input, or `REMOVE_BG_API_KEY` missing when `removeBg` is true · `401` missing/invalid `X-API-Key` · `403` key lacks OPERATOR role · `413` media above the size cap · `503` conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated
 
 ### 6.4.16 Automation rules (autoreply)
 

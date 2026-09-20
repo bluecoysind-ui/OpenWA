@@ -42,7 +42,7 @@ All five SDKs expose the same fluent surface:
 | `templates` | list, get, create, update, delete                                                                                                                                                                                                                                                                        |
 | `profile`   | setProfileName, setProfileStatus, setProfilePicture, deleteProfilePicture                                                                                                                                                                                                                                |
 | `calls`     | rejectCall, createLink                                                                                                                                                                                                                                                                                   |
-| `media`     | conversionStatus, convertVoice, convertVideo _(OPERATOR)_                                                                                                                                                                                                                                                |
+| `media`     | conversionStatus, convertVoice, convertVideo, convertSticker _(OPERATOR)_                                                                                                                                                                                                                                                |
 | `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
 | `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                                                |
 | `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
@@ -344,7 +344,8 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | ------------------ | -------------------------------- | -------------------------------------------------------------------------------------------- |
 | `conversionStatus` | `conversionStatus(sessionId)`    | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(sessionId, input)` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
-| `convertVideo`     | `convertVideo(sessionId, input)` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertVideo`     | `convertVideo(sessionId, input)`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertSticker`   | `convertSticker(sessionId, input)` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
 
 #### `scheduled-messages`
 
@@ -735,6 +736,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `conversion_status` | `conversion_status(session_id) -> MediaConversionAvailability`          | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convert_voice`     | `convert_voice(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convert_video`     | `convert_video(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convert_sticker`   | `convert_sticker(session_id, *, url=None, base64=None, pack_name=None, author=None, remove_bg=None) -> ConvertedMedia` | Convert image or video into a 512×512 WebP sticker. **OPERATOR** |
 
 #### `client.scheduled-messages`
 
@@ -1099,7 +1101,8 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | ------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | `conversionStatus` | `conversionStatus(string $sessionId): array`           | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(string $sessionId, array $media): array` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
-| `convertVideo`     | `convertVideo(string $sessionId, array $media): array` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertVideo`     | `convertVideo(string $sessionId, array $media): array`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertSticker`   | `convertSticker(string $sessionId, array $media): array` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
 
 #### `scheduled-messages`
 

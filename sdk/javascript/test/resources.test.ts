@@ -173,6 +173,23 @@ describe('MediaResource — exact paths', () => {
     expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/convert/video');
     expect(t.lastCall!.body).toEqual({ url: 'https://example.com/clip.mov' });
   });
+
+  it('convertSticker POSTs pack metadata to /convert/sticker', async () => {
+    const t = new MockTransport().on('POST', /\/media\/convert\/sticker$/, {
+      body: { base64: 'UklGRg==', mimetype: 'image/webp', bytes: 8 },
+    });
+    await client(t).media.convertSticker('s', {
+      url: 'https://example.com/pic.png',
+      packName: 'Pack',
+      author: 'Author',
+    });
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/convert/sticker');
+    expect(t.lastCall!.body).toEqual({
+      url: 'https://example.com/pic.png',
+      packName: 'Pack',
+      author: 'Author',
+    });
+  });
 });
 
 describe('ContactsResource — exact paths', () => {

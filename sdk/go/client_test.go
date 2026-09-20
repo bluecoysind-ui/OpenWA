@@ -1394,6 +1394,21 @@ func TestConvertVideo(t *testing.T) {
 	}
 }
 
+func TestConvertSticker(t *testing.T) {
+	rt := &recordTransport{status: 200, body: `{"base64":"UklGRg==","mimetype":"image/webp","bytes":8}`}
+	c := newTestClient(t, rt)
+
+	if _, err := c.Media.ConvertSticker(context.Background(), "s1", ConvertMediaInput{URL: "https://example.com/p.png", PackName: "Pack"}); err != nil {
+		t.Fatalf("ConvertSticker: %v", err)
+	}
+	if got, want := rt.lastReq.URL.Path, "/api/sessions/s1/media/convert/sticker"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	if got := string(rt.lastRaw); got != `{"url":"https://example.com/p.png","packName":"Pack"}` {
+		t.Fatalf("body = %s, want url+packName", got)
+	}
+}
+
 // The config route needs three states per field: absent leaves it unchanged, explicit null clears it
 // to the default, a value sets it. A *int with omitempty could only ever express two — a nil pointer
 // was OMITTED, so restoring unlimited reconnect attempts was unreachable through this SDK.

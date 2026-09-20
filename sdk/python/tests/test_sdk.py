@@ -503,6 +503,14 @@ class TestMedia:
         assert backend.last_call.url == "http://localhost:2785/api/sessions/s/media/convert/video"
         assert backend.last_call.body == {"url": "https://example.com/c.mov"}
 
+    def test_convert_sticker(self):
+        backend = MockBackend().on(
+            "POST", "/media/convert/sticker", body={"base64": "UklGRg==", "mimetype": "image/webp", "bytes": 8}
+        )
+        make_client(backend).media.convert_sticker("s", url="https://example.com/p.png", pack_name="Pack")
+        assert backend.last_call.url == "http://localhost:2785/api/sessions/s/media/convert/sticker"
+        assert backend.last_call.body == {"url": "https://example.com/p.png", "packName": "Pack"}
+
 
 class TestCalls:
     def test_reject_call(self):

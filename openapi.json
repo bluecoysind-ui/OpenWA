@@ -8287,6 +8287,57 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/media/convert/sticker": {
+      "post": {
+        "operationId": "MediaController_convertSticker",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertStickerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted 512×512 WebP sticker bytes, ready to post to send-sticker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "503": {
+            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+          }
+        },
+        "summary": "Convert image or video into a WhatsApp WebP sticker",
+        "tags": [
+          "media"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/scheduled-messages": {
       "post": {
         "operationId": "SchedulerController_create",
@@ -17060,6 +17111,36 @@
           "mimetype",
           "bytes"
         ]
+      },
+      "ConvertStickerDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
+            "example": "https://example.com/note.m4a"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
+            "example": "SUQzBAAAAAAA..."
+          },
+          "packName": {
+            "type": "string",
+            "description": "Sticker pack display name (WebP EXIF).",
+            "maxLength": 128
+          },
+          "author": {
+            "type": "string",
+            "description": "Sticker pack author (WebP EXIF).",
+            "maxLength": 128
+          },
+          "removeBg": {
+            "type": "boolean",
+            "description": "Strip the background via remove.bg before converting. Requires REMOVE_BG_API_KEY.",
+            "default": false
+          }
+        }
       },
       "CreateScheduledMessageDto": {
         "type": "object",

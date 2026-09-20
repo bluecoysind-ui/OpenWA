@@ -1775,6 +1775,18 @@ curl -X POST "$BASE/api/sessions/$SESSION_ID/media/convert/video" \
   -d '{ "url": "https://example.com/clip.mov" }'
 ```
 
+#### POST /api/sessions/:sessionId/media/convert/sticker
+
+Convert image or short video into a 512×512 WebP sticker (OPERATOR). Same `url`/`base64` as voice.
+Optional `packName`/`author` EXIF. `removeBg: true` requires `REMOVE_BG_API_KEY` (empty key → 400).
+
+```bash
+curl -X POST "$BASE/api/sessions/$SESSION_ID/media/convert/sticker" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://example.com/pic.png", "packName": "OpenWA", "author": "OpenWA" }'
+```
+
 ### 07.17 Real-time (WebSocket)
 
 Events are delivered over **Socket.IO** on the `/events` namespace (not a raw WebSocket). Use the `socket.io-client` package. Set `BASE_WS` (e.g. `ws://localhost:2785`) and `API_KEY`.

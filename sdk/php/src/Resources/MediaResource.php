@@ -59,4 +59,15 @@ class MediaResource
     {
         return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/convert/video", [], $media);
     }
+
+    /**
+     * Convert image or video into a 512×512 WebP sticker. Requires an OPERATOR-level key.
+     *
+     * @param array<string,mixed> $media Exactly one of url or base64; optional packName, author, removeBg.
+     * @return array<string,mixed>
+     */
+    public function convertSticker(string $sessionId, array $media): array
+    {
+        return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/convert/sticker", [], $media);
+    }
 }

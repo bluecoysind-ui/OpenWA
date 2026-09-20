@@ -56,4 +56,17 @@ public final class MediaResource {
             media,
             ConvertedMedia.class);
     }
+
+    /**
+     * Convert image or video into a 512×512 WebP sticker (duration-capped). Optional pack EXIF and
+     * remove.bg. Requires an OPERATOR key.
+     */
+    public ConvertedMedia convertSticker(String sessionId, ConvertMediaRequest media) {
+        return client.request(
+            HttpMethod.POST,
+            "/api/sessions/" + encodeSegment(sessionId) + "/media/convert/sticker",
+            null,
+            media,
+            ConvertedMedia.class);
+    }
 }

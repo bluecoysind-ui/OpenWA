@@ -14,8 +14,11 @@ func (s *MediaService) base(sessionID string) string {
 // Base64; Base64 wins when both are given. No mimetype is needed — the input
 // format is read from the bytes.
 type ConvertMediaInput struct {
-	URL    string `json:"url,omitempty"`
-	Base64 string `json:"base64,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Base64   string `json:"base64,omitempty"`
+	PackName string `json:"packName,omitempty"`
+	Author   string `json:"author,omitempty"`
+	RemoveBg bool   `json:"removeBg,omitempty"`
 }
 
 // ConvertedMedia is the result, shaped for handing straight to a send call.
@@ -64,6 +67,17 @@ func (s *MediaService) ConvertVoice(ctx context.Context, sessionID string, in Co
 func (s *MediaService) ConvertVideo(ctx context.Context, sessionID string, in ConvertMediaInput) (*ConvertedMedia, error) {
 	var out ConvertedMedia
 	err := s.client.do(ctx, "POST", s.base(sessionID)+"/convert/video", nil, in, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ConvertSticker converts image or video into a 512×512 WebP sticker (duration-capped).
+// Optional PackName/Author EXIF and RemoveBg. Requires an OPERATOR-level key.
+func (s *MediaService) ConvertSticker(ctx context.Context, sessionID string, in ConvertMediaInput) (*ConvertedMedia, error) {
+	var out ConvertedMedia
+	err := s.client.do(ctx, "POST", s.base(sessionID)+"/convert/sticker", nil, in, &out)
 	if err != nil {
 		return nil, err
 	}

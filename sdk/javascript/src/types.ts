@@ -1409,6 +1409,16 @@ export interface ConvertMediaInput {
   base64?: string;
 }
 
+/** Sticker conversion extras on top of {@link ConvertMediaInput}. */
+export interface ConvertStickerInput extends ConvertMediaInput {
+  /** Sticker pack display name written into WebP EXIF. */
+  packName?: string;
+  /** Sticker pack author written into WebP EXIF. */
+  author?: string;
+  /** Strip the background via remove.bg first. Requires REMOVE_BG_API_KEY. */
+  removeBg?: boolean;
+}
+
 /** The converted media, in the shape a send endpoint accepts. */
 export interface ConvertedMedia {
   /** Converted bytes, ready to pass as a send endpoint's `base64`. */
