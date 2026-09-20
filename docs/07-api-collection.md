@@ -1746,7 +1746,8 @@ curl -X GET "$BASE/api/search?q=invoice&direction=incoming&limit=20" \
 
 Server-side transcoding into the shapes WhatsApp clients actually play. Disabled by default; set
 `MEDIA_CONVERSION_ENABLED=true`, and `ffmpeg` must be runnable (the official Docker image ships it)
-or the routes answer `503`. Nothing is converted implicitly — run media through here first, then
+or the routes answer `503`. Concurrent conversions are capped (`MEDIA_CONVERSION_CONCURRENCY`, default
+2, hard max 4) with a wait queue of 2; saturation answers `429`. Nothing is converted implicitly — run media through here first, then
 post the result.
 
 #### GET /api/sessions/:sessionId/media/convert

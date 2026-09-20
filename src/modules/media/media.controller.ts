@@ -70,10 +70,10 @@ export class MediaController {
   })
   @ApiResponse({ status: 400, description: 'Neither url nor base64 given, or ffmpeg refused the input.' })
   @ApiResponse({ status: 413, description: 'The supplied media is above the media size cap.' })
+  @ApiResponse({ status: 429, description: 'The ffmpeg conversion queue is full — retry shortly.' })
   @ApiResponse({
     status: 503,
-    description:
-      'Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly.',
+    description: 'Conversion is disabled, or the ffmpeg binary is not runnable.',
   })
   async convertVoice(@Param('sessionId') sessionId: string, @Body() dto: ConvertMediaDto) {
     return this.mediaConversion.convertToVoice(sessionId, dto);
@@ -92,10 +92,10 @@ export class MediaController {
   })
   @ApiResponse({ status: 400, description: 'Neither url nor base64 given, or ffmpeg refused the input.' })
   @ApiResponse({ status: 413, description: 'The supplied media is above the media size cap.' })
+  @ApiResponse({ status: 429, description: 'The ffmpeg conversion queue is full — retry shortly.' })
   @ApiResponse({
     status: 503,
-    description:
-      'Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly.',
+    description: 'Conversion is disabled, or the ffmpeg binary is not runnable.',
   })
   async convertVideo(@Param('sessionId') sessionId: string, @Body() dto: ConvertMediaDto) {
     return this.mediaConversion.convertToVideo(sessionId, dto);
@@ -115,10 +115,10 @@ export class MediaController {
     description: 'Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true.',
   })
   @ApiResponse({ status: 413, description: 'The supplied media is above the media size cap.' })
+  @ApiResponse({ status: 429, description: 'The ffmpeg conversion queue is full — retry shortly.' })
   @ApiResponse({
     status: 503,
-    description:
-      'Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly.',
+    description: 'Conversion is disabled, or the ffmpeg binary is not runnable.',
   })
   async convertSticker(@Param('sessionId') sessionId: string, @Body() dto: ConvertStickerDto) {
     return this.mediaConversion.convertToSticker(sessionId, dto);

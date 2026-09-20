@@ -2389,8 +2389,11 @@
           "413": {
             "description": "The supplied media is above the media size cap."
           },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
           "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
           }
         },
         "summary": "Convert audio into a WhatsApp voice note (Ogg/Opus)",
@@ -2440,8 +2443,11 @@
           "413": {
             "description": "The supplied media is above the media size cap."
           },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
           "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
           }
         },
         "summary": "Convert video into a WhatsApp-compatible MP4",
@@ -2491,8 +2497,11 @@
           "413": {
             "description": "The supplied media is above the media size cap."
           },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
           "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
           }
         },
         "summary": "Convert image or video into a WhatsApp WebP sticker",

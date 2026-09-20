@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   HttpException,
+  HttpStatus,
   PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -333,10 +334,10 @@ describe('MediaConversionService', () => {
   });
 
   describe('concurrency gate', () => {
-    // The rate limiter caps admission per second, not how many long-running ffmpeg processes stack
-    // up while each runs toward its timeout — that bound lives here.
-    it('bounds concurrent ffmpeg runs and answers 503 past the queue instead of stacking processes', async () => {
-      // concurrency 1 → queue depth 4: five simultaneous requests fill the gate, the sixth is refused.
+    const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+
+    it('never runs more ffmpeg processes than the concurrency cap, and 429s past the wait queue', async () => {
+      // concurrency 1 + queue 2: three simultaneous sticker converts fill the gate, the fourth is 429.
       const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
       let release!: () => void;
       runFfmpeg.mockImplementation(
@@ -346,21 +347,47 @@ describe('MediaConversionService', () => {
           }),
       );
 
-      const inflight = Array.from({ length: 5 }, () => service.convertToVoice(SESSION, { base64: 'AAAA' }));
-      await new Promise(resolve => setImmediate(resolve));
+      const inflight = Array.from({ length: 3 }, () => service.convertToSticker(SESSION, { base64: 'AAAA' }));
+      await flush();
       expect(runFfmpeg).toHaveBeenCalledTimes(1);
 
-      await expect(service.convertToVoice(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(
-        ServiceUnavailableException,
-      );
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        message: 'busy, try again',
+      });
 
-      // Drain: release each run in turn so every parked task completes and nothing leaks.
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         release();
-        await new Promise(resolve => setImmediate(resolve));
+        await flush();
       }
       await Promise.all(inflight);
-      expect(runFfmpeg).toHaveBeenCalledTimes(5);
+      expect(runFfmpeg).toHaveBeenCalledTimes(3);
+    });
+
+    it('releases a slot after ffmpeg times out so a later convert can run', async () => {
+      const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
+      runFfmpeg.mockRejectedValueOnce(new ffmpeg.FfmpegConversionError('Conversion timed out after 1ms'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(BadRequestException);
+
+      runFfmpeg.mockResolvedValueOnce(Buffer.from('ok'));
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).resolves.toMatchObject({
+        mimetype: 'image/webp',
+      });
+      expect(runFfmpeg).toHaveBeenCalledTimes(2);
+    });
+
+    it('releases a slot after ffmpeg errors so a later convert can run', async () => {
+      const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
+      runFfmpeg.mockRejectedValueOnce(new ffmpeg.FfmpegConversionError('ffmpeg exited with code 1', 'Invalid data'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(BadRequestException);
+
+      runFfmpeg.mockResolvedValueOnce(Buffer.from('ok'));
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).resolves.toMatchObject({
+        mimetype: 'image/webp',
+      });
+      expect(runFfmpeg).toHaveBeenCalledTimes(2);
     });
   });
 });

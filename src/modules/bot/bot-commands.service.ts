@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ModuleRef } from '@nestjs/core';
 import { createLogger } from '../../common/services/logger.service';
@@ -196,7 +196,12 @@ export class BotCommandsService implements OnModuleInit, OnModuleDestroy {
         author: cfg.stickerPackAuthor ?? undefined,
       });
     } catch (error) {
-      const text = error instanceof Error && error.message ? error.message.slice(0, 180) : 'sticker conversion failed';
+      const busy = error instanceof HttpException && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS;
+      const text = busy
+        ? 'busy, try again'
+        : error instanceof Error && error.message
+          ? error.message.slice(0, 180)
+          : 'sticker conversion failed';
       await messages.sendText(sessionId, { chatId, text });
     }
   }

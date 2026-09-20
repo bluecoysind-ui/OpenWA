@@ -495,6 +495,8 @@ describe('validateEnv', () => {
 
   it('rejects a non-positive media-conversion knob instead of silently using the default', () => {
     expect(() => validateEnv({ MEDIA_CONVERSION_CONCURRENCY: '0' })).toThrow(/positive integer/);
+    expect(() => validateEnv({ MEDIA_CONVERSION_CONCURRENCY: '5' })).toThrow(/between 1 and 4/);
+    expect(() => validateEnv({ MEDIA_CONVERSION_CONCURRENCY: '4' })).not.toThrow();
     expect(() => validateEnv({ MEDIA_CONVERSION_TIMEOUT_MS: 'abc' })).toThrow(/positive integer/);
     expect(() => validateEnv({ MEDIA_CONVERSION_MAX_OUTPUT_BYTES: '52428800' })).not.toThrow();
     expect(() => validateEnv({ STICKER_MAX_DURATION_SEC: '0' })).toThrow(/positive integer/);

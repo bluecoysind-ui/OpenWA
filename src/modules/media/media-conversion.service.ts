@@ -1,4 +1,10 @@
-import { BadRequestException, HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
@@ -38,9 +44,8 @@ export class MediaConversionService {
   private binaryAvailable?: Promise<boolean>;
   /**
    * Bounds concurrent ffmpeg processes (the rate limiter caps admission per second, not how many
-   * long-running processes stack up while each runs toward its timeout). Queue depth is a small
-   * multiple of the cap: each parked task holds its input buffer in heap, so anything beyond it
-   * answers 503 instead of accumulating.
+   * long-running processes stack up while each runs toward its timeout). A short wait queue of 2
+   * absorbs a burst; anything beyond it answers 429 instead of accumulating in heap.
    */
   private readonly ffmpegGate: ConcurrencyLimiter;
 
@@ -50,8 +55,9 @@ export class MediaConversionService {
     @InjectRepository(Session, 'data')
     private readonly sessionRepository: Repository<Session>,
   ) {
-    const concurrency = this.configService.get<number>('mediaConversion.concurrency', 2);
-    this.ffmpegGate = new ConcurrencyLimiter(concurrency, concurrency * 4);
+    const raw = this.configService.get<number>('mediaConversion.concurrency', 2) ?? 2;
+    const concurrency = Math.min(4, Math.max(1, raw));
+    this.ffmpegGate = new ConcurrencyLimiter(concurrency, 2);
   }
 
   /**
@@ -158,7 +164,7 @@ export class MediaConversionService {
       return { base64: output.toString('base64'), mimetype: outputMimetype, bytes: output.length };
     } catch (error) {
       if (error instanceof Error && error.message === 'ConcurrencyLimiter queue full') {
-        throw new ServiceUnavailableException('Media conversion is busy — retry shortly');
+        throw new HttpException('busy, try again', HttpStatus.TOO_MANY_REQUESTS);
       }
       if (error instanceof FfmpegConversionError) {
         this.logger.warn('Media conversion failed', { reason: error.message, detail: error.detail });

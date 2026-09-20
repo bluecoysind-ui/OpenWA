@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Media conversion saturates with `429` (was `503`): `MEDIA_CONVERSION_CONCURRENCY` default 2, hard max 4, wait queue of 2; `#sticker` replies `busy, try again`.
 - Baileys `listMessage`, `buttonsResponseMessage`, `templateButtonReplyMessage` and `listResponseMessage` now classify as `type: "text"` (they previously fell through to `unknown`). Consumers filtering on `type` will see those shapes as text. Thanks @gabrielmmoraes1999.
 - The PostgreSQL data connection is pinned to UTC: parameters bind as UTC, naive timestamps read back as UTC, every pooled connection sets its session `TimeZone`, and boot fails when the effective zone is not UTC year round.
 - Credentials on a `socks4://` session proxy are reported at session start as unauthenticatable: SOCKS4 sends the user name as the connect request's user id and drops the password.

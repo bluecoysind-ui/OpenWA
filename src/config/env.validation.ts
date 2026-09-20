@@ -264,6 +264,9 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     if (!Number.isInteger(n) || n < 1) {
       errors.push(`${key} must be a positive integer (got "${raw}")`);
     }
+    if (key === 'MEDIA_CONVERSION_CONCURRENCY' && Number.isInteger(n) && n > 4) {
+      errors.push(`${key} must be between 1 and 4 (got "${raw}")`);
+    }
   };
   for (const key of [
     'RATE_LIMIT_SHORT_LIMIT',

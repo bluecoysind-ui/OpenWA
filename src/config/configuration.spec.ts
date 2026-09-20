@@ -276,6 +276,7 @@ describe('configuration — scheduler and automation port knobs', () => {
     'REMOVE_BG_API_KEY',
     'STICKER_MAX_DURATION_SEC',
     'MEDIA_PERSIST_TTL_DAYS',
+    'MEDIA_CONVERSION_CONCURRENCY',
   ];
   const orig: Record<string, string | undefined> = {};
   beforeEach(() => keys.forEach(k => (orig[k] = process.env[k])));
@@ -301,7 +302,13 @@ describe('configuration — scheduler and automation port knobs', () => {
     expect(cfg.automation.regexMaxPatternLength).toBe(256);
     expect(cfg.removeBg.apiKey).toBe('');
     expect(cfg.mediaConversion.stickerMaxDurationSec).toBe(8);
+    expect(cfg.mediaConversion.concurrency).toBe(2);
     expect(cfg.mediaPersist.ttlDays).toBe(30);
+  });
+
+  it('clamps MEDIA_CONVERSION_CONCURRENCY to a hard max of 4', () => {
+    process.env.MEDIA_CONVERSION_CONCURRENCY = '9';
+    expect(configuration().mediaConversion.concurrency).toBe(4);
   });
 });
 

@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { BotCommandsService } from './bot-commands.service';
 import { BotConfigService } from './bot-config.service';
 import { BotAccessMode } from './bot-access';
@@ -171,6 +172,20 @@ describe('BotCommandsService', () => {
     ).toBe(true);
     expect(getChatMedia).toHaveBeenCalledWith('sessA', '628111@c.us', 'wamid.q');
     expect(converted[0]).toEqual(expect.objectContaining({ base64: Buffer.from('IMG').toString('base64'), removeBg: false }));
+  });
+
+  it('replies busy, try again when conversion is 429 saturated', async () => {
+    conversion.convertToSticker = () =>
+      Promise.reject(new HttpException('busy, try again', HttpStatus.TOO_MANY_REQUESTS));
+    const svc = new BotCommandsService(botConfig, hooks, config(true), moduleRef);
+    expect(
+      await svc.handleInbound(
+        'sessA',
+        inbound('#sticker', { type: 'image', media: { data: 'AAA', mimetype: 'image/jpeg' } }),
+      ),
+    ).toBe(true);
+    expect(texts.some(t => t.text === 'busy, try again')).toBe(true);
+    expect(stickers).toHaveLength(0);
   });
 
   it('replies with a short error instead of throwing when conversion fails', async () => {
