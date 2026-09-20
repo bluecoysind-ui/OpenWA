@@ -283,5 +283,7 @@ export const EXPORT_TABLES: AnyExportTable[] = [
  * entity metadata does not report it.
  */
 export const EXPORT_TABLE_EXCLUSIONS: Readonly<Record<string, string>> = {
-  // (empty today: every data-connection entity table is exported)
+  webhook_deliveries:
+    'ephemeral per-attempt log (30d / last 500); bodies are never stored and restore does not need it',
+  media_objects: 'MEDIA_PERSIST blob index; files live in StorageService, not the backup payload',
 };
