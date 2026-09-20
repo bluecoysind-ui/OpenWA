@@ -14,7 +14,7 @@
 | **Tool registry (`ToolDescriptor`)**         | ✅ Implemented | `src/core/agent-tools/tool-descriptor.ts`            |
 | **Tool invoker (auth → validate → service)** | ✅ Implemented | `src/core/agent-tools/tool-invoker.ts`               |
 | **Registry service**                         | ✅ Implemented | `src/core/agent-tools/tool-registry.service.ts`      |
-| **Curated tool tables (51 tools)**           | ✅ Implemented | `src/core/agent-tools/tools/*.tools.ts`              |
+| **Curated tool tables (57 tools)**           | ✅ Implemented | `src/core/agent-tools/tools/*.tools.ts`              |
 | **MCP transport adapter**                    | ✅ Implemented | `src/modules/mcp/mcp.server.ts`                      |
 | **Opt-in module gate**                       | ✅ Implemented | `src/modules/mcp/mcp.module.ts`, `src/app.module.ts` |
 | **Per-key rate limiter**                     | ✅ Implemented | `src/modules/mcp/mcp-rate-limit.ts`                  |
@@ -119,8 +119,8 @@ The surface is an **allowlist by construction** — a capability is exposed only
 declares a `tier` (`read` | `write`) and a `requiredRole` when the call warrants one: every
 write carries its privilege level, and a read carries the role its REST twin requires. The
 reads at OPERATOR are `WebhooksList`, `WebhookFindBySession` and `WebhookFindOne`,
-`AutomationRuleFindAll` and `AutomationRuleFindOne`, and `GroupGetInviteCode` (the invite
-code is a transferable join capability, so it sits at OPERATOR like the QR endpoint).
+`AutomationRuleFindAll` and `AutomationRuleFindOne`, `WebhookListDeliveries`, and `GroupGetInviteCode` (the invite
+code is a transferable join capability, so it sits at OPERATOR like the QR endpoint). `SchedulerFindAll` / `SchedulerFindOne` and `BotConfigGet` are VIEWER, matching REST.
 
 | Domain         | Read tools                                              | Write tools                                                                                   |
 | -------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -128,9 +128,11 @@ code is a transferable join capability, so it sits at OPERATOR like the QR endpo
 | **Message**    | list, history, reactions                                | send text/image/video/audio/document/location/contact/sticker/template, reply, forward, react |
 | **Contact**    | list, get, check-number, resolve-phone, profile-picture | block, unblock                                                                                |
 | **Group**      | list, get, invite-code (OPERATOR)                       | create, add participants, set subject, set description                                        |
-| **Webhook**    | list, get (OPERATOR)                                    | —                                                                                             |
+| **Webhook**    | list, get, deliveries (OPERATOR)                    | —                                                                                             |
 | **Label**      | list, get, chats for a label, labels on a chat          | upsert, delete, add to chat, remove from chat                                                 |
 | **Automation** | rules list, get (OPERATOR)                              | —                                                                                             |
+| **Scheduler**  | list, get                                               | create, cancel (only when `MCP_READONLY=false`; not bulk)                                     |
+| **Bot**        | get config                                              | —                                                                                             |
 
 > **Labels split across the engines**, and each tool's description says which way. Every label
 > _read_ needs whatsapp-web.js — Baileys exposes no label query at all. Editing a label (upsert,
@@ -140,7 +142,8 @@ code is a transferable join capability, so it sits at OPERATOR like the QR endpo
 > Business feature throughout.
 
 **Deliberately excluded from the surface** (not exposed as tools): session lifecycle
-(create/delete/start/stop/logout/force-kill), chat delete, bulk send, message delete, message edit,
+(create/delete/start/stop/logout/force-kill), chat delete, bulk send, spam / bomb loops,
+message delete, message edit,
 group
 leave/remove/promote/demote/invite-revoke/join, group settings writes, all own-profile writes
 (name/status/picture), call reject, all API-key management, all plugin management,

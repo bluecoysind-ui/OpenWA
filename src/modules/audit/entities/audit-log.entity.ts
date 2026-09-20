@@ -53,6 +53,8 @@ export enum AuditAction {
   // and alert-worthy, so it is never sampled.
   SEND_PACING_BLOCKED = 'send_pacing_blocked',
   SEND_BREAKER_TRIPPED = 'send_breaker_tripped',
+  SCHEDULED_MESSAGE_CREATED = 'scheduled_message_created',
+  SCHEDULED_MESSAGE_CANCELLED = 'scheduled_message_cancelled',
   SCHEDULED_MESSAGE_SENT = 'scheduled_message_sent',
   SCHEDULED_MESSAGE_FAILED = 'scheduled_message_failed',
 

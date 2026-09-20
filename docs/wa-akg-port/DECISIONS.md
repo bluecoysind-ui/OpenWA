@@ -167,3 +167,11 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 ## D29 — message.poll_vote is webhook-only (not in SUBSCRIBABLE_EVENTS). Deliveries GET is OPERATOR. Poll votes are not decrypted (selectedOptions omitted).
 
 ## D30 — SDK coverage verb harvest includes request_bytes / requestBinary / doRaw so a binary GET on a GET+DELETE path is counted.
+
+## D31 — WP7 features endpoint; WP8 scheduler audit
+
+`GET /api/features` is VIEWER, deployment-wide, booleans only (`removeBgConfigured` is a presence bit — never the key). Session-scoped keys may read it so the Gateway UI can hide panes. Scheduler create/cancel now emit `scheduled_message_created` / `scheduled_message_cancelled` with `jobId` + `chatId` only (no text, caption, or media URL in the audit row), matching sent/failed.
+
+
+`GET /api/features` is VIEWER, deployment-wide, booleans only (`removeBgConfigured` is a presence bit — never the key). Session-scoped keys may read it so the Gateway UI can hide panes. Scheduler create/cancel now emit `scheduled_message_created` / `scheduled_message_cancelled` with `jobId` + `chatId` only (no text, caption, or media URL in the audit row), matching sent/failed.
+

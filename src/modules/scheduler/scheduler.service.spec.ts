@@ -82,6 +82,11 @@ describe('SchedulerService', () => {
     const listed = await service.findAll('sessA');
     expect(listed).toHaveLength(1);
     expect(listed[0].id).toBe(job.id);
+    expect(logInfo).toHaveBeenCalledWith(
+      AuditAction.SCHEDULED_MESSAGE_CREATED,
+      expect.objectContaining({ sessionId: 'sessA', metadata: expect.objectContaining({ jobId: job.id }) }),
+    );
+    expect(JSON.stringify(logInfo.mock.calls)).not.toMatch(/hello later/);
   });
 
   it('refuses naive sendAt, unknown timezones, and the pending cap', async () => {
@@ -97,6 +102,10 @@ describe('SchedulerService', () => {
     await service.cancel('sessA', job.id);
     expect((await service.findOne('sessA', job.id)).status).toBe(ScheduledMessageStatus.CANCELLED);
     await expect(service.cancel('sessA', job.id)).rejects.toBeInstanceOf(ConflictException);
+    expect(logInfo).toHaveBeenCalledWith(
+      AuditAction.SCHEDULED_MESSAGE_CANCELLED,
+      expect.objectContaining({ sessionId: 'sessA', metadata: expect.objectContaining({ jobId: job.id }) }),
+    );
   });
 
   it('sends due jobs at-most-once: claim sending first, then sent + webhook + audit', async () => {

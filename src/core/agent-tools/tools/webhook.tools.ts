@@ -44,5 +44,30 @@ export function webhookTools(webhook: WebhookService): AnyToolDescriptor[] {
       }),
       handler: input => webhook.findOne(input.sessionId, input.webhookId).then(w => WebhookResponseDto.fromEntity(w)),
     }),
+    defineTool({
+      name: 'WebhookListDeliveries',
+      description:
+        'List recent delivery attempts for a webhook (status, HTTP code, duration, attempt, error snippet). ' +
+        'Never includes request or response bodies.',
+      tier: 'read',
+      requiredRole: ApiKeyRole.OPERATOR,
+      sessionScoped: true,
+      inputSchema: z.object({
+        sessionId,
+        webhookId: z.string().min(1).describe('Webhook UUID'),
+      }),
+      handler: input =>
+        webhook.listDeliveries(input.sessionId, input.webhookId).then(rows =>
+          rows.map(row => ({
+            id: row.id,
+            status: row.status,
+            httpCode: row.httpCode,
+            durationMs: row.durationMs,
+            attempt: row.attempt,
+            errorSnippet: row.errorSnippet,
+            createdAt: row.createdAt,
+          })),
+        ),
+    }),
   ];
 }

@@ -86,7 +86,12 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       status: ScheduledMessageStatus.PENDING,
       attemptCount: 0,
     });
-    return this.jobs.save(job);
+    const saved = await this.jobs.save(job);
+    void this.audit.logInfo(AuditAction.SCHEDULED_MESSAGE_CREATED, {
+      sessionId,
+      metadata: { jobId: saved.id, chatId: saved.chatId, mediaType: saved.mediaType },
+    });
+    return saved;
   }
 
   async findAll(sessionId: string): Promise<ScheduledMessage[]> {
@@ -139,6 +144,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       status: ScheduledMessageStatus.CANCELLED,
     });
     if (!claimed) throw new ConflictException('Job is no longer pending');
+    void this.audit.logInfo(AuditAction.SCHEDULED_MESSAGE_CANCELLED, {
+      sessionId,
+      metadata: { jobId: job.id, chatId: job.chatId },
+    });
   }
 
   /** Crash recovery: SENDING rows never auto-resend. */

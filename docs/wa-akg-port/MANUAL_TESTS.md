@@ -72,7 +72,35 @@ Screens:
 - [ ] Chat actions (archive/mute/pin/presence)
 - [ ] Contacts bulk check
 - [ ] Groups / labels / profile
-- [ ] Webhook delivery history
+- [ ] Webhook delivery history + send-test; new event names (`scheduled.message.*`, `message.poll_vote` when flagged)
+- [ ] Media files pane only when `mediaPersist` is true (hidden/disabled otherwise)
+
+Per engine (same screens on a **whatsapp-web.js** session and a **Baileys** session):
+
+- [ ] 501 “not supported by this engine” for cells that docs/29 marks engine-split (create group on wwjs, chats-by-label on Baileys, poll vote send on Baileys, …)
+- [ ] Sticker pack/author visible on wwjs; Baileys still sends the sticker (EXIF when convert ran)
+- [ ] Welcome on `group.join` fires once, paced; autoRead marks inbound seen; alwaysOnline after PUT
+- [ ] Viewer key: writes hidden/disabled; `GET /api/features` still 200
 
 - [ ] `git diff -- dashboard` empty
-- [ ] `frontend`: lint, typecheck, build
+- [ ] `frontend`: typecheck, unit tests (`akg-datetime`, `akg-builders`), build; lint on changed files only
+
+## WP8 — MCP, docs, security
+
+Backend (both engines, viewer + operator keys):
+
+- [ ] MCP read: scheduled list/get, automation rules, bot-config, webhook deliveries (no bodies)
+- [ ] `MCP_READONLY` unset: create/cancel scheduled tools absent
+- [ ] `MCP_READONLY=false`: create + cancel one scheduled job; no spam/bulk tool names
+- [ ] `GET /api/features` booleans only; blank `REMOVE_BG_API_KEY` → `removeBgConfigured: false`
+- [ ] Flag off: scheduler 400/404; media files 404; regex rule 400
+- [ ] 429 on bulk number check / paced send surfaces Retry-After
+- [ ] Audit: scheduled create/cancel/sent/failed rows have jobId/chatId, **not** text or media URL
+
+UI (both engines):
+
+- [ ] Every new pane: loading, empty, error, 501, 404-flag-off, 429, viewer
+- [ ] Destructive confirm on cancel scheduled, delete rule, delete stored media, leave group, delete-for-everyone
+- [ ] Media upload still base64 and the existing size cap
+
+- [ ] Compose env parity: `SCHEDULED_MESSAGES`, `BOT_COMMANDS`, `MEDIA_PERSIST`, `AUTO_REPLY_REGEX`, `POLL_VOTE_EVENTS`, `REMOVE_BG_API_KEY`, `MCP_READONLY` forwarded in both compose files

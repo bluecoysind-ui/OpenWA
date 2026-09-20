@@ -1002,3 +1002,23 @@ adapter sources — re-derive the same way when anything changes:
 - Remaining adapter-gaps (fixable in this repo, ranked): **#1** `getChannelMessages` (Baileys —
   fetch is one line, `BinaryNode`→`ChannelMessage` parser is the work); **#2** `subscribeToChannel`
   (wwjs — two-step `getChannelByInviteCode` → `subscribeToChannel`, needs live verification).
+
+## 29.9 REST extras (not IWhatsAppEngine methods)
+
+Gateway-owned routes added for the WA-AKG capability port. They are not adapter cells; engine
+split still surfaces as HTTP 501 from the method they call.
+
+| REST | Engines | Notes |
+| --- | --- | --- |
+| `GET /api/features` | both | VIEWER booleans only. No secrets. |
+| `…/scheduled-messages` | both | One-shot; send goes through MessageService (pacing + SSRF). |
+| `…/bot-config` | both | `alwaysOnline` / `autoRead` / welcome honour engine 501. |
+| `…/messages/send-text-list` | both | Formatted text, not native listMessage. |
+| `…/messages/forward` `toChatIds[]` | both | N>1 → 201/207/502 + per-dest results. Cap 10. |
+| `…/messages/send-poll` `selectableCount` | both | wwjs maps ≠1 to `allowMultipleAnswers`; Baileys keeps the integer (`0` = unlimited). |
+| `…/messages/send-sticker` pack/author | wwjs native; Baileys via convert EXIF | Fields accepted on both. |
+| `…/contacts/check` bulk | both | Max 50, paced; 429 when limited. |
+| `…/media/convert/sticker` | both (ffmpeg) | 503 if ffmpeg missing; remove.bg only with key. |
+| `…/media/files` | both | 404 when `MEDIA_PERSIST` is off. |
+| `…/webhooks/:id/deliveries` | both | OPERATOR; metadata only. |
+| `message.poll_vote` webhook | Baileys | Off unless `POLL_VOTE_EVENTS`; options not decrypted. |
