@@ -286,9 +286,10 @@ PUT name / status (about text) / picture, DELETE picture. **No GET own profile.*
 
 `GET /sessions/:sessionId/media/convert`  
 `POST .../convert/voice` (Ogg/Opus)  
-`POST .../convert/video` (H.264)
+`POST .../convert/video` (H.264)  
+`POST .../convert/sticker` (512 WebP, duration cap, optional remove.bg + pack EXIF)
 
-Not a sticker encoder. ffmpeg-gated.
+ffmpeg-gated.
 
 ### Storage
 

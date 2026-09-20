@@ -7,11 +7,19 @@ import { createLogger } from '../../common/services/logger.service';
 import { EngineRegistry } from '../../engine/engine-registry.service';
 import { Session } from '../session/entities/session.entity';
 import { loadRemoteMediaBuffer } from '../../common/media/load-remote-media';
-import { SsrfBlockedError, SSRF_BLOCKED_CLIENT_MESSAGE } from '../../common/security/ssrf-guard';
+import { SsrfBlockedError, SSRF_BLOCKED_CLIENT_MESSAGE, withSafeFetch } from '../../common/security/ssrf-guard';
 import { ConcurrencyLimiter } from '../../common/utils/concurrency-limiter';
 import { assertBase64WithinMediaCap, stripBase64DataUri } from '../message/media-cap.util';
-import { FfmpegConversionError, probeFfmpeg, runFfmpeg, videoEncodeArgs, voiceEncodeArgs } from './ffmpeg';
-import type { ConvertMediaDto } from './dto/convert-media.dto';
+import {
+  FfmpegConversionError,
+  probeFfmpeg,
+  runFfmpeg,
+  stickerEncodeArgs,
+  videoEncodeArgs,
+  voiceEncodeArgs,
+} from './ffmpeg';
+import type { ConvertMediaDto, ConvertStickerDto } from './dto/convert-media.dto';
+import { applyStickerPackExif } from '../../common/media/webp-sticker-exif';
 
 /** What a conversion produced, in the same url-or-base64 vocabulary the send endpoints speak. */
 export interface ConvertedMedia {
@@ -63,6 +71,56 @@ export class MediaConversionService {
     return this.convert(sessionId, dto, 'mp4', videoEncodeArgs(), 'video/mp4');
   }
 
+  /** Convert image/video into a 512×512 WebP sticker (duration-capped, optional remove.bg + pack EXIF). */
+  async convertToSticker(sessionId: string, dto: ConvertStickerDto): Promise<ConvertedMedia> {
+    await this.assertAvailable();
+    let input = await this.resolveInput(sessionId, dto);
+    if (dto.removeBg) {
+      input = await this.removeBackground(input);
+    }
+    const maxDuration = this.configService.get<number>('mediaConversion.stickerMaxDurationSec', 8) ?? 8;
+    const converted = await this.convertBuffer(input, 'webp', stickerEncodeArgs(maxDuration), 'image/webp');
+    const tagged = applyStickerPackExif(Buffer.from(converted.base64, 'base64'), dto.packName, dto.author);
+    return { base64: tagged.toString('base64'), mimetype: 'image/webp', bytes: tagged.length };
+  }
+
+  /**
+   * remove.bg is fail-closed: missing key is a 4xx. The key is never written to logs.
+   */
+  private async removeBackground(input: Buffer): Promise<Buffer> {
+    const apiKey = this.configService.get<string>('removeBg.apiKey', '') ?? '';
+    if (!apiKey) {
+      throw new BadRequestException('REMOVE_BG_API_KEY is not configured');
+    }
+    const form = new FormData();
+    form.append('size', 'auto');
+    form.append('image_file', new Blob([new Uint8Array(input)]), 'image.bin');
+    try {
+      return await withSafeFetch(
+        'https://api.remove.bg/v1.0/removebg',
+        { method: 'POST', headers: { 'X-Api-Key': apiKey }, body: form as never },
+        async response => {
+          if (response.status === 402 || response.status === 403 || response.status === 400) {
+            throw new BadRequestException('remove.bg rejected the request');
+          }
+          if (!response.ok) {
+            throw new BadRequestException('remove.bg request failed');
+          }
+          return Buffer.from(await response.arrayBuffer());
+        },
+      );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error instanceof SsrfBlockedError) {
+        throw new BadRequestException(SSRF_BLOCKED_CLIENT_MESSAGE);
+      }
+      this.logger.warn('remove.bg request failed', {
+        error: error instanceof Error ? error.message.replace(apiKey, '[redacted]') : 'unknown',
+      });
+      throw new BadRequestException('remove.bg request failed');
+    }
+  }
+
   /** Whether conversion is both switched on and actually runnable on this host. */
   async isAvailable(): Promise<boolean> {
     if (!this.configService.get<boolean>('mediaConversion.enabled', false)) return false;
@@ -78,7 +136,16 @@ export class MediaConversionService {
   ): Promise<ConvertedMedia> {
     await this.assertAvailable();
     const input = await this.resolveInput(sessionId, dto);
+    return this.convertBuffer(input, outputExtension, encodeArgs, outputMimetype);
+  }
 
+  private async convertBuffer(
+    input: Buffer,
+    outputExtension: string,
+    encodeArgs: string[],
+    outputMimetype: string,
+  ): Promise<ConvertedMedia> {
+    await this.assertAvailable();
     try {
       const output = await this.ffmpegGate.run(() =>
         runFfmpeg(input, 'bin', outputExtension, encodeArgs, {
@@ -94,9 +161,6 @@ export class MediaConversionService {
         throw new ServiceUnavailableException('Media conversion is busy — retry shortly');
       }
       if (error instanceof FfmpegConversionError) {
-        // ffmpeg's stderr is about the caller's own bytes, so returning it is what makes a rejection
-        // actionable. It never names a path the caller did not supply: the only paths in the command
-        // are the temp files this process created.
         this.logger.warn('Media conversion failed', { reason: error.message, detail: error.detail });
         throw new BadRequestException(error.detail ? `${error.message}: ${error.detail}` : error.message);
       }

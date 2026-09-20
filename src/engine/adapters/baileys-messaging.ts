@@ -1,3 +1,4 @@
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import type * as BaileysLib from '@whiskeysockets/baileys';
 import type { AnyMessageContent, MiscMessageGenerationOptions, WAMessage, WASocket } from '@whiskeysockets/baileys';
 import { generateSafeLinkPreview } from './safe-link-preview';
@@ -19,7 +20,7 @@ import { toEngineParticipants } from './baileys-groups';
 import { buildVCard } from './vcard';
 import { resolveBaileysButtonClick } from './baileys-message-mapper';
 import { loadRemoteMediaBuffer } from '../../common/media/load-remote-media';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { applyStickerPackExif } from '../../common/media/webp-sticker-exif';
 import { EngineRefusedError } from '../../common/errors/engine-refused.error';
 import { MessageNotFoundError } from '../../common/errors/message-not-found.error';
 import { type createLogger } from '../../common/services/logger.service';
@@ -436,7 +437,10 @@ export class BaileysMessaging {
     // take one, so dropping it here left a documented capability doing nothing.
     return this.sendContent(
       chatId,
-      { sticker: await toWebpSticker(data, mimetype), ...this.withMentions(media.mentions) },
+      {
+        sticker: applyStickerPackExif(await toWebpSticker(data, mimetype), media.packName, media.packAuthor),
+        ...this.withMentions(media.mentions),
+      },
       await this.quoteOption(media.quotedMessageId),
     );
   }

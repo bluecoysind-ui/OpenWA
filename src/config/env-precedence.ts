@@ -77,6 +77,7 @@ export const BLANK_SHADOWED_ENV_KEYS: string[] = [
   'MEDIA_CONVERSION_TIMEOUT_MS',
   'MEDIA_CONVERSION_MAX_OUTPUT_BYTES',
   'MEDIA_CONVERSION_CONCURRENCY',
+  'STICKER_MAX_DURATION_SEC',
   // Session ownership / multi-node routing (docs/13). Blank-forwarded so the single-node default
   // stays untouched while .env / data/.env.generated can supply real values.
   'NODE_ID',

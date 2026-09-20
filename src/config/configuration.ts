@@ -539,6 +539,11 @@ export default () => ({
       const n = parseInt(process.env.MEDIA_CONVERSION_CONCURRENCY ?? '', 10);
       return Number.isFinite(n) && n > 0 ? n : 2;
     })(),
+    // Animated-sticker wall-clock cap (ffmpeg -t). WhatsApp clients typically refuse longer loops.
+    stickerMaxDurationSec: (() => {
+      const n = parseInt(process.env.STICKER_MAX_DURATION_SEC ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 8;
+    })(),
   },
 
   // Message-template rendering

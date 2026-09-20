@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestj
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ConversionStatusResponseDto, ConvertedMediaResponseDto } from './dto/media-response.dto';
 import { MediaConversionService } from './media-conversion.service';
-import { ConvertMediaDto } from './dto/convert-media.dto';
+import { ConvertMediaDto, ConvertStickerDto } from './dto/convert-media.dto';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
 
@@ -81,5 +81,28 @@ export class MediaController {
   })
   async convertVideo(@Param('sessionId') sessionId: string, @Body() dto: ConvertMediaDto) {
     return this.mediaConversion.convertToVideo(sessionId, dto);
+  }
+
+  @Post('convert/sticker')
+  @HttpCode(HttpStatus.OK)
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Convert image or video into a WhatsApp WebP sticker' })
+  @ApiResponse({
+    status: 200,
+    description: 'Converted 512×512 WebP sticker bytes, ready to post to send-sticker.',
+    type: ConvertedMediaResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true.',
+  })
+  @ApiResponse({ status: 413, description: 'The supplied media is above the media size cap.' })
+  @ApiResponse({
+    status: 503,
+    description:
+      'Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly.',
+  })
+  async convertSticker(@Param('sessionId') sessionId: string, @Body() dto: ConvertStickerDto) {
+    return this.mediaConversion.convertToSticker(sessionId, dto);
   }
 }

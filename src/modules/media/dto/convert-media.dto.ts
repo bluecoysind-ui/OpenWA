@@ -1,5 +1,6 @@
-import { IsString, IsNotEmpty, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, ValidateIf, IsOptional, IsBoolean, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ToStrictBoolean } from '../../../common/utils/strict-boolean';
 
 /**
  * Media to convert, in the same url-or-base64 shape every other media endpoint accepts.
@@ -26,4 +27,27 @@ export class ConvertMediaDto {
   @IsString()
   @IsNotEmpty()
   base64?: string;
+}
+
+export class ConvertStickerDto extends ConvertMediaDto {
+  @ApiPropertyOptional({ description: 'Sticker pack display name (WebP EXIF).', maxLength: 128 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  packName?: string;
+
+  @ApiPropertyOptional({ description: 'Sticker pack author (WebP EXIF).', maxLength: 128 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  author?: string;
+
+  @ApiPropertyOptional({
+    description: 'Strip the background via remove.bg before converting. Requires REMOVE_BG_API_KEY.',
+    default: false,
+  })
+  @IsOptional()
+  @ToStrictBoolean()
+  @IsBoolean()
+  removeBg?: boolean;
 }

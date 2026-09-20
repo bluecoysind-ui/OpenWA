@@ -235,6 +235,7 @@ services:
       - MEDIA_CONVERSION_TIMEOUT_MS=${MEDIA_CONVERSION_TIMEOUT_MS:-}
       - MEDIA_CONVERSION_MAX_OUTPUT_BYTES=${MEDIA_CONVERSION_MAX_OUTPUT_BYTES:-}
       - MEDIA_CONVERSION_CONCURRENCY=${MEDIA_CONVERSION_CONCURRENCY:-}
+      - STICKER_MAX_DURATION_SEC=${STICKER_MAX_DURATION_SEC:-}
       # Redis. Blank-forwarded (see Database note) so a dashboard enable/disable applies; a real host
       # value pins.
       - REDIS_ENABLED=${REDIS_ENABLED:-}

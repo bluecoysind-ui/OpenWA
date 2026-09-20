@@ -289,6 +289,7 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'MEDIA_CONVERSION_TIMEOUT_MS',
     'MEDIA_CONVERSION_MAX_OUTPUT_BYTES',
     'MEDIA_CONVERSION_CONCURRENCY',
+    'STICKER_MAX_DURATION_SEC',
     // Session ownership leases, same fall-back-silently reasoning.
     'SESSION_LEASE_TTL_MS',
     'SESSION_LEASE_HEARTBEAT_MS',

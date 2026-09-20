@@ -88,6 +88,24 @@ export function videoEncodeArgs(): string[] {
   ];
 }
 
+/** Encoder arguments for a WhatsApp sticker (512×512 WebP, duration-capped). */
+export function stickerEncodeArgs(maxDurationSec: number): string[] {
+  const seconds = Number.isFinite(maxDurationSec) && maxDurationSec > 0 ? maxDurationSec : 8;
+  return [
+    '-t',
+    String(seconds),
+    '-an',
+    '-vf',
+    'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=yuva420p',
+    '-c:v',
+    'libwebp',
+    '-quality',
+    '80',
+    '-loop',
+    '0',
+  ];
+}
+
 /**
  * Convert `input` by running ffmpeg once, and return the produced bytes.
  *
