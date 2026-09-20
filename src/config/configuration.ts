@@ -546,6 +546,14 @@ export default () => ({
     })(),
   },
 
+  // Inbound chat-media persistence (WP6). Flag default OFF via features.mediaPersist.
+  mediaPersist: {
+    ttlDays: (() => {
+      const n = parseInt(process.env.MEDIA_PERSIST_TTL_DAYS ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 30;
+    })(),
+  },
+
   // Message-template rendering
   template: {
     // Cap on the FINAL rendered text of a send-template request (header+body+footer joined, after

@@ -3,11 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Webhook } from './entities/webhook.entity';
 import { WebhookDeliveryFailure } from './entities/webhook-delivery-failure.entity';
 import { WebhookOutboxEvent } from './entities/webhook-outbox-event.entity';
+import { WebhookDeliveryLog } from './entities/webhook-delivery-log.entity';
 import { WebhookOutboxService } from './webhook-outbox.service';
 import { WebhookReconcilerService } from './webhook-reconciler.service';
 import { Session } from '../session/entities/session.entity';
 import { WebhookService } from './webhook.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
+import { WebhookDeliveryLogService } from './webhook-delivery-log.service';
 import { WebhookController } from './webhook.controller';
 import { WebhooksListController } from './webhooks-list.controller';
 import { EngineModule } from '../../engine/engine.module';
@@ -24,12 +26,21 @@ if (process.env.QUEUE_ENABLED === 'true') {
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Webhook, WebhookDeliveryFailure, WebhookOutboxEvent, Session], 'data'),
+    TypeOrmModule.forFeature(
+      [Webhook, WebhookDeliveryFailure, WebhookOutboxEvent, WebhookDeliveryLog, Session],
+      'data',
+    ),
     EngineModule,
     ...queueModules,
   ],
   controllers: [WebhookController, WebhooksListController],
-  providers: [WebhookService, WebhookDeliveryService, WebhookOutboxService, WebhookReconcilerService],
+  providers: [
+    WebhookService,
+    WebhookDeliveryService,
+    WebhookDeliveryLogService,
+    WebhookOutboxService,
+    WebhookReconcilerService,
+  ],
   exports: [WebhookService],
 })
 export class WebhookModule {}

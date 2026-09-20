@@ -1,5 +1,6 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
+import { Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
@@ -9,8 +10,10 @@ import { workerConnectionOptions, webhookWorkerConcurrency } from '../redis-conn
 import { WebhookJobData, WebhookPayload } from '../../webhook/webhook.service';
 import { Webhook } from '../../webhook/entities/webhook.entity';
 import { WebhookDeliveryFailure } from '../../webhook/entities/webhook-delivery-failure.entity';
+import { WebhookDeliveryLog } from '../../webhook/entities/webhook-delivery-log.entity';
 import { recordWebhookDeliveryFailure, statusCodeFromError } from '../../webhook/utils/record-delivery-failure';
 import { postWebhookPayload } from '../../webhook/utils/deliver-once';
+import { recordWebhookDeliveryAttempt } from '../../webhook/utils/record-delivery-attempt';
 import { HookManager } from '../../../core/hooks';
 import { redactSsrfError } from '../../../common/security/ssrf-guard';
 import { incrementWebhookDeliveryFailures } from '../../../common/metrics/webhook-delivery-metrics';
@@ -58,6 +61,9 @@ export class WebhookProcessor extends WorkerHost {
     private readonly failureRepository: Repository<WebhookDeliveryFailure>,
     private readonly hookManager: HookManager,
     private readonly configService: ConfigService,
+    @Optional()
+    @InjectRepository(WebhookDeliveryLog, 'data')
+    private readonly deliveryLogRepo?: Repository<WebhookDeliveryLog>,
   ) {
     super();
   }
@@ -146,6 +152,15 @@ export class WebhookProcessor extends WorkerHost {
       );
     }
 
+    await recordWebhookDeliveryAttempt(this.deliveryLogRepo, {
+      webhookId,
+      sessionId,
+      status: 'success',
+      httpCode: status,
+      durationMs: responseTime,
+      attempt: job.attemptsMade + 1,
+    });
+
     // Execute hook after successful delivery
     await this.hookManager.execute(
       'webhook:delivered',
@@ -193,6 +208,16 @@ export class WebhookProcessor extends WorkerHost {
       maxRetries,
       isFinalAttempt,
       action: 'webhook_failed',
+    });
+
+    await recordWebhookDeliveryAttempt(this.deliveryLogRepo, {
+      webhookId,
+      sessionId,
+      status: 'failed',
+      httpCode: statusCodeFromError(errorMessage),
+      durationMs: responseTime,
+      attempt: job.attemptsMade + 1,
+      errorSnippet: redactSsrfError(error),
     });
 
     // On final failure (all retries exhausted): fire the error hook AND persist a durable record so
@@ -286,5 +311,14 @@ export class WebhookProcessor extends WorkerHost {
     if (recorded) {
       incrementWebhookDeliveryFailures();
     }
+    await recordWebhookDeliveryAttempt(this.deliveryLogRepo, {
+      webhookId,
+      sessionId,
+      status: 'failed',
+      httpCode: null,
+      durationMs: 0,
+      attempt: Math.max(1, job.attemptsMade),
+      errorSnippet: error.message,
+    });
   }
 }

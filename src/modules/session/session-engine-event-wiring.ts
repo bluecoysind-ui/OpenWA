@@ -25,6 +25,7 @@ import {
 import { type createLogger } from '../../common/services/logger.service';
 import { userPart } from '../../engine/identity/wa-id';
 import { SessionEngineLeafEvents } from './session-engine-leaf-events';
+import { resolveFeatureFlags } from '../../config/feature-flags';
 
 /** The lastError an engine-internal reconnect episode records; onQRCode clears only this one. */
 export const RECONNECT_LOOP_REASON = 'Reconnecting after a dropped connection';
@@ -249,6 +250,16 @@ export class SessionEngineEventWiring {
         });
 
         host.messages.applyReactionQueued(id, event);
+      },
+      onPollVote: (event): void => {
+        if (!resolveFeatureFlags().pollVoteEvents) return;
+        if (!host.isLiveEngine(id, engine)) return;
+        void host.webhookService.dispatch(id, 'message.poll_vote', {
+          pollMessageId: event.pollMessageId,
+          chatId: event.chatId,
+          voter: event.voter,
+          ...(event.selectedOptions ? { selectedOptions: event.selectedOptions } : {}),
+        });
       },
       onMessageEdited: (message): void => {
         if (!host.isLiveEngine(id, engine)) return;

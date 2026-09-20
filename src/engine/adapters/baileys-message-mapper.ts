@@ -1,5 +1,6 @@
 import { DeliveryStatus, IncomingMessage, MessageType } from '../interfaces/whatsapp-engine.interface';
 import { chatKind } from '../identity/wa-id';
+import { quotedHasMedia } from '../quoted-payload';
 
 /**
  * Map a Baileys message content-type token (from `getContentType`) to the engine-neutral
@@ -74,6 +75,27 @@ export function mapBaileysMessageType(
     default:
       return 'unknown';
   }
+}
+
+function quotedContentType(qm: object): string | undefined {
+  const keys = [
+    'imageMessage',
+    'videoMessage',
+    'audioMessage',
+    'documentMessage',
+    'documentWithCaptionMessage',
+    'stickerMessage',
+    'locationMessage',
+    'contactMessage',
+    'contactsArrayMessage',
+    'pollCreationMessage',
+    'pollCreationMessageV2',
+    'pollCreationMessageV3',
+    'extendedTextMessage',
+    'conversation',
+  ] as const;
+  const record = qm as Record<string, unknown>;
+  return keys.find(key => record[key]);
 }
 
 /**
@@ -783,7 +805,15 @@ export function extractBaileysContext(content: BaileysContextContent): BaileysMe
     // poll or interactive shape carries its text instead of an empty string — matching wwjs, whose
     // quote is a full Message and therefore shows the same body it would show unquoted.
     const qm = contextInfo.quotedMessage as BaileysBodyContent;
-    context.quotedMessage = { id: contextInfo.stanzaId, body: extractBaileysBody(qm) };
+    const quotedType = mapBaileysMessageType(quotedContentType(qm));
+    const caption = qm.imageMessage?.caption ?? qm.videoMessage?.caption ?? qm.documentMessage?.caption ?? undefined;
+    context.quotedMessage = {
+      id: contextInfo.stanzaId,
+      body: extractBaileysBody(qm),
+      type: quotedType,
+      hasMedia: quotedHasMedia(quotedType),
+      ...(caption ? { caption } : {}),
+    };
   }
 
   return context;
@@ -825,6 +855,10 @@ export interface BaileysIncomingFields {
   fromMe: boolean;
   /** Group sender (`key.participant`); `remoteJid` is the group JID for group messages. */
   participant?: string;
+  /** LID/phone twin of `remoteJid` when Baileys supplies `key.remoteJidAlt`. */
+  remoteJidAlt?: string;
+  /** LID/phone twin of `participant` when Baileys supplies `key.participantAlt`. */
+  participantAlt?: string;
   body: string;
   /** Result of `getContentType(msg.message)`. */
   contentType: string | undefined;
@@ -906,6 +940,13 @@ export function buildIncomingMessageFromBaileys(
   const senderJid = fields.participant ?? rawChatId;
   if (senderJid.endsWith('@lid')) {
     incoming.isLidSender = true;
+  }
+
+  if (fields.remoteJidAlt) {
+    incoming.remoteJidAlt = normalizeJid(fields.remoteJidAlt);
+  }
+  if (fields.participantAlt) {
+    incoming.participantAlt = normalizeJid(fields.participantAlt);
   }
 
   if (fields.pushName) {

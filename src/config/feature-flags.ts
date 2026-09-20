@@ -19,6 +19,8 @@ export interface FeatureFlags {
   simulateTypingMaxMs: number;
   /** Persist inbound chat media via StorageService. Opt-in — default OFF. List/delete only when on. */
   mediaPersist: boolean;
+  /** Emit `message.poll_vote` webhooks. Opt-in — default OFF. Webhook-only (not socket-subscribable). */
+  pollVoteEvents: boolean;
   /** Inbound `#` commands (core module). Opt-in — default OFF; also requires per-session bot-config. */
   botCommands: boolean;
   /** Regex matchMode on automation rules. Opt-in — default OFF. EXACT/CONTAINS/STARTS_WITH need no flag. */
@@ -47,6 +49,7 @@ export function computeFeatureFlags(env: NodeJS.ProcessEnv = process.env): Featu
     simulateTyping: env.SIMULATE_TYPING !== 'false',
     simulateTypingMaxMs: Number(env.SIMULATE_TYPING_MAX_MS) || 5000,
     mediaPersist: env.MEDIA_PERSIST === 'true',
+    pollVoteEvents: env.POLL_VOTE_EVENTS === 'true',
     botCommands: env.BOT_COMMANDS === 'true',
     autoReplyRegex: env.AUTO_REPLY_REGEX === 'true',
     scheduledMessages: env.SCHEDULED_MESSAGES !== 'false',

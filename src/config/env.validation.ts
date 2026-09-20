@@ -290,6 +290,7 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'MEDIA_CONVERSION_MAX_OUTPUT_BYTES',
     'MEDIA_CONVERSION_CONCURRENCY',
     'STICKER_MAX_DURATION_SEC',
+    'MEDIA_PERSIST_TTL_DAYS',
     // Session ownership leases, same fall-back-silently reasoning.
     'SESSION_LEASE_TTL_MS',
     'SESSION_LEASE_HEARTBEAT_MS',
@@ -408,6 +409,7 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'CHAT_MEDIA_ARCHIVE_OUTBOUND',
     // WA-AKG port (docs/wa-akg-port): opt-in except SCHEDULED_MESSAGES, which is opt-out.
     'MEDIA_PERSIST',
+    'POLL_VOTE_EVENTS',
     'BOT_COMMANDS',
     'AUTO_REPLY_REGEX',
     'SCHEDULED_MESSAGES',

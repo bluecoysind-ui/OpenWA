@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  OnModuleInit,
+  OnModuleDestroy,
+  Optional,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindManyOptions, In, LessThan, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +26,7 @@ import {
   redactSsrfError,
 } from '../../common/security/ssrf-guard';
 import { WebhookDeliveryService, WebhookPayload } from './webhook-delivery.service';
+import { WebhookDeliveryLogService } from './webhook-delivery-log.service';
 
 // Delivery-engine types (payload and queue job shapes) live on WebhookDeliveryService; re-exported
 // here so existing importers (the queue processor) keep a single stable path.
@@ -51,6 +59,8 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     private readonly sessionRepository: Repository<Session>,
     private readonly configService: ConfigService,
     private readonly delivery: WebhookDeliveryService,
+    @Optional()
+    private readonly deliveryLog?: WebhookDeliveryLogService,
   ) {}
 
   /**
@@ -64,15 +74,27 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     const retentionDays = Number.isInteger(parsed) ? Math.max(0, parsed) : 90;
     if (retentionDays <= 0) {
       this.logger.log('Webhook delivery-failure retention disabled (WEBHOOK_FAILURE_RETENTION_DAYS <= 0)');
-      return;
     }
     const runPrune = (): void => {
-      this.pruneDeliveryFailures(retentionDays)
+      if (retentionDays > 0) {
+        this.pruneDeliveryFailures(retentionDays)
+          .then(n => {
+            if (n > 0) this.logger.log(`Pruned ${n} webhook delivery-failure(s) older than ${retentionDays} day(s)`);
+          })
+          .catch(err =>
+            this.logger.error(
+              'Webhook delivery-failure cleanup failed',
+              err instanceof Error ? err.stack : String(err),
+            ),
+          );
+      }
+      void this.deliveryLog
+        ?.sweep()
         .then(n => {
-          if (n > 0) this.logger.log(`Pruned ${n} webhook delivery-failure(s) older than ${retentionDays} day(s)`);
+          if (n > 0) this.logger.log(`Pruned ${n} webhook delivery attempt(s) older than 30 day(s)`);
         })
         .catch(err =>
-          this.logger.error('Webhook delivery-failure cleanup failed', err instanceof Error ? err.stack : String(err)),
+          this.logger.error('Webhook delivery-attempt cleanup failed', err instanceof Error ? err.stack : String(err)),
         );
     };
     runPrune(); // prune once at startup
@@ -215,6 +237,11 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException(`Webhook with id '${id}' not found`);
     }
     return webhook;
+  }
+
+  async listDeliveries(sessionId: string, webhookId: string) {
+    await this.findOne(sessionId, webhookId);
+    return this.deliveryLog?.list(webhookId, sessionId) ?? [];
   }
 
   async update(sessionId: string, id: string, dto: UpdateWebhookDto): Promise<Webhook> {

@@ -175,6 +175,12 @@ export interface IncomingMessage {
    */
   isLidSender?: boolean;
   /**
+   * Alternate JID from Baileys `key.remoteJidAlt` (LID/phone twin) when known. Additive; `from`/`chatId` stay as today.
+   */
+  remoteJidAlt?: string;
+  /** Alternate participant JID from Baileys `key.participantAlt` when known. Additive. */
+  participantAlt?: string;
+  /**
    * Best-effort phone number (MSISDN digits) of the sender, resolved from a privacy id when inline
    * resolution is enabled (`RESOLVE_LID_TO_PHONE`). `null` when the engine cannot map it. Only
    * populated for `isLidSender` messages.
@@ -198,6 +204,14 @@ export interface IncomingMessage {
   quotedMessage?: {
     id: string;
     body: string;
+    /** Neutral type of the quoted message. Additive. */
+    type?: MessageType;
+    /** Caption when the quote is media. Additive. */
+    caption?: string;
+    /** True when the quoted message carried media. Additive. */
+    hasMedia?: boolean;
+    /** Session-scoped stored-file URL. Present only when MEDIA_PERSIST stored that quote. */
+    fileUrl?: string;
   };
   location?: {
     latitude: number;
@@ -655,6 +669,15 @@ export interface ReactionEvent {
   senderId: string;
 }
 
+/** A vote on a poll. Emitted only when POLL_VOTE_EVENTS is on. */
+export interface PollVoteEvent {
+  pollMessageId: string;
+  chatId: string;
+  voter: string;
+  /** Selected option names when decrypt succeeded; omitted otherwise. */
+  selectedOptions?: string[];
+}
+
 /**
  * A group membership or metadata change, mapped at the adapter boundary to this neutral
  * shape so consumers never see engine-specific payloads:
@@ -809,6 +832,11 @@ export interface EngineEventCallbacks {
   onMessageAck?: (messageId: string, status: DeliveryStatus) => void;
   onMessageRevoked?: (message: RevokedMessage) => void;
   onMessageReaction?: (event: ReactionEvent) => void;
+  /**
+   * Fired when someone votes on a poll. Emitted only when `POLL_VOTE_EVENTS=true`. Baileys surfaces
+   * encrypted pollUpdates; selected option names are omitted unless decrypt succeeds.
+   */
+  onPollVote?: (event: PollVoteEvent) => void;
   onMessageEdited?: (message: EditedMessage) => void;
   /**
    * Fired on group membership changes (join/leave), group metadata updates
