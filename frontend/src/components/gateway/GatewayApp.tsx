@@ -376,7 +376,7 @@ function Directory({ title, kind }: { title: string; kind: "dm" | "group" }) {
   const busy = chatsLoading || pics.isFetching;
   return (
     <div className="glass scroll-thin min-w-0 flex-1 overflow-auto rounded-2xl p-4">
-        <h2 className="mb-4 text-base font-semibold">{title}</h2>
+      <h2 className="mb-4 text-base font-semibold">{title}</h2>
       <DirectoryActions sessionId={sessionId} kind={kind} />
       {busy ? (
         <div className="mb-3">

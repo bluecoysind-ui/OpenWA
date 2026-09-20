@@ -172,6 +172,7 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 
 `GET /api/features` is VIEWER, deployment-wide, booleans only (`removeBgConfigured` is a presence bit — never the key). Session-scoped keys may read it so the Gateway UI can hide panes. Scheduler create/cancel now emit `scheduled_message_created` / `scheduled_message_cancelled` with `jobId` + `chatId` only (no text, caption, or media URL in the audit row), matching sent/failed.
 
+## D32 — Bot access-mode and command-flag mapping
 
-`GET /api/features` is VIEWER, deployment-wide, booleans only (`removeBgConfigured` is a presence bit — never the key). Session-scoped keys may read it so the Gateway UI can hide panes. Scheduler create/cancel now emit `scheduled_message_created` / `scheduled_message_cancelled` with `jobId` + `chatId` only (no text, caption, or media URL in the audit row), matching sent/failed.
+WA-AKG `BotConfig` uses ALL / OWNER / SPECIFIC / BLACKLIST plus per-command `enablePing` / `enableSticker` / `enableUptime` and a per-session `removeBgApiKey`. OpenWA maps SPECIFIC→`allow`, BLACKLIST→`block`, and ALL→`all`. OWNER-as-fromMe-only is not a first-class mode: commands skip `fromMe` (loop protection). Per-command enable flags collapse to `commandsEnabled`. Per-session remove.bg key stays env-only (D13). Command aliases `s`/`stiker`→sticker and `help`→menu are accepted; inbound-media `/nobg` stays URL-only (D26).
 

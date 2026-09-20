@@ -179,6 +179,15 @@ describe('SchedulerService', () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
+  it('does not start the tick loop when SCHEDULED_MESSAGES is off', () => {
+    flagOn = false;
+    const setI = jest.spyOn(global, 'setInterval');
+    service.onModuleInit();
+    expect(setI).not.toHaveBeenCalled();
+    setI.mockRestore();
+    service.onModuleDestroy();
+  });
+
   it('refuses create/update when the flag is off; cancel still works', async () => {
     const job = await create();
     flagOn = false;

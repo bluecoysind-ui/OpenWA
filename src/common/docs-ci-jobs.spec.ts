@@ -15,7 +15,7 @@ describe('docs/09 §9.6 matches the CI workflow', () => {
   const read = (...parts: string[]): string => readFileSync(join(__dirname, '..', '..', ...parts), 'utf8');
 
   const workflow = (): string => {
-    const yaml = read('.github', 'workflows', 'ci.yml');
+    const yaml = read('.github', 'workflows', 'ci.yml').replace(/\r\n/g, '\n');
     return yaml.slice(yaml.indexOf('\njobs:\n'));
   };
 
@@ -36,7 +36,7 @@ describe('docs/09 §9.6 matches the CI workflow', () => {
 
   /** Parse the §9.6 table: `| \`job\` | prose |`, job ids backticked in the first column. */
   const section = (): string => {
-    const doc = read('docs', '09-testing-strategy.md');
+    const doc = read('docs', '09-testing-strategy.md').replace(/\r\n/g, '\n');
     return doc.slice(doc.indexOf('## 9.6'), doc.indexOf('## 9.7'));
   };
 

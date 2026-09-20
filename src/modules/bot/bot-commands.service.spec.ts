@@ -78,6 +78,18 @@ describe('BotCommandsService', () => {
     expect(stickers).toEqual([{ chatId: '628111@c.us', url: 'https://example.com/a.webp' }]);
   });
 
+  it('accepts WA-AKG aliases s/stiker → sticker and help → menu', async () => {
+    const svc = new BotCommandsService(botConfig, hooks, { get: () => true } as unknown as ConfigService, moduleRef);
+    expect(await svc.handleInbound('sessA', inbound('#help'))).toBe(true);
+    expect(texts[0].text).toContain('#sticker');
+    expect(await svc.handleInbound('sessA', inbound('#s https://example.com/b.webp'))).toBe(true);
+    expect(await svc.handleInbound('sessA', inbound('#stiker https://example.com/c.webp'))).toBe(true);
+    expect(stickers).toEqual([
+      { chatId: '628111@c.us', url: 'https://example.com/b.webp' },
+      { chatId: '628111@c.us', url: 'https://example.com/c.webp' },
+    ]);
+  });
+
   it('skips fromMe and unknown commands', async () => {
     const svc = new BotCommandsService(botConfig, hooks, { get: () => true } as unknown as ConfigService, moduleRef);
     expect(await svc.handleInbound('sessA', inbound('#ping'))).toBe(true);

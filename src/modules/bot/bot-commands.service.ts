@@ -10,6 +10,7 @@ const PLUGIN_ID = 'openwa-bot-commands';
 const startedAt = Date.now();
 
 const MENU = ['ping', 'id', 'uptime', 'menu', 'sticker'];
+const ALIASES: Record<string, string> = { s: 'sticker', stiker: 'sticker', help: 'menu' };
 
 @Injectable()
 export class BotCommandsService implements OnModuleInit, OnModuleDestroy {
@@ -77,7 +78,8 @@ export class BotCommandsService implements OnModuleInit, OnModuleDestroy {
     if (!trimmed.startsWith(prefix)) return false;
     const rest = trimmed.slice(prefix.length).trim();
     const space = rest.search(/\s/);
-    const name = (space === -1 ? rest : rest.slice(0, space)).toLowerCase();
+    const raw = (space === -1 ? rest : rest.slice(0, space)).toLowerCase();
+    const name = ALIASES[raw] ?? raw;
     const arg = space === -1 ? '' : rest.slice(space).trim();
     if (!MENU.includes(name)) return false;
 
