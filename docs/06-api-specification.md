@@ -6755,15 +6755,21 @@ Partial update (any subset of the create fields). **Auth:** API key (OPERATOR) �
 
 Delete a rule. **Auth:** API key (OPERATOR) · **Response** `204`.
 
-### 6.4.16a Scheduled messages (one-shot)
+### 6.4.16a Scheduled messages
 
-Delayed one-shot sends under `/api/sessions/:sessionId/scheduled-messages`. Text or an http(s) media
+Delayed one-shot or recurring sends under `/api/sessions/:sessionId/scheduled-messages`. Text or an http(s) media
 URL (fetched at send time through the SSRF-safe send path). `sendAt` is an ISO-8601 **instant with
-offset**; `timezone` is an IANA name stored for display. Statuses: `pending`, `sending`, `sent`,
-`failed`, `cancelled`. The claim loop runs only when `SCHEDULED_MESSAGES` is on (default on).
-At-most-once: a job is marked `sending` before the send; a crash leaves it `failed` (never
-auto-resent). Overdue jobs past `SCHEDULED_MESSAGES_MAX_LATENESS_MS` fail. A pacing 429 reschedules
-with backoff. `DELETE` cancels a pending job (row kept). Sends go through `MessageService`.
+offset**; `timezone` is an IANA name used for display **and** recurrence math (DST-correct via Intl).
+Statuses: `pending`, `sending`, `sent`, `failed`, `cancelled`, `paused`. The claim loop runs only when
+`SCHEDULED_MESSAGES` is on (default on). At-most-once: a fire is marked `sending` before the send; a
+crash on a one-shot leaves it `failed`; a crash on a series skips that occurrence and schedules the
+next. Overdue one-shots past `SCHEDULED_MESSAGES_MAX_LATENESS_MS` fail; recurring series skip missed
+fires beyond that window rather than bursting. A pacing 429 reschedules the same occurrence with
+backoff. Recurrence is `none` / `daily` / `weekly` (days of week 0–6) / `monthly` (day of month;
+31 clamps to the last day). Recurring jobs require `until` and/or `maxOccurrences` (hard-capped),
+minimum interval 1 hour, and a per-session cap on active series. After a send the same row is updated
+atomically to the next fire. `PATCH` can pause/resume (`status` `paused`/`pending`). `DELETE` cancels
+a pending or paused job (row kept). Sends go through `MessageService`.
 
 #### POST /api/sessions/:sessionId/scheduled-messages
 
@@ -6771,11 +6777,13 @@ Create a job. **Auth:** API key (OPERATOR)
 
 **Request body** — `chatId` (required), `sendAt` (ISO instant with offset), `timezone` (IANA, default
 `UTC`), `text` and/or `mediaUrl`, optional `mediaType` (`text`/`image`/`video`/`document`/`audio`)
-and `caption`.
+and `caption`. Recurrence: `recurrence` (`none`/`daily`/`weekly`/`monthly`), `interval` (default 1),
+`daysOfWeek` (weekly), `dayOfMonth` (monthly), `until` (YYYY-MM-DD or ISO instant), `maxOccurrences`.
 
-**Response** `201` — the job, including `status` and UTC `sendAt`.
+**Response** `201` — the job, including `status`, UTC `sendAt` (next run), `occurrenceCount`.
 
-**Errors:** `400` flag off, cap, horizon, naive `sendAt`, or neither text nor mediaUrl
+**Errors:** `400` flag off, cap, horizon, naive `sendAt`, neither text nor mediaUrl, or recurring
+without until/maxOccurrences
 
 #### GET /api/sessions/:sessionId/scheduled-messages
 
@@ -6787,23 +6795,27 @@ Get one job. **Auth:** API key (VIEWER) · `200` or `404` when the job does not 
 
 #### PATCH /api/sessions/:sessionId/scheduled-messages/:jobId
 
-Update a **pending** job. **Auth:** API key (OPERATOR) · `200`, `404`, or `409` if not pending.
+Update a **pending or paused** job. **Auth:** API key (OPERATOR) · `200`, `404`, or `409` if not
+pending/paused. Body may include `status` `paused` or `pending` to pause/resume.
 
-**Errors:** `409` job is not pending
+**Errors:** `409` job is not pending or paused
 
 #### DELETE /api/sessions/:sessionId/scheduled-messages/:jobId
 
-Cancel a pending job. **Auth:** API key (OPERATOR) · **Response** `204`. `409` if not pending.
+Cancel a pending or paused job. **Auth:** API key (OPERATOR) · **Response** `204`. `409` if not
+pending or paused.
 
-**Errors:** `409` job is not pending
+**Errors:** `409` job is not pending or paused
 
 ### 6.4.16b Bot config and commands
 
 Per-session bot settings under `/api/sessions/:sessionId/bot-config`. Access lists are evaluated
 **before** automation-rule conditions and before commands. `BOT_COMMANDS=false` (default) means the
 commands module registers no `message:received` hook. Built-in commands (`#ping`, `#id`, `#uptime`,
-`#menu`, `#sticker <https-url>`) use the paced send path; sticker takes a URL only (no inbound media
-bytes). Welcome text fires on `group.join` through the same send path.
+`#menu`, `#sticker`) use the paced send path. `#sticker` takes an https URL, or an image/video whose
+caption starts with the command, or the command as a reply to an image/video (existing media download
++ sticker converter; pack/author from bot-config; no remove.bg). Welcome text fires on `group.join`
+through the same send path.
 
 #### GET /api/sessions/:sessionId/bot-config
 
@@ -6814,7 +6826,8 @@ Return the saved config, or the defaults if none has been saved. **Auth:** API k
 Upsert. **Auth:** API key (OPERATOR)
 
 **Request body** (all optional): `accessMode` (`all` / `allow` / `block`), `allowList[]`, `blockList[]`
-(max 500), `prefix` (default `#`), `commandsEnabled`, `autoRead`, `alwaysOnline`, `welcomeMessage`.
+(max 500), `prefix` (default `#`), `commandsEnabled`, `autoRead`, `alwaysOnline`, `welcomeMessage`,
+`stickerPackName`, `stickerPackAuthor`.
 
 **Response** `200` — the stored config.
 

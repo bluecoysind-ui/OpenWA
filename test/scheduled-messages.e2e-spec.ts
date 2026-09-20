@@ -122,4 +122,35 @@ describe('Scheduled messages (e2e)', () => {
       .send({ chatId: '628111@c.us', sendAt: sendAt() })
       .expect(400);
   });
+
+  it('creates a daily job, pauses, and resumes it', async () => {
+    const session = await nextSession();
+    const job = await createJob(session, { recurrence: 'daily', maxOccurrences: 5, timezone: 'UTC' });
+    expect(job.recurrence).toBe('daily');
+    expect(job.maxOccurrences).toBe(5);
+    expect(job.interval).toBe(1);
+
+    const paused = await request(app.getHttpServer())
+      .patch(`/api/sessions/${session}/scheduled-messages/${job.id as string}`)
+      .set('X-API-Key', apiKey)
+      .send({ status: 'paused' })
+      .expect(200);
+    expect((paused.body as { status: string }).status).toBe('paused');
+
+    const resumed = await request(app.getHttpServer())
+      .patch(`/api/sessions/${session}/scheduled-messages/${job.id as string}`)
+      .set('X-API-Key', apiKey)
+      .send({ status: 'pending' })
+      .expect(200);
+    expect((resumed.body as { status: string }).status).toBe('pending');
+  });
+
+  it('refuses recurring without until or maxOccurrences', async () => {
+    const session = await nextSession();
+    await request(app.getHttpServer())
+      .post(`/api/sessions/${session}/scheduled-messages`)
+      .set('X-API-Key', apiKey)
+      .send({ chatId: '628111@c.us', sendAt: sendAt(), text: 'x', recurrence: 'daily' })
+      .expect(400);
+  });
 });

@@ -1,4 +1,4 @@
-"""Scheduled messages — one-shot delayed sends.
+"""Scheduled messages — one-shot and recurring delayed sends.
 
 Backed by ``src/modules/scheduler/scheduler.controller.ts``.
 """

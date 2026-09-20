@@ -268,6 +268,10 @@ describe('configuration — scheduler and automation port knobs', () => {
     'SCHEDULED_MESSAGES_MAX_PENDING',
     'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
     'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+    'SCHEDULED_MESSAGES_MAX_RECURRING',
+    'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+    'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+    'BOT_COMMAND_COOLDOWN_MS',
     'AUTO_REPLY_REGEX_MAX_PATTERN',
     'REMOVE_BG_API_KEY',
     'STICKER_MAX_DURATION_SEC',
@@ -289,7 +293,11 @@ describe('configuration — scheduler and automation port knobs', () => {
       maxPendingPerSession: 100,
       maxHorizonHours: 720,
       maxLatenessMs: 6 * 60 * 60 * 1000,
+      maxRecurringPerSession: 20,
+      maxOccurrences: 366,
+      minIntervalMs: 3_600_000,
     });
+    expect(cfg.bot.commandCooldownMs).toBe(3000);
     expect(cfg.automation.regexMaxPatternLength).toBe(256);
     expect(cfg.removeBg.apiKey).toBe('');
     expect(cfg.mediaConversion.stickerMaxDurationSec).toBe(8);

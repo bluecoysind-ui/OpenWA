@@ -121,7 +121,7 @@ For any deployment where ethical, legal, or regulatory compliance matters (healt
 | Message Reactions | ✅     | React to messages with emoji                              |
 | Message Editing   | ✅     | Send edits + live `message.edited` events on both engines |
 | Bulk Messaging    | ✅     | Send to multiple recipients with pacing                         |
-| Scheduled sends   | ✅     | One-shot delayed text/media URL (`SCHEDULED_MESSAGES`, default on) |
+| Scheduled sends   | ✅     | One-shot and recurring delayed text/media URL (`SCHEDULED_MESSAGES`, default on) |
 | Auto-reply / bot  | ✅     | Per-session rules + commands (`BOT_COMMANDS` / `AUTO_REPLY_REGEX` opt-in) |
 | Message Status    | ✅     | Track delivery and read receipts                          |
 

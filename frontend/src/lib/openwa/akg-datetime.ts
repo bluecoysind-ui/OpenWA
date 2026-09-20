@@ -71,3 +71,20 @@ export function localDateTimeToIsoInstant(local: string, timeZone: string): stri
   const offsetMin = timeZoneOffsetMinutes(utc, timeZone);
   return `${date}T${pad(hour)}:${pad(minute)}:${pad(second)}${formatOffset(offsetMin)}`;
 }
+
+/** Format an ISO instant as `YYYY-MM-DDTHH:mm` wall-clock in `timeZone` (for datetime-local). */
+export function isoInstantToLocalDateTime(iso: string, timeZone: string): string {
+  const utcMs = Date.parse(iso);
+  if (!Number.isFinite(utcMs)) throw new Error('invalid instant');
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(utcMs));
+  const num = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value ?? '00';
+  return `${num('year')}-${num('month')}-${num('day')}T${num('hour')}:${num('minute')}`;
+}

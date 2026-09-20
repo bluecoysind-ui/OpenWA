@@ -502,6 +502,25 @@ export default () => ({
       const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_LATENESS_MS ?? '', 10);
       return Number.isFinite(n) && n >= 0 ? n : 6 * 60 * 60 * 1000;
     })(),
+    maxRecurringPerSession: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_RECURRING ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 20;
+    })(),
+    maxOccurrences: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_OCCURRENCES ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 366;
+    })(),
+    minIntervalMs: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MIN_INTERVAL_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 3_600_000;
+    })(),
+  },
+
+  bot: {
+    commandCooldownMs: (() => {
+      const n = parseInt(process.env.BOT_COMMAND_COOLDOWN_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 3000;
+    })(),
   },
 
   // remove.bg for sticker convert (WP5). Empty → endpoint fails closed; never log the value.

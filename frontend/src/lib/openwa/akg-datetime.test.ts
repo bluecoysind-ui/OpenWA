@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { localDateTimeToIsoInstant, timeZoneOffsetMinutes } from './akg-datetime.ts';
+import { localDateTimeToIsoInstant, isoInstantToLocalDateTime, timeZoneOffsetMinutes } from './akg-datetime.ts';
 
 describe('localDateTimeToIsoInstant', () => {
   it('keeps Asia/Kolkata at +05:30 (no DST)', () => {
@@ -21,6 +21,11 @@ describe('localDateTimeToIsoInstant', () => {
 
   it('rejects a naive datetime without the T separator', () => {
     assert.throws(() => localDateTimeToIsoInstant('2026-01-01 00:00', 'UTC'), /YYYY-MM-DD/);
+  });
+
+  it('round-trips a Kolkata wall time through isoInstantToLocalDateTime', () => {
+    const iso = localDateTimeToIsoInstant('2026-09-21T15:00', 'Asia/Kolkata');
+    assert.equal(isoInstantToLocalDateTime(iso, 'Asia/Kolkata'), '2026-09-21T15:00');
   });
 
   it('reads a positive offset east of UTC at a known instant', () => {

@@ -318,7 +318,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     StatusStoreModule, // Phase 3: inbound status/story TTL store (24h purge + media persistence)
     ChatMediaModule, // opt-in chat-media archive (retention purge + orphan sweep)
     AutomationModule, // single-message autoreply rules, evaluated on the inbound dispatch
-    SchedulerModule, // one-shot delayed sends (WP4a); loop idle unless SCHEDULED_MESSAGES is on
+    SchedulerModule, // delayed / recurring sends; loop idle unless SCHEDULED_MESSAGES is on
     BotModule, // bot-config + core commands (WP4b); commands subscribe only when BOT_COMMANDS=true
     TakeoverModule, // adopts sessions whose holder's lease lapsed (crashed peer / recreated node)
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)

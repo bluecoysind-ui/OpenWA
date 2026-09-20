@@ -52,7 +52,14 @@ export type ScheduledMessage = {
   mediaUrl: string | null;
   mediaType: string;
   caption: string | null;
-  status: 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled' | 'paused';
+  recurrence: 'none' | 'daily' | 'weekly' | 'monthly';
+  interval: number;
+  daysOfWeek: number[] | null;
+  dayOfMonth: number | null;
+  until: string | null;
+  maxOccurrences: number | null;
+  occurrenceCount: number;
   attemptCount: number;
   lastError: string | null;
   sentMessageId: string | null;
@@ -122,6 +129,8 @@ export type BotConfig = {
   autoRead: boolean;
   alwaysOnline: boolean;
   welcomeMessage: string | null;
+  stickerPackName: string | null;
+  stickerPackAuthor: string | null;
 };
 
 export function getBotConfig(sessionId: string) {

@@ -11,7 +11,7 @@ Source: `_reference/WA-AKG` (package.json `1.6.4`), not OpenWA docs. Route inven
 | EXISTED | 62 |
 | IMPLEMENTED | 20 |
 | EXTENDED | 7 |
-| SKIPPED-INTENTIONAL | 14 |
+| SKIPPED-INTENTIONAL | 13 |
 | OUT-OF-SCOPE | 13 |
 | MISSING | 0 |
 
@@ -25,7 +25,7 @@ Totals include every exported HTTP verb (and the NextAuth catch-all with no verb
 | Universal `POST .../send` | Q5 | Typed send routes already exist. |
 | Multipart `POST .../media` | Q5 / send-pacing | JSON typed sends + pacing; no second multipart pipeline. |
 | Native `listMessage` / `LIST_MESSAGES` | Q1 | Text-list helper only; env stub unused/reserved. |
-| Scheduler recurrence / `cronExpression` | Q2 | One-shot + IANA tz. |
+| Scheduler recurrence / `cronExpression` | Q2 | Daily/weekly/monthly on the same row (no cron). |
 | Dual scheduler loops | D7 / D25 | Single 5s claim loop. |
 | Broadcast pause/cancel worker flag | Q3 | Existing bulk cancel; no WA-AKG-style cancelled worker. |
 | `GET /chat/:jid` | D24 | List + history already cover the pane. |
@@ -33,16 +33,15 @@ Totals include every exported HTTP verb (and the NextAuth catch-all with no verb
 | Webhook request/response bodies | Q6 / D16 | Snippet + status only. |
 | Stories / `POST /status/.../update` | D10 / map §12 | No route.ts in source; Story unused. |
 | Baileys rc.9 newsletter patch | Q7 | OpenWA is rc14. |
-| OWNER-as-fromMe / per-command enable* / per-session removeBgApiKey | D32, D13, D26 | Mapped to all/allow/block + commandsEnabled; env key; URL sticker only. |
+| OWNER-as-fromMe / per-command enable* / per-session removeBgApiKey | D32, D13, D26 | Mapped to all/allow/block + commandsEnabled; env key; #sticker URL + caption/reply media (no remove.bg on inbound). |
 | BotConfig anti-spam knobs | D19 | `SendPacingService` is the send gate. |
-| Inbound-media `#sticker` + nobg/ffmpeg | D26 | URL-only command. |
 | `status.update` webhook | map §7 | WA-AKG never dispatches it. |
 
 No unexplained skips.
 
 ## Unverified
 
-- Postgres up/down of 178660–178680 (no local Postgres in this run). SQLite up+down + upgrade-from-main **verified**.
+- Postgres up/down of 178660–178690 (no local Postgres in this run). SQLite up+down + upgrade-from-main **verified**.
 - Live Gateway panes with no session (backend+frontend not started together here).
 - Real WhatsApp number-check / sticker/remove.bg against production APIs.
 - Linux CI (this run is Windows). Jest name-fails vs BASELINE still Windows FS/chmod/symlink/patch/SIGKILL.
@@ -61,7 +60,7 @@ No unexplained skips.
 | Frozen frontend | `git diff main --numstat -- frontend`: new `akg-*` files + registration-only rows in `FRONTEND_CHANGES.md`. `GatewayApp.tsx` slots only. |
 | Dashboard | `git diff main -- dashboard` empty. |
 | Flags default off / inert | `feature-flags.spec.ts`; `does not subscribe when BOT_COMMANDS is off`; `404s list/get/delete when the flag is off`; `does not start the tick loop when SCHEDULED_MESSAGES is off`. |
-| Migrations | `port-migrations-upgrade-down.spec.ts` (SQLite: main tip 178650 → up 178660–680 → down ×3 → up). `sqlite-chain-boot.e2e-spec.ts` full chain. Postgres **unverified**. |
+| Migrations | `port-migrations-upgrade-down.spec.ts` (SQLite: main tip 178650 → up 178660–690 → down ×4 → up). `sqlite-chain-boot.e2e-spec.ts` full chain. Postgres **unverified**. |
 | Dependencies | `git diff main -- package.json package-lock.json frontend/package.json`: no new runtime packages (frontend `test` script only). |
 | Env parity | `docs-env-example.spec.ts` + compose forwards. |
 | Security | Media URL fetch uses `withSafeFetch` SSRF guard. Audit/logs omit message bodies and `REMOVE_BG_API_KEY`. Bulk check max 50 + `CONTACT_CHECK_RATE` 429. |
@@ -198,7 +197,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 | Message | EXISTED | `messages` | e2e | transcript | |
 | Group | EXISTED | groups via engine | e2e | | |
 | AutoReply + match/context | EXTENDED | `automation_rules` matchMode/chatContext/replyMediaUrl | 178670; automation e2e | AutomationPanel | equals/contains/startsWith/regex; all/private/group |
-| ScheduledMessage | IMPLEMENTED | `scheduled_messages` | 178660; scheduler e2e | SchedulerPanel | no cron (Q2) |
+| ScheduledMessage | IMPLEMENTED | `scheduled_messages` | 178660+178690; scheduler e2e | SchedulerPanel | daily/weekly/monthly; paused |
 | Webhook + WebhookLog bodies | SKIPPED-INTENTIONAL | `webhooks` + `webhook_deliveries` snippets | Q6; 178680 | WebhookDeliveries | |
 | BotConfig fields | IMPLEMENTED / SKIPPED-INTENTIONAL | `bot_configs` | 178670; bot-config e2e; D32 | AutomationPanel | see field rows |
 | Label / ChatLabel | EXISTED | labels | openapi | Directory/labels | |
@@ -208,7 +207,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 | SystemConfig.timezone | OUT-OF-SCOPE | per-job IANA `timezone` | D25 | SchedulerPanel | not a global app timezone |
 | Notification / SessionAccess | OUT-OF-SCOPE | — | n/a | n/a | |
 
-**BotConfig field map:** `prefix`, `welcomeMessage`, `autoRead`, `alwaysOnline` IMPLEMENTED; `autoReplyMode`/`botAllowedJids`/`botBlockedJids` → `accessMode`/`allowList`/`blockList` IMPLEMENTED (D32); `enabled`/`enablePing`/`enableSticker`/`enableUptime` → `commandsEnabled` SKIPPED-INTENTIONAL D32; `removeBgApiKey` SKIPPED-INTENTIONAL D13; `antiSpam*` SKIPPED-INTENTIONAL D19; `botName`/`botMode` unused SKIPPED-INTENTIONAL D32; `enableVideoSticker`/`maxStickerDuration` SKIPPED-INTENTIONAL D26.
+**BotConfig field map:** `prefix`, `welcomeMessage`, `autoRead`, `alwaysOnline`, `stickerPackName`, `stickerPackAuthor` IMPLEMENTED; `autoReplyMode`/`botAllowedJids`/`botBlockedJids` → `accessMode`/`allowList`/`blockList` IMPLEMENTED (D32); `enabled`/`enablePing`/`enableSticker`/`enableUptime` → `commandsEnabled` SKIPPED-INTENTIONAL D32; `removeBgApiKey` SKIPPED-INTENTIONAL D13; `antiSpam*` SKIPPED-INTENTIONAL D19; `botName`/`botMode` unused SKIPPED-INTENTIONAL D32; `enableVideoSticker`/`maxStickerDuration` SKIPPED-INTENTIONAL D26 (converter caps).
 
 ### Bot commands (`bot/command-handler.ts`)
 
@@ -216,7 +215,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 | --- | --- | --- | --- | --- | --- |
 | `ping` `id` `uptime` `menu` `sticker` | IMPLEMENTED | `bot-commands.service.ts` | `bot-commands.service.spec.ts` | AutomationPanel enables | BOT_COMMANDS off: no subscribe |
 | aliases `s` `stiker` `help` | IMPLEMENTED | ALIASES map | `accepts WA-AKG aliases` | n/a (inbound) | A4 |
-| `sticker nobg/removebg` inbound media | SKIPPED-INTENTIONAL | URL sticker only | D26 | StickerTool uses convert API | |
+| `sticker nobg/removebg` inbound media | SKIPPED-INTENTIONAL | no remove.bg on #sticker | D26 | StickerTool uses convert API | caption/reply convert has no nobg |
 | OWNER fromMe macros | SKIPPED-INTENTIONAL | skip fromMe | spec `skips fromMe`; D32 | | loop protection |
 
 ### Autoreply (`store/autoreply.ts`)
@@ -234,7 +233,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 
 | WA-AKG item | status | OpenWA | proof | frontend | notes |
 | --- | --- | --- | --- | --- | --- |
-| node-cron recurrence + 30s dual loop | SKIPPED-INTENTIONAL | 5s claim loop | scheduler.service.spec; D25 Q2 | | flag off: no setInterval |
+| node-cron recurrence + 30s dual loop | IMPLEMENTED | 5s claim loop; daily/weekly/monthly | scheduler-recurrence.spec; D25 Q2 | SchedulerPanel | skip-missed; pause; no cron |
 | IANA tz at create | IMPLEMENTED | `timezone` on row | e2e | akg-datetime | naive refused |
 | Broadcast delay/jitter | EXISTED | bulk pacing | send-pacing | AkgBulkNote | |
 | Webhook events received/sent/status/connection/group/contact/deleted/edited/participant/test | EXISTED | SUBSCRIBABLE_EVENTS | webhooks e2e | WebhooksPanel | |

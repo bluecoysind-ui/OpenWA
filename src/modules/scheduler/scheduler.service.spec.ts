@@ -25,6 +25,9 @@ describe('SchedulerService', () => {
       if (key === 'scheduler.maxPendingPerSession') return 2;
       if (key === 'scheduler.maxHorizonHours') return 24;
       if (key === 'scheduler.maxLatenessMs') return 60_000;
+      if (key === 'scheduler.maxRecurringPerSession') return 1;
+      if (key === 'scheduler.maxOccurrences') return 10;
+      if (key === 'scheduler.minIntervalMs') return 3_600_000;
       return def;
     },
   } as unknown as ConfigService;
@@ -84,6 +87,8 @@ describe('SchedulerService', () => {
     expect(listed[0].id).toBe(job.id);
     expect(logInfo).toHaveBeenCalledWith(
       AuditAction.SCHEDULED_MESSAGE_CREATED,
+      // Jest asymmetric matchers are typed as any.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.objectContaining({ sessionId: 'sessA', metadata: expect.objectContaining({ jobId: job.id }) }),
     );
     expect(JSON.stringify(logInfo.mock.calls)).not.toMatch(/hello later/);
@@ -104,6 +109,7 @@ describe('SchedulerService', () => {
     await expect(service.cancel('sessA', job.id)).rejects.toBeInstanceOf(ConflictException);
     expect(logInfo).toHaveBeenCalledWith(
       AuditAction.SCHEDULED_MESSAGE_CANCELLED,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.objectContaining({ sessionId: 'sessA', metadata: expect.objectContaining({ jobId: job.id }) }),
     );
   });
@@ -224,5 +230,76 @@ describe('SchedulerService', () => {
       expect.objectContaining({ chatId: '628111@c.us', url: 'https://example.com/pic.jpg' }),
     );
     expect((await service.findOne('sessA', job.id)).status).toBe(ScheduledMessageStatus.SENT);
+  });
+
+  it('advances a daily job on the same row after a send', async () => {
+    const job = await create({
+      sendAt: new Date(Date.now() - 1_000).toISOString(),
+      recurrence: 'daily',
+      maxOccurrences: 5,
+    });
+    await service.processDueJobs(new Date());
+    expect(sendText).toHaveBeenCalledTimes(1);
+    const stored = await service.findOne('sessA', job.id);
+    expect(stored.status).toBe(ScheduledMessageStatus.PENDING);
+    expect(stored.occurrenceCount).toBe(1);
+    expect(new Date(stored.sendAtUtc).getTime()).toBeGreaterThan(Date.now() + 20 * 3_600_000);
+  });
+
+  it('skips missed recurring fires after downtime instead of bursting', async () => {
+    const repo = ds.getRepository(ScheduledMessage);
+    const start = new Date(Date.now() - 3 * 86_400_000);
+    const job = await repo.save(
+      repo.create({
+        sessionId: 'sessA',
+        chatId: '628111@c.us',
+        sendAtUtc: start,
+        timezone: 'UTC',
+        text: 'daily',
+        status: ScheduledMessageStatus.PENDING,
+        recurrence: 'daily',
+        recurrenceInterval: 1,
+        maxOccurrences: 10,
+        occurrenceCount: 0,
+        anchorAtUtc: start,
+      }),
+    );
+    await service.processDueJobs(new Date());
+    expect(sendText).not.toHaveBeenCalled();
+    const stored = await service.findOne('sessA', job.id);
+    expect(stored.status).toBe(ScheduledMessageStatus.PENDING);
+    expect(stored.occurrenceCount).toBeGreaterThanOrEqual(2);
+    expect(Date.now() - new Date(stored.sendAtUtc).getTime()).toBeLessThanOrEqual(60_000 + 5_000);
+  });
+
+  it('crash recovery on a recurring job skips the fire and schedules the next', async () => {
+    const job = await create({ recurrence: 'daily', maxOccurrences: 5 });
+    await ds.getRepository(ScheduledMessage).update(job.id, { status: ScheduledMessageStatus.SENDING });
+    expect(await service.failInterruptedJobs()).toBe(1);
+    const stored = await service.findOne('sessA', job.id);
+    expect(stored.status).toBe(ScheduledMessageStatus.PENDING);
+    expect(stored.occurrenceCount).toBe(1);
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second active recurring job at the per-session cap', async () => {
+    await create({ recurrence: 'daily', maxOccurrences: 3, text: 'first' });
+    await expect(create({ recurrence: 'daily', maxOccurrences: 3, text: 'second' })).rejects.toThrow(
+      /recurring-job cap/,
+    );
+  });
+
+  it('pauses and resumes a pending job', async () => {
+    const job = await create();
+    const paused = await service.update('sessA', job.id, { status: ScheduledMessageStatus.PAUSED });
+    expect(paused.status).toBe(ScheduledMessageStatus.PAUSED);
+    await service.processDueJobs(new Date(Date.now() + 4_000_000));
+    expect(sendText).not.toHaveBeenCalled();
+    const resumed = await service.update('sessA', job.id, { status: ScheduledMessageStatus.PENDING });
+    expect(resumed.status).toBe(ScheduledMessageStatus.PENDING);
+  });
+
+  it('refuses recurring without until or maxOccurrences', async () => {
+    await expect(create({ recurrence: 'daily' })).rejects.toThrow(/until and\/or maxOccurrences/);
   });
 });

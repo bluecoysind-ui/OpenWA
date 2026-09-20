@@ -1,5 +1,5 @@
 /**
- * Scheduled messages — one-shot delayed sends.
+ * Scheduled messages — one-shot and recurring delayed sends.
  *
  * Backed by `src/modules/scheduler/scheduler.controller.ts`.
  * @packageDocumentation
@@ -7,6 +7,8 @@
 
 import { encodeSegment } from '../http.js';
 import type { OpenWAClient } from '../client.js';
+
+export type RecurrenceKind = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export interface CreateScheduledMessageRequest {
   chatId: string;
@@ -17,9 +19,17 @@ export interface CreateScheduledMessageRequest {
   mediaUrl?: string;
   mediaType?: 'text' | 'image' | 'video' | 'document' | 'audio';
   caption?: string;
+  recurrence?: RecurrenceKind;
+  interval?: number;
+  daysOfWeek?: number[];
+  dayOfMonth?: number;
+  until?: string;
+  maxOccurrences?: number;
 }
 
-export type UpdateScheduledMessageRequest = Partial<CreateScheduledMessageRequest>;
+export type UpdateScheduledMessageRequest = Partial<CreateScheduledMessageRequest> & {
+  status?: 'pending' | 'paused';
+};
 
 export interface ScheduledMessageRecord {
   id: string;
@@ -31,7 +41,14 @@ export interface ScheduledMessageRecord {
   mediaUrl: string | null;
   mediaType: string;
   caption: string | null;
-  status: 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled' | 'paused';
+  recurrence: RecurrenceKind;
+  interval: number;
+  daysOfWeek: number[] | null;
+  dayOfMonth: number | null;
+  until: string | null;
+  maxOccurrences: number | null;
+  occurrenceCount: number;
   attemptCount: number;
   lastError: string | null;
   sentMessageId: string | null;

@@ -66,6 +66,7 @@ Screens:
 - [ ] Composer: poll, contact, location, sticker pack/author, multi-forward, text list, message actions
 - [ ] Bulk/broadcast progress
 - [ ] Scheduler
+- [ ] Scheduler recurrence picker + next-run + pause/resume
 - [ ] Auto-reply editor
 - [ ] Bot settings
 - [ ] Sticker tool

@@ -7,7 +7,7 @@ Locked Q1–Q8 (2026-09-20):
 | ID     | Decision                                                                                                                                                                    |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Q1** | Text-list helper only, last item in WP2. **No** native `listMessage`. `LIST_MESSAGES` stays unused.                                                                         |
-| **Q2** | One-shot scheduler in WP4. IANA timezone stored per row. Recurrence = WP4b later.                                                                                           |
+| **Q2** | Recurrence shipped as daily/weekly/monthly (IANA, DST-correct) on the same row — not node-cron. Until and/or maxOccurrences required and hard-capped. |
 | **Q3** | Leave bulk crash-resume as-is (interrupted batches stay FAILED; cancel stays).                                                                                              |
 | **Q4** | Intended plugin, **spike failed** — see D4. Core module behind `BOT_COMMANDS` + per-session enabled.                                                                        |
 | **Q5** | No universal `/send`.                                                                                                                                                       |
@@ -158,7 +158,7 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 
 ## D25 — WP4a sendAt is an ISO instant (offset required); IANA timezone stored for display. Naive wall-clock conversion refused (no tz lib). Send/fail webhooks are additive `scheduled.message.*`; DELETE cancels the row.
 
-## D26 — WP4b sticker command is `#{prefix}sticker <https-url>` only (no inbound media bytes on the hook). Commands that match set `_openwaCommandHandled` so automation skips that message. Welcome fires once per group.join event via BOT_INBOUND_PORT (SessionModule does not import BotModule). GET bot-config returns in-memory defaults without inserting a row. alwaysOnline is applied on PUT when a live engine exists, not on session:ready.
+## D26 — `#sticker` accepts an https URL, an image/video caption, or a reply to image/video. Caption/reply uses the existing media download + sticker converter (ffmpeg gate, size/duration caps, pack/author from bot-config). No remove.bg on this path. URL form unchanged. Commands that match set `_openwaCommandHandled` so automation skips that message. Welcome fires once per group.join event via BOT_INBOUND_PORT (SessionModule does not import BotModule). GET bot-config returns in-memory defaults without inserting a row. alwaysOnline is applied on PUT when a live engine exists, not on session:ready.
 
 ## D27 — WP5 sticker-pack EXIF is an in-repo WebP writer (no node-webpmux). Existing WebP stays byte-identical unless packName/packAuthor are set. Empty REMOVE_BG_API_KEY with removeBg=true is 400, never 500; the key is never logged.
 
@@ -174,5 +174,5 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 
 ## D32 — Bot access-mode and command-flag mapping
 
-WA-AKG `BotConfig` uses ALL / OWNER / SPECIFIC / BLACKLIST plus per-command `enablePing` / `enableSticker` / `enableUptime` and a per-session `removeBgApiKey`. OpenWA maps SPECIFIC→`allow`, BLACKLIST→`block`, and ALL→`all`. OWNER-as-fromMe-only is not a first-class mode: commands skip `fromMe` (loop protection). Per-command enable flags collapse to `commandsEnabled`. Per-session remove.bg key stays env-only (D13). Command aliases `s`/`stiker`→sticker and `help`→menu are accepted; inbound-media `/nobg` stays URL-only (D26).
+WA-AKG `BotConfig` uses ALL / OWNER / SPECIFIC / BLACKLIST plus per-command `enablePing` / `enableSticker` / `enableUptime` and a per-session `removeBgApiKey`. OpenWA maps SPECIFIC→`allow`, BLACKLIST→`block`, and ALL→`all`. OWNER-as-fromMe-only is not a first-class mode: commands skip `fromMe` (loop protection). Per-command enable flags collapse to `commandsEnabled`. Per-session remove.bg key stays env-only (D13). Command aliases `s`/`stiker`→sticker and `help`→menu are accepted; inbound-media `/nobg` is not on the command path (D26) — caption/reply convert never calls remove.bg.
 

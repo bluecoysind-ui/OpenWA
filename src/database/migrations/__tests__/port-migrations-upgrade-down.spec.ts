@@ -4,8 +4,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 /**
- * Upgrade path from main (last migration 178650) plus up AND down of the three WA-AKG
- * port migrations (178660/670/680) on SQLite.
+ * Upgrade path from main (last migration 178650) plus up AND down of the WA-AKG
+ * port migrations (178660/670/680/690) on SQLite.
  */
 const importMigrations = (dir: string): Array<{ ts: number; Ctor: new () => { name?: string } }> => {
   const out: Array<{ ts: number; Ctor: new () => { name?: string } }> = [];
@@ -31,6 +31,7 @@ const PORT_NAMES = [
   'AddScheduledMessages1786600000000',
   'AddBotConfigsAndAutomationMatch1786700000000',
   'AddWebhookDeliveriesAndMediaObjects1786800000000',
+  'AddSchedulerRecurrenceAndStickerPack1786900000000',
 ];
 
 const tableNames = async (ds: DataSource): Promise<Set<string>> => {
@@ -49,7 +50,7 @@ describe('WA-AKG port SQLite migrations: upgrade from main + down', () => {
     rmSync(`${file}-shm`, { force: true });
   });
 
-  it('runs 178660-178680 after 178650, then reverts them', async () => {
+  it('runs 178660-178690 after 178650, then reverts them', async () => {
     rmSync(file, { force: true });
     const all = importMigrations(join(repoRoot, 'src/database/migrations'));
     const mainOnly = all.filter(m => m.ts <= MAIN_TIP).map(m => m.Ctor);
@@ -83,6 +84,7 @@ describe('WA-AKG port SQLite migrations: upgrade from main + down', () => {
     expect(names.has('webhook_deliveries')).toBe(true);
     expect(names.has('media_objects')).toBe(true);
 
+    await ds.undoLastMigration({ transaction: 'all' });
     await ds.undoLastMigration({ transaction: 'all' });
     await ds.undoLastMigration({ transaction: 'all' });
     await ds.undoLastMigration({ transaction: 'all' });

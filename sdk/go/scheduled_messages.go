@@ -2,7 +2,7 @@ package openwa
 
 import "context"
 
-// ScheduledMessagesService is one-shot delayed sends.
+// ScheduledMessagesService is one-shot and recurring delayed sends.
 // Backed by src/modules/scheduler/scheduler.controller.ts.
 type ScheduledMessagesService struct{ client *Client }
 

@@ -198,6 +198,10 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'SCHEDULED_MESSAGES_MAX_PENDING', // 0 = unlimited
     'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS', // 0 = unlimited
     'SCHEDULED_MESSAGES_MAX_LATENESS_MS', // 0 = refuse any overdue job
+    'SCHEDULED_MESSAGES_MAX_RECURRING', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+    'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+    'BOT_COMMAND_COOLDOWN_MS', // 0 = no cooldown
     'WEBHOOK_MEDIA_INLINE_MAX_BYTES', // 0 = never inline media
     'EXPORT_INLINE_MEDIA_BUDGET_BYTES', // 0 = a data export carries no inline media at all
     'MESSAGE_LIST_INLINE_MEDIA_BUDGET_BYTES', // 0 = a message list carries no inline media at all

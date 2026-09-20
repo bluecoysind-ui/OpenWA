@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository } from 'typeorm';
+import { In, LessThanOrEqual, Not, Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { createLogger } from '../../common/services/logger.service';
@@ -17,6 +17,15 @@ import { isPacingLimitedError } from '../message/send-pacing.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { CreateScheduledMessageDto, UpdateScheduledMessageDto } from './dto/scheduled-message.dto';
 import { ScheduledMediaType, ScheduledMessage, ScheduledMessageStatus } from './entities/scheduled-message.entity';
+import {
+  assertRecurrenceRule,
+  nextOccurrence,
+  parseUntilUtc,
+  skipMissedOccurrences,
+  zonedParts,
+  type RecurrenceKind,
+  type RecurrenceRule,
+} from './scheduler-recurrence';
 import { assertIanaTimeZone, pacingBackoffMs, parseSendAtUtc } from './scheduler-time';
 
 const TICK_MS = 5_000;
@@ -25,6 +34,12 @@ const ERROR_SNIPPET = 500;
 const CLOCK_SKEW_MS = 2_000;
 
 const INTERRUPTED_ERROR = 'interrupted (process restarted while sending)';
+const EDITABLE = new Set([ScheduledMessageStatus.PENDING, ScheduledMessageStatus.PAUSED]);
+const ACTIVE_RECURRING = [
+  ScheduledMessageStatus.PENDING,
+  ScheduledMessageStatus.PAUSED,
+  ScheduledMessageStatus.SENDING,
+];
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnModuleDestroy {
@@ -73,6 +88,11 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     this.assertNotTooLate(sendAtUtc);
     await this.assertPendingCap(sessionId);
 
+    const recurrence = this.applyRecurrenceFields(dto, timezone, sendAtUtc);
+    if (recurrence.recurrence !== 'none') {
+      await this.assertRecurringCap(sessionId);
+    }
+
     const mediaType = this.resolveMediaType(dto.mediaType, dto.mediaUrl);
     const job = this.jobs.create({
       sessionId,
@@ -85,6 +105,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       caption: dto.caption ?? null,
       status: ScheduledMessageStatus.PENDING,
       attemptCount: 0,
+      occurrenceCount: 0,
+      anchorAtUtc: sendAtUtc,
+      ...recurrence,
     });
     const saved = await this.jobs.save(job);
     void this.audit.logInfo(AuditAction.SCHEDULED_MESSAGE_CREATED, {
@@ -107,8 +130,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   async update(sessionId: string, jobId: string, dto: UpdateScheduledMessageDto): Promise<ScheduledMessage> {
     this.assertFlagOn();
     const job = await this.findOne(sessionId, jobId);
-    if (job.status !== ScheduledMessageStatus.PENDING) {
-      throw new ConflictException('Only pending jobs can be updated');
+    if (!EDITABLE.has(job.status)) {
+      throw new ConflictException('Only pending or paused jobs can be updated');
     }
     if (dto.timezone !== undefined) {
       const timezone = dto.timezone.trim() || 'UTC';
@@ -120,6 +143,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       this.assertHorizon(sendAtUtc);
       this.assertNotTooLate(sendAtUtc);
       job.sendAtUtc = sendAtUtc;
+      if (!job.anchorAtUtc) job.anchorAtUtc = sendAtUtc;
     }
     if (dto.text !== undefined) job.text = dto.text;
     if (dto.mediaUrl !== undefined) job.mediaUrl = dto.mediaUrl;
@@ -129,6 +153,32 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Provide text or mediaUrl');
     }
     job.mediaType = this.resolveMediaType(job.mediaType, job.mediaUrl);
+
+    const becomingRecurring =
+      (dto.recurrence !== undefined ? dto.recurrence : job.recurrence) !== 'none' && job.recurrence === 'none';
+    const fields = this.applyRecurrenceFields(
+      {
+        recurrence: dto.recurrence ?? job.recurrence,
+        interval: dto.interval ?? job.recurrenceInterval,
+        daysOfWeek: dto.daysOfWeek === undefined ? (job.daysOfWeek ?? undefined) : (dto.daysOfWeek ?? undefined),
+        dayOfMonth: dto.dayOfMonth === undefined ? (job.dayOfMonth ?? undefined) : (dto.dayOfMonth ?? undefined),
+        until: dto.until === undefined ? undefined : (dto.until ?? undefined),
+        maxOccurrences:
+          dto.maxOccurrences === undefined ? (job.maxOccurrences ?? undefined) : (dto.maxOccurrences ?? undefined),
+      },
+      job.timezone,
+      job.sendAtUtc,
+      { existingUntil: dto.until === undefined ? job.untilUtc : null },
+    );
+    if (dto.until === null) fields.untilUtc = null;
+    if (becomingRecurring) await this.assertRecurringCap(sessionId);
+    Object.assign(job, fields);
+
+    if (dto.status === ScheduledMessageStatus.PAUSED) {
+      job.status = ScheduledMessageStatus.PAUSED;
+    } else if (dto.status === ScheduledMessageStatus.PENDING) {
+      job.status = ScheduledMessageStatus.PENDING;
+    }
     return this.jobs.save(job);
   }
 
@@ -137,10 +187,10 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     if (job.status === ScheduledMessageStatus.SENDING) {
       throw new ConflictException('Job is currently sending and cannot be cancelled');
     }
-    if (job.status !== ScheduledMessageStatus.PENDING) {
-      throw new ConflictException('Only pending jobs can be cancelled');
+    if (!EDITABLE.has(job.status)) {
+      throw new ConflictException('Only pending or paused jobs can be cancelled');
     }
-    const claimed = await this.claimStatus(job.id, ScheduledMessageStatus.PENDING, {
+    const claimed = await this.claimStatus(job.id, job.status, {
       status: ScheduledMessageStatus.CANCELLED,
     });
     if (!claimed) throw new ConflictException('Job is no longer pending');
@@ -150,16 +200,19 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  /** Crash recovery: SENDING rows never auto-resend. */
+  /** Crash recovery: one-shot SENDING → FAILED; recurring skips that fire and schedules the next. */
   async failInterruptedJobs(): Promise<number> {
-    const result = await this.jobs
-      .createQueryBuilder()
-      .update(ScheduledMessage)
-      .set({ status: ScheduledMessageStatus.FAILED, lastError: INTERRUPTED_ERROR })
-      .where('status = :st', { st: ScheduledMessageStatus.SENDING })
-      .execute();
-    const n = result.affected ?? 0;
-    if (n > 0) this.logger.warn(`Marked ${n} interrupted scheduled message(s) failed`);
+    const rows = await this.jobs.find({ where: { status: ScheduledMessageStatus.SENDING } });
+    let n = 0;
+    for (const job of rows) {
+      if (this.isRecurring(job)) {
+        await this.finishOccurrence(job, new Date(), { lastError: INTERRUPTED_ERROR });
+      } else {
+        await this.jobs.update(job.id, { status: ScheduledMessageStatus.FAILED, lastError: INTERRUPTED_ERROR });
+      }
+      n += 1;
+    }
+    if (n > 0) this.logger.warn(`Recovered ${n} interrupted scheduled message(s)`);
     return n;
   }
 
@@ -189,17 +242,25 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     if (!claimed) return;
 
     if (this.isTooLate(job.sendAtUtc, now)) {
+      if (this.isRecurring(job)) {
+        await this.finishOccurrence(job, now, { lastError: 'skipped: overdue (beyond max lateness)' });
+        return;
+      }
       await this.markFailed(job, 'overdue (beyond max lateness)');
       return;
     }
 
     try {
       const sent = await this.send(job);
-      await this.jobs.update(job.id, {
-        status: ScheduledMessageStatus.SENT,
-        sentMessageId: sent.messageId ?? null,
-        lastError: null,
-      });
+      if (this.isRecurring(job)) {
+        await this.finishOccurrence(job, now, { sentMessageId: sent.messageId ?? null, lastError: null });
+      } else {
+        await this.jobs.update(job.id, {
+          status: ScheduledMessageStatus.SENT,
+          sentMessageId: sent.messageId ?? null,
+          lastError: null,
+        });
+      }
       void this.webhooks.dispatch(job.sessionId, 'scheduled.message.sent', {
         sessionId: job.sessionId,
         jobId: job.id,
@@ -224,6 +285,48 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       }
       await this.markFailed(job, this.errorSnippet(error));
     }
+  }
+
+  private async finishOccurrence(
+    job: ScheduledMessage,
+    now: Date,
+    patch: { sentMessageId?: string | null; lastError?: string | null },
+  ): Promise<void> {
+    const remaining = job.maxOccurrences == null ? 10_000 : job.maxOccurrences - job.occurrenceCount - 1;
+    const terminal = (occurrenceCount: number) => ({
+      status: ScheduledMessageStatus.SENT,
+      occurrenceCount,
+      sentMessageId: patch.sentMessageId ?? job.sentMessageId,
+      lastError: patch.lastError ?? null,
+      attemptCount: 0,
+    });
+    if (remaining <= 0) {
+      await this.jobs.update(job.id, terminal(job.occurrenceCount + 1));
+      return;
+    }
+    const { next, skipped } = skipMissedOccurrences(
+      job.sendAtUtc,
+      now,
+      job.timezone,
+      this.ruleOf(job),
+      job.anchorAtUtc ?? job.sendAtUtc,
+      this.maxLatenessMs(),
+      job.untilUtc,
+      remaining,
+    );
+    const occurrenceCount = job.occurrenceCount + 1 + skipped;
+    if (!next) {
+      await this.jobs.update(job.id, terminal(occurrenceCount));
+      return;
+    }
+    await this.jobs.update(job.id, {
+      status: ScheduledMessageStatus.PENDING,
+      sendAtUtc: next,
+      occurrenceCount,
+      sentMessageId: patch.sentMessageId ?? job.sentMessageId,
+      lastError: patch.lastError ?? null,
+      attemptCount: 0,
+    });
   }
 
   private async send(job: ScheduledMessage): Promise<{ messageId?: string }> {
@@ -295,6 +398,79 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     return (result.affected ?? 0) === 1;
   }
 
+  private applyRecurrenceFields(
+    dto: {
+      recurrence?: RecurrenceKind;
+      interval?: number;
+      daysOfWeek?: number[];
+      dayOfMonth?: number;
+      until?: string;
+      maxOccurrences?: number;
+    },
+    timezone: string,
+    sendAtUtc: Date,
+    opts: { existingUntil?: Date | null } = {},
+  ): Pick<
+    ScheduledMessage,
+    'recurrence' | 'recurrenceInterval' | 'daysOfWeek' | 'dayOfMonth' | 'untilUtc' | 'maxOccurrences'
+  > {
+    const kind: RecurrenceKind = dto.recurrence ?? 'none';
+    if (kind === 'none') {
+      return {
+        recurrence: 'none',
+        recurrenceInterval: 1,
+        daysOfWeek: null,
+        dayOfMonth: null,
+        untilUtc: dto.until ? parseUntilUtc(dto.until, timezone) : (opts.existingUntil ?? null),
+        maxOccurrences: dto.maxOccurrences ?? null,
+      };
+    }
+    const parts = zonedParts(sendAtUtc, timezone);
+    const interval = dto.interval ?? 1;
+    const daysOfWeek = kind === 'weekly' ? (dto.daysOfWeek?.length ? dto.daysOfWeek : [parts.weekday]) : null;
+    const dayOfMonth = kind === 'monthly' ? (dto.dayOfMonth ?? parts.day) : null;
+    const rule: RecurrenceRule = {
+      kind,
+      interval,
+      daysOfWeek: daysOfWeek ?? undefined,
+      dayOfMonth: dayOfMonth ?? undefined,
+    };
+    assertRecurrenceRule(rule);
+    const untilUtc = dto.until ? parseUntilUtc(dto.until, timezone) : (opts.existingUntil ?? null);
+    let maxOccurrences = dto.maxOccurrences ?? null;
+    if (maxOccurrences != null) {
+      maxOccurrences = Math.min(maxOccurrences, this.maxOccurrencesCap());
+    }
+    if (!untilUtc && maxOccurrences == null) {
+      throw new BadRequestException('Recurring jobs require until and/or maxOccurrences');
+    }
+    const next = nextOccurrence(sendAtUtc, timezone, rule, sendAtUtc);
+    if (next.getTime() - sendAtUtc.getTime() < this.minIntervalMs()) {
+      throw new BadRequestException(`Recurrence interval must be at least ${this.minIntervalMs() / 3_600_000} hour(s)`);
+    }
+    return {
+      recurrence: kind,
+      recurrenceInterval: interval,
+      daysOfWeek,
+      dayOfMonth,
+      untilUtc,
+      maxOccurrences,
+    };
+  }
+
+  private isRecurring(job: ScheduledMessage): boolean {
+    return job.recurrence !== 'none';
+  }
+
+  private ruleOf(job: ScheduledMessage): RecurrenceRule {
+    return {
+      kind: job.recurrence,
+      interval: job.recurrenceInterval || 1,
+      daysOfWeek: job.daysOfWeek ?? undefined,
+      dayOfMonth: job.dayOfMonth ?? undefined,
+    };
+  }
+
   private flagOn(): boolean {
     return this.config.get<boolean>('features.scheduledMessages') !== false;
   }
@@ -317,6 +493,18 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     return this.config.get<number>('scheduler.maxLatenessMs', 6 * 60 * 60 * 1000);
   }
 
+  private maxRecurring(): number {
+    return this.config.get<number>('scheduler.maxRecurringPerSession', 20);
+  }
+
+  private maxOccurrencesCap(): number {
+    return this.config.get<number>('scheduler.maxOccurrences', 366);
+  }
+
+  private minIntervalMs(): number {
+    return this.config.get<number>('scheduler.minIntervalMs', 3_600_000);
+  }
+
   private async assertPendingCap(sessionId: string): Promise<void> {
     const cap = this.maxPending();
     if (cap <= 0) return;
@@ -325,6 +513,17 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     });
     if (pending >= cap) {
       throw new BadRequestException(`Pending scheduled-message cap reached (${cap} per session)`);
+    }
+  }
+
+  private async assertRecurringCap(sessionId: string): Promise<void> {
+    const cap = this.maxRecurring();
+    if (cap <= 0) return;
+    const active = await this.jobs.count({
+      where: { sessionId, recurrence: Not('none'), status: In(ACTIVE_RECURRING) },
+    });
+    if (active >= cap) {
+      throw new BadRequestException(`Active recurring-job cap reached (${cap} per session)`);
     }
   }
 

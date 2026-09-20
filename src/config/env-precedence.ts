@@ -99,6 +99,10 @@ export const BLANK_SHADOWED_ENV_KEYS: string[] = [
   'SCHEDULED_MESSAGES_MAX_PENDING',
   'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
   'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+  'SCHEDULED_MESSAGES_MAX_RECURRING',
+  'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+  'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+  'BOT_COMMAND_COOLDOWN_MS',
   'REMOVE_BG_API_KEY',
   // Behaviour flags with no dashboard route: before they were forwarded, a value set in .env simply
   // never reached the container. They are blank-forwarded like everything else here so the forward

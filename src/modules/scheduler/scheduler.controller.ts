@@ -16,7 +16,7 @@ export class SchedulerController {
 
   @Post()
   @RequireRole(ApiKeyRole.OPERATOR)
-  @ApiOperation({ summary: 'Schedule a one-shot text or media-URL send' })
+  @ApiOperation({ summary: 'Schedule a one-shot or recurring text or media-URL send' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiResponse({ status: 201, description: 'Job created.', type: ScheduledMessageResponseDto })
   @ApiResponse({ status: 400, description: 'Invalid body, flag off, cap, or horizon.' })
@@ -52,11 +52,11 @@ export class SchedulerController {
 
   @Patch(':jobId')
   @RequireRole(ApiKeyRole.OPERATOR)
-  @ApiOperation({ summary: 'Update a pending scheduled message' })
+  @ApiOperation({ summary: 'Update a pending or paused scheduled message (including pause/resume)' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiParam({ name: 'jobId', description: 'Job ID' })
   @ApiResponse({ status: 200, type: ScheduledMessageResponseDto })
-  @ApiResponse({ status: 409, description: 'Job is not pending.' })
+  @ApiResponse({ status: 409, description: 'Job is not pending or paused.' })
   async update(
     @Param('sessionId') sessionId: string,
     @Param('jobId') jobId: string,
@@ -68,7 +68,7 @@ export class SchedulerController {
   @Delete(':jobId')
   @RequireRole(ApiKeyRole.OPERATOR)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Cancel a pending scheduled message' })
+  @ApiOperation({ summary: 'Cancel a pending or paused scheduled message' })
   @ApiParam({ name: 'sessionId', description: 'Session ID' })
   @ApiParam({ name: 'jobId', description: 'Job ID' })
   @ApiResponse({ status: 204, description: 'Job cancelled.' })

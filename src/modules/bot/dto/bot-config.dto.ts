@@ -70,6 +70,26 @@ export class UpdateBotConfigDto {
   @IsString()
   @MaxLength(MESSAGE_TEXT_MAX_LENGTH)
   welcomeMessage?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Sticker pack title applied to #sticker media converts.',
+    maxLength: 128,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  stickerPackName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Sticker pack author applied to #sticker media converts.',
+    maxLength: 128,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  stickerPackAuthor?: string | null;
 }
 
 export class BotConfigResponseDto {
@@ -108,6 +128,14 @@ export class BotConfigResponseDto {
   @ApiPropertyOptional({ nullable: true })
   @Expose()
   welcomeMessage!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @Expose()
+  stickerPackName!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @Expose()
+  stickerPackAuthor!: string | null;
 
   @ApiProperty()
   @Expose()

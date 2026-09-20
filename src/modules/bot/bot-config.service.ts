@@ -27,6 +27,8 @@ const DEFAULTS: Pick<
   | 'autoRead'
   | 'alwaysOnline'
   | 'welcomeMessage'
+  | 'stickerPackName'
+  | 'stickerPackAuthor'
 > = {
   accessMode: BotAccessMode.ALL,
   allowList: [],
@@ -36,6 +38,8 @@ const DEFAULTS: Pick<
   autoRead: false,
   alwaysOnline: false,
   welcomeMessage: null,
+  stickerPackName: null,
+  stickerPackAuthor: null,
 };
 
 @Injectable()
@@ -82,6 +86,12 @@ export class BotConfigService implements BotInboundPort {
     if (dto.alwaysOnline !== undefined) row.alwaysOnline = dto.alwaysOnline;
     if (dto.welcomeMessage !== undefined) {
       row.welcomeMessage = dto.welcomeMessage === '' ? null : dto.welcomeMessage;
+    }
+    if (dto.stickerPackName !== undefined) {
+      row.stickerPackName = dto.stickerPackName === '' ? null : dto.stickerPackName;
+    }
+    if (dto.stickerPackAuthor !== undefined) {
+      row.stickerPackAuthor = dto.stickerPackAuthor === '' ? null : dto.stickerPackAuthor;
     }
     const saved = await this.repo.save(row);
     this.cache.set(sessionId, saved);

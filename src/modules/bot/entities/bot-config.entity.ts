@@ -49,6 +49,12 @@ export class BotConfig {
   @Column({ type: 'text', nullable: true })
   welcomeMessage!: string | null;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  stickerPackName!: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  stickerPackAuthor!: string | null;
+
   @CreateDateColumn()
   createdAt!: Date;
 

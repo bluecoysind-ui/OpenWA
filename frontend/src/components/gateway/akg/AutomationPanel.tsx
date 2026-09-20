@@ -285,6 +285,18 @@ export function AutomationPanel() {
               onChange={e => setBot({ ...bot, welcomeMessage: e.target.value || null })}
               placeholder="Welcome message on group.join (empty disables)"
             />
+            <input
+              className={field}
+              value={bot.stickerPackName ?? ''}
+              onChange={e => setBot({ ...bot, stickerPackName: e.target.value || null })}
+              placeholder="Sticker pack name (#sticker media)"
+            />
+            <input
+              className={field}
+              value={bot.stickerPackAuthor ?? ''}
+              onChange={e => setBot({ ...bot, stickerPackAuthor: e.target.value || null })}
+              placeholder="Sticker pack author"
+            />
             <button type="button" className={btn} disabled={!canWrite} onClick={() => void saveBot()}>
               Save bot settings
             </button>

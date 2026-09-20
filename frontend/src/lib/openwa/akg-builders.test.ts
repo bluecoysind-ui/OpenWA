@@ -15,6 +15,23 @@ describe('buildScheduledCreateBody', () => {
     assert.equal(body.text, 'hello');
     assert.equal(body.mediaUrl, undefined);
   });
+
+  it('includes recurrence fields when not none', () => {
+    const body = buildScheduledCreateBody({
+      chatId: '628123@c.us',
+      localDateTime: '2026-09-21T15:00',
+      timeZone: 'UTC',
+      text: 'daily',
+      recurrence: 'daily',
+      interval: 1,
+      maxOccurrences: 10,
+      until: '2026-12-31',
+    });
+    assert.equal(body.recurrence, 'daily');
+    assert.equal(body.interval, 1);
+    assert.equal(body.maxOccurrences, 10);
+    assert.equal(body.until, '2026-12-31');
+  });
 });
 
 describe('clampCheckNumbers', () => {

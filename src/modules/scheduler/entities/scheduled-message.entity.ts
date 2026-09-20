@@ -8,7 +8,9 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { jsonColumnType } from '../../../common/utils/column-types';
 import { Session } from '../../session/entities/session.entity';
+import type { RecurrenceKind } from '../scheduler-recurrence';
 
 export enum ScheduledMessageStatus {
   PENDING = 'pending',
@@ -16,6 +18,7 @@ export enum ScheduledMessageStatus {
   SENT = 'sent',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
+  PAUSED = 'paused',
 }
 
 export enum ScheduledMediaType {
@@ -27,9 +30,10 @@ export enum ScheduledMediaType {
 }
 
 /**
- * One-shot delayed send. Recurrence is WP4b later. Status machine is at-most-once: a job is
- * claimed PENDING→SENDING with an atomic conditional UPDATE; a crash while SENDING marks FAILED
- * and never auto-resends.
+ * Delayed send, one-shot or recurring (daily/weekly/monthly). Status machine is at-most-once: a
+ * fire is claimed PENDING→SENDING with an atomic conditional UPDATE. After a successful send the
+ * same row is updated to the next fire (recurring) or SENT (terminal). A crash while SENDING on a
+ * one-shot marks FAILED; on a series the occurrence is skipped and the next fire is scheduled.
  */
 @Entity('scheduled_messages')
 @Index('IDX_scheduled_messages_due', ['status', 'sendAtUtc'])
@@ -68,6 +72,30 @@ export class ScheduledMessage {
 
   @Column({ type: 'varchar', length: 16, default: ScheduledMessageStatus.PENDING })
   status!: ScheduledMessageStatus;
+
+  @Column({ type: 'varchar', length: 16, default: 'none' })
+  recurrence!: RecurrenceKind;
+
+  @Column({ type: 'int', default: 1 })
+  recurrenceInterval!: number;
+
+  @Column({ type: jsonColumnType(), nullable: true })
+  daysOfWeek!: number[] | null;
+
+  @Column({ type: 'int', nullable: true })
+  dayOfMonth!: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  untilUtc!: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  maxOccurrences!: number | null;
+
+  @Column({ type: 'int', default: 0 })
+  occurrenceCount!: number;
+
+  @Column({ type: 'datetime', nullable: true })
+  anchorAtUtc!: Date | null;
 
   @Column({ type: 'int', default: 0 })
   attemptCount!: number;
