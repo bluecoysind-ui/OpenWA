@@ -109,6 +109,23 @@ describe('BaileysMessaging.sendStickerMessage — what reaches the socket must r
     expect((contentOf(sock).sticker as Buffer).equals(WEBP)).toBe(true);
   });
 
+  it('embeds pack EXIF only when packName/packAuthor are set', async () => {
+    const { messaging, sock } = makeMessaging();
+
+    await messaging.sendStickerMessage('628111@s.whatsapp.net', {
+      data: WEBP,
+      mimetype: 'image/webp',
+      packName: 'OpenPack',
+      packAuthor: 'OpenAuthor',
+    });
+
+    const sent = contentOf(sock).sticker as Buffer;
+    expect(isWebp(sent)).toBe(true);
+    expect(sent.equals(WEBP)).toBe(false);
+    expect(sent.toString('utf8')).toContain('OpenPack');
+    expect(sent.toString('utf8')).toContain('OpenAuthor');
+  });
+
   // A converter that drops `{ animated: true }` keeps only the first frame and still emits valid
   // WebP, so every other assertion here would stay green while animated stickers silently became
   // stills — the same shape of quiet corruption this whole change is about.

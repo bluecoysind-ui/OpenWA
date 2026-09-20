@@ -14,10 +14,12 @@ describe('MediaController', () => {
   // has to reference a method detached from its receiver.
   const convertToVoice = jest.fn().mockResolvedValue({ base64: 'b', mimetype: 'audio/ogg; codecs=opus', bytes: 1 });
   const convertToVideo = jest.fn().mockResolvedValue({ base64: 'b', mimetype: 'video/mp4', bytes: 1 });
+  const convertToSticker = jest.fn().mockResolvedValue({ base64: 'b', mimetype: 'image/webp', bytes: 1 });
   const isAvailable = jest.fn().mockResolvedValue(true);
   const controller = new MediaController({
     convertToVoice,
     convertToVideo,
+    convertToSticker,
     isAvailable,
   } as unknown as MediaConversionService);
 
@@ -44,11 +46,13 @@ describe('MediaController', () => {
     it('answers 200 rather than 201 — a conversion creates no resource', () => {
       expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler('convertVoice'))).toBe(HttpStatus.OK);
       expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler('convertVideo'))).toBe(HttpStatus.OK);
+      expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler('convertSticker'))).toBe(HttpStatus.OK);
     });
 
     it('exposes conversion as POST and the availability probe as GET', () => {
       expect(Reflect.getMetadata(METHOD_METADATA, handler('convertVoice'))).toBe(RequestMethod.POST);
       expect(Reflect.getMetadata(METHOD_METADATA, handler('convertVideo'))).toBe(RequestMethod.POST);
+      expect(Reflect.getMetadata(METHOD_METADATA, handler('convertSticker'))).toBe(RequestMethod.POST);
       expect(Reflect.getMetadata(METHOD_METADATA, handler('conversionStatus'))).toBe(RequestMethod.GET);
     });
   });
@@ -58,6 +62,7 @@ describe('MediaController', () => {
     it('requires OPERATOR to convert', () => {
       expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertVoice'))).toBe(ApiKeyRole.OPERATOR);
       expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertVideo'))).toBe(ApiKeyRole.OPERATOR);
+      expect(Reflect.getMetadata(REQUIRED_ROLE_KEY, handler('convertSticker'))).toBe(ApiKeyRole.OPERATOR);
     });
 
     // Asking whether the feature exists reveals nothing, and a read-only key needs the answer to
@@ -84,6 +89,13 @@ describe('MediaController', () => {
 
       await expect(controller.convertVideo('session-1', dto)).resolves.toMatchObject({ mimetype: 'video/mp4' });
       expect(convertToVideo).toHaveBeenCalledWith('session-1', dto);
+    });
+
+    it('passes the body and the session id straight to the sticker conversion', async () => {
+      const dto = { url: 'https://example.com/pic.png', packName: 'Pack', author: 'Author' };
+
+      await expect(controller.convertSticker('session-1', dto)).resolves.toMatchObject({ mimetype: 'image/webp' });
+      expect(convertToSticker).toHaveBeenCalledWith('session-1', dto);
     });
 
     it('reports availability as a plain flag', async () => {

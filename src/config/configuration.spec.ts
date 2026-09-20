@@ -270,6 +270,7 @@ describe('configuration — scheduler and automation port knobs', () => {
     'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
     'AUTO_REPLY_REGEX_MAX_PATTERN',
     'REMOVE_BG_API_KEY',
+    'STICKER_MAX_DURATION_SEC',
   ];
   const orig: Record<string, string | undefined> = {};
   beforeEach(() => keys.forEach(k => (orig[k] = process.env[k])));
@@ -290,6 +291,7 @@ describe('configuration — scheduler and automation port knobs', () => {
     });
     expect(cfg.automation.regexMaxPatternLength).toBe(256);
     expect(cfg.removeBg.apiKey).toBe('');
+    expect(cfg.mediaConversion.stickerMaxDurationSec).toBe(8);
   });
 });
 

@@ -1,4 +1,4 @@
-import { buildFfmpegArgs, voiceEncodeArgs, videoEncodeArgs } from './ffmpeg';
+import { buildFfmpegArgs, stickerEncodeArgs, voiceEncodeArgs, videoEncodeArgs } from './ffmpeg';
 
 /**
  * These pin the two things about the argument lists that are load-bearing and easy to break while
@@ -59,6 +59,25 @@ describe('ffmpeg encoder arguments', () => {
     // -2 keeps the computed edge even, which H.264 requires; -1 would produce odd heights and fail.
     it('keeps the derived edge even', () => {
       expect(valueOf(args, '-vf')).toMatch(/:-2$/);
+    });
+  });
+
+  describe('sticker', () => {
+    const args = stickerEncodeArgs(8);
+
+    it('caps duration with ffmpeg -t and encodes libwebp', () => {
+      expect(valueOf(args, '-t')).toBe('8');
+      expect(valueOf(args, '-c:v')).toBe('libwebp');
+    });
+
+    it('drops audio and loops the WebP', () => {
+      expect(args).toContain('-an');
+      expect(valueOf(args, '-loop')).toBe('0');
+    });
+
+    it('falls back to 8s when the cap is not a positive number', () => {
+      expect(valueOf(stickerEncodeArgs(0), '-t')).toBe('8');
+      expect(valueOf(stickerEncodeArgs(Number.NaN), '-t')).toBe('8');
     });
   });
 });

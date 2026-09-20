@@ -11,6 +11,7 @@ import { EngineRegistry } from '../../engine/engine-registry.service';
 import { Session } from '../session/entities/session.entity';
 import * as ffmpeg from './ffmpeg';
 import * as loadRemoteMedia from '../../common/media/load-remote-media';
+import * as ssrfGuard from '../../common/security/ssrf-guard';
 
 /**
  * The behaviours worth pinning here are the ones a caller can reach: that a host without ffmpeg says
@@ -265,6 +266,43 @@ describe('MediaConversionService', () => {
 
       await expect(service.convertToVoice(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(BadRequestException);
       await expect(service.convertToVoice(SESSION, { base64: 'AAAA' })).rejects.toThrow(/Invalid data found/);
+    });
+
+    it('returns WebP for sticker conversion and caps duration via ffmpeg -t', async () => {
+      const service = makeService(config({ 'mediaConversion.stickerMaxDurationSec': 8 }));
+
+      const result = await service.convertToSticker(SESSION, { base64: 'AAAA' });
+
+      expect(result.mimetype).toBe('image/webp');
+      expect(outputExtensionOf(runFfmpeg)).toBe('webp');
+      const encodeArgs = (runFfmpeg.mock.calls[0] as unknown[])[3] as string[];
+      expect(encodeArgs[encodeArgs.indexOf('-t') + 1]).toBe('8');
+      expect(encodeArgs).toContain('libwebp');
+    });
+
+    it('refuses removeBg with 400 when REMOVE_BG_API_KEY is empty, never 500', async () => {
+      const service = makeService(config({ 'removeBg.apiKey': '' }));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toThrow(
+        /REMOVE_BG_API_KEY/,
+      );
+      expect(runFfmpeg).not.toHaveBeenCalled();
+    });
+
+    it('does not log the remove.bg key when the remote call fails', async () => {
+      const service = makeService(config({ 'removeBg.apiKey': 'super-secret-rmbg' }));
+      const warn = jest.fn();
+      (service as unknown as { logger: { warn: jest.Mock } }).logger.warn = warn;
+      jest.spyOn(ssrfGuard, 'withSafeFetch').mockRejectedValue(new Error('upstream super-secret-rmbg'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('super-secret-rmbg');
+      expect(runFfmpeg).not.toHaveBeenCalled();
     });
 
     // A programming error must not be relabelled as the caller's fault.
