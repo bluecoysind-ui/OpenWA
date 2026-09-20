@@ -1,7 +1,22 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Optional,
+  Param,
+  Post,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { ConversionStatusResponseDto, ConvertedMediaResponseDto } from './dto/media-response.dto';
 import { MediaConversionService } from './media-conversion.service';
+import { MediaPersistService } from './media-persist.service';
 import { ConvertMediaDto, ConvertStickerDto } from './dto/convert-media.dto';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
@@ -23,7 +38,10 @@ import { ApiKeyRole } from '../auth/entities/api-key.entity';
 @ApiParam({ name: 'sessionId', type: String, description: 'Session ID the API key must be authorized for' })
 @Controller('sessions/:sessionId/media')
 export class MediaController {
-  constructor(private readonly mediaConversion: MediaConversionService) {}
+  constructor(
+    private readonly mediaConversion: MediaConversionService,
+    @Optional() private readonly mediaPersist?: MediaPersistService,
+  ) {}
 
   @Get('convert')
   @ApiOperation({ summary: 'Whether server-side media conversion is available' })
@@ -104,5 +122,52 @@ export class MediaController {
   })
   async convertSticker(@Param('sessionId') sessionId: string, @Body() dto: ConvertStickerDto) {
     return this.mediaConversion.convertToSticker(sessionId, dto);
+  }
+
+  @Get('files')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'List inbound files stored when MEDIA_PERSIST is on' })
+  @ApiResponse({ status: 200, description: 'Stored files for this session (empty when none).' })
+  @ApiResponse({ status: 404, description: 'MEDIA_PERSIST is off, or the session has no stored files index.' })
+  async listStoredFiles(@Param('sessionId') sessionId: string) {
+    return this.persist().list(sessionId);
+  }
+
+  @Get('files/:messageId')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Fetch stored inbound media bytes for a message' })
+  @ApiResponse({
+    status: 200,
+    description: 'The stored bytes as an attachment.',
+    content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
+  })
+  @ApiResponse({ status: 404, description: 'MEDIA_PERSIST is off, or no stored file for this message.' })
+  async getStoredFile(
+    @Param('sessionId') sessionId: string,
+    @Param('messageId') messageId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const buffer = await this.persist().get(sessionId, messageId);
+    res.set({
+      'Content-Type': 'application/octet-stream',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': 'attachment',
+    });
+    return new StreamableFile(buffer);
+  }
+
+  @Delete('files/:messageId')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a stored inbound media file' })
+  @ApiResponse({ status: 204, description: 'File deleted' })
+  @ApiResponse({ status: 404, description: 'MEDIA_PERSIST is off, or no stored file for this message.' })
+  async deleteStoredFile(@Param('sessionId') sessionId: string, @Param('messageId') messageId: string): Promise<void> {
+    await this.persist().remove(sessionId, messageId);
+  }
+
+  private persist(): MediaPersistService {
+    if (!this.mediaPersist) throw new NotFoundException();
+    return this.mediaPersist;
   }
 }
