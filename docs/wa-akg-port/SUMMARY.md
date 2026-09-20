@@ -1,6 +1,6 @@
 # WA-AKG port — what shipped
 
-Capability checklist against `_reference/WA-AKG`, implemented as additive OpenWA modules and `./frontend/` Gateway panes. `/dashboard` is unchanged.
+Capability checklist against WA-AKG 1.6.4 (historical `_reference/WA-AKG` paths), implemented as additive OpenWA modules and `./frontend/` Gateway panes. `/dashboard` is unchanged.
 
 ## What shipped
 
@@ -28,7 +28,7 @@ Capability checklist against `_reference/WA-AKG`, implemented as additive OpenWA
 | `MEDIA_PERSIST` | **off** | List/delete only when on. `MEDIA_PERSIST_TTL_DAYS` default 30. |
 | `POLL_VOTE_EVENTS` | **off** | Webhook-only; not socket-subscribable. Votes not decrypted. |
 | `REMOVE_BG_API_KEY` | unset | Empty + `removeBg=true` → 400, never 500. Key never logged or returned. |
-| `LIST_MESSAGES` | unused | Native listMessage not in this port. |
+| `LIST_MESSAGES` | reserved / unused | Native listMessage not in this port. |
 | `MCP_READONLY` | **true** (unset = read-only) | Write tools only when the literal `false`. |
 
 `GET /api/features` (VIEWER) returns booleans only: `scheduler`, `botCommands`, `mediaPersist`, `removeBgConfigured`, `regexRules`, `pollVoteEvents`. No secrets.

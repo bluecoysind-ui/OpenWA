@@ -41,7 +41,7 @@ const tableNames = async (ds: DataSource): Promise<Set<string>> => {
 };
 
 describe('WA-AKG port SQLite migrations: upgrade from main + down', () => {
-  const file = join(tmpdir(), `openwa-wa-akg-mig-${process.pid}.sqlite`);
+  const file = join(tmpdir(), `openwa-port-mig-${process.pid}.sqlite`);
 
   afterAll(() => {
     rmSync(file, { force: true });

@@ -61,7 +61,7 @@ No unexplained skips.
 | Frozen frontend | `git diff main --numstat -- frontend`: new `akg-*` files + registration-only rows in `FRONTEND_CHANGES.md`. `GatewayApp.tsx` slots only. |
 | Dashboard | `git diff main -- dashboard` empty. |
 | Flags default off / inert | `feature-flags.spec.ts`; `does not subscribe when BOT_COMMANDS is off`; `404s list/get/delete when the flag is off`; `does not start the tick loop when SCHEDULED_MESSAGES is off`. |
-| Migrations | `wa-akg-upgrade-down.spec.ts` (SQLite: main tip 178650 → up 178660–680 → down ×3 → up). `sqlite-chain-boot.e2e-spec.ts` full chain. Postgres **unverified**. |
+| Migrations | `port-migrations-upgrade-down.spec.ts` (SQLite: main tip 178650 → up 178660–680 → down ×3 → up). `sqlite-chain-boot.e2e-spec.ts` full chain. Postgres **unverified**. |
 | Dependencies | `git diff main -- package.json package-lock.json frontend/package.json`: no new runtime packages (frontend `test` script only). |
 | Env parity | `docs-env-example.spec.ts` + compose forwards. |
 | Security | Media URL fetch uses `withSafeFetch` SSRF guard. Audit/logs omit message bodies and `REMOVE_BG_API_KEY`. Bulk check max 50 + `CONTACT_CHECK_RATE` 429. |
