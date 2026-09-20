@@ -67,9 +67,13 @@ export function zonedToUtc(
     const got = zonedParts(new Date(utc), tz);
     const gotUtc = Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
     const delta = wanted - gotUtc;
-    if (delta === 0) break;
+    if (delta === 0) return new Date(utc);
     utc += delta;
   }
+  const got = zonedParts(new Date(utc), tz);
+  const gotUtc = Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
+  // Gap: the civil time never occurs. Landed before the hole → skip forward to the first valid instant.
+  if (gotUtc < wanted) utc += wanted - gotUtc;
   return new Date(utc);
 }
 

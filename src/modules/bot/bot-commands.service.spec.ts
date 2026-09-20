@@ -191,4 +191,63 @@ describe('BotCommandsService', () => {
     expect(await svc.handleInbound('sessA', inbound('#ping'))).toBe(true);
     expect(texts).toHaveLength(1);
   });
+
+  it('holds per-sender cooldown under concurrent same-sender commands', async () => {
+    const svc = new BotCommandsService(botConfig, hooks, config(true, 60_000), moduleRef);
+    await Promise.all([
+      svc.handleInbound('sessA', inbound('#ping')),
+      svc.handleInbound('sessA', inbound('#ping')),
+    ]);
+    expect(texts).toHaveLength(1);
+  });
+
+  it('allows concurrent commands from different senders under cooldown', async () => {
+    const svc = new BotCommandsService(botConfig, hooks, config(true, 60_000), moduleRef);
+    await Promise.all([
+      svc.handleInbound('sessA', inbound('#ping', { from: '628111@c.us', author: '628111@c.us' })),
+      svc.handleInbound('sessA', inbound('#ping', { from: '628222@c.us', author: '628222@c.us' })),
+    ]);
+    expect(texts).toHaveLength(2);
+  });
+
+  it('converts a captioned image in a group without remove.bg', async () => {
+    const svc = new BotCommandsService(botConfig, hooks, config(true), moduleRef);
+    expect(
+      await svc.handleInbound(
+        'sessA',
+        inbound('#sticker', {
+          isGroup: true,
+          chatId: '120363@g.us',
+          author: '628111@c.us',
+          type: 'image',
+          media: { data: 'AAA', mimetype: 'image/jpeg' },
+        }),
+      ),
+    ).toBe(true);
+    expect(converted[0]).toEqual(
+      expect.objectContaining({ base64: 'AAA', removeBg: false, packName: 'OpenWA', author: 'bot' }),
+    );
+    expect(stickers[0]).toEqual(expect.objectContaining({ chatId: '120363@g.us', base64: 'WEBP' }));
+  });
+
+  it('converts a reply to an image in a group via getChatMedia', async () => {
+    getChatMedia.mockResolvedValue({ buffer: Buffer.from('IMG'), mimetype: 'image/jpeg' });
+    const svc = new BotCommandsService(botConfig, hooks, config(true), moduleRef);
+    expect(
+      await svc.handleInbound(
+        'sessA',
+        inbound('#s', {
+          isGroup: true,
+          chatId: '120363@g.us',
+          author: '628111@c.us',
+          quotedMessage: { id: 'wamid.q', type: 'image', hasMedia: true },
+        }),
+      ),
+    ).toBe(true);
+    expect(getChatMedia).toHaveBeenCalledWith('sessA', '120363@g.us', 'wamid.q');
+    expect(converted[0]).toEqual(
+      expect.objectContaining({ base64: Buffer.from('IMG').toString('base64'), removeBg: false }),
+    );
+    expect(stickers[0]).toEqual(expect.objectContaining({ chatId: '120363@g.us' }));
+  });
 });

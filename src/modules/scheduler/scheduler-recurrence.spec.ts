@@ -26,11 +26,38 @@ describe('scheduler-recurrence', () => {
     expect(parts).toMatchObject({ year: 2026, month: 3, day: 8, hour: 15, minute: 0 });
   });
 
+  it('spring-forward nonexistent local time snaps forward', () => {
+    // 2026-03-08 02:00 EST → 03:00 EDT; 02:30 does not exist. Snap to 03:30 EDT = 07:30 UTC.
+    const utc = zonedToUtc(ny, 2026, 3, 8, 2, 30, 0);
+    expect(utc.toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    expect(zonedParts(utc, ny)).toMatchObject({ year: 2026, month: 3, day: 8, hour: 3, minute: 30 });
+  });
+
+  it('daily next that lands in a spring-forward gap snaps forward', () => {
+    const from = zonedToUtc(ny, 2026, 3, 7, 2, 30, 0);
+    const next = nextOccurrence(from, ny, { kind: 'daily', interval: 1 }, from);
+    expect(zonedParts(next, ny)).toMatchObject({ year: 2026, month: 3, day: 8, hour: 3, minute: 30 });
+    expect(next.toISOString()).toBe('2026-03-08T07:30:00.000Z');
+  });
+
   it('daily next preserves local clock across US fall-back', () => {
     const from = zonedToUtc(ny, 2026, 10, 31, 15, 0, 0);
     const next = nextOccurrence(from, ny, { kind: 'daily', interval: 1 }, from);
     const parts = zonedParts(next, ny);
     expect(parts).toMatchObject({ year: 2026, month: 11, day: 1, hour: 15, minute: 0 });
+  });
+
+  it('fall-back ambiguous local time picks the earlier offset', () => {
+    // 2026-11-01 01:30 happens twice. Earlier offset is EDT (−04) = 05:30 UTC.
+    const utc = zonedToUtc(ny, 2026, 11, 1, 1, 30, 0);
+    expect(utc.toISOString()).toBe('2026-11-01T05:30:00.000Z');
+    expect(zonedParts(utc, ny)).toMatchObject({ year: 2026, month: 11, day: 1, hour: 1, minute: 30 });
+  });
+
+  it('daily next that lands in a fall-back overlap picks the earlier offset', () => {
+    const from = zonedToUtc(ny, 2026, 10, 31, 1, 30, 0);
+    const next = nextOccurrence(from, ny, { kind: 'daily', interval: 1 }, from);
+    expect(next.toISOString()).toBe('2026-11-01T05:30:00.000Z');
   });
 
   it('monthly day 31 clamps to last day of shorter months', () => {

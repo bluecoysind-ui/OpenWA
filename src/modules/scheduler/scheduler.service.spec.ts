@@ -272,14 +272,22 @@ describe('SchedulerService', () => {
     expect(Date.now() - new Date(stored.sendAtUtc).getTime()).toBeLessThanOrEqual(60_000 + 5_000);
   });
 
-  it('crash recovery on a recurring job skips the fire and schedules the next', async () => {
+  it('crash recovery on a recurring job skips the fire and the series continues on the next tick', async () => {
     const job = await create({ recurrence: 'daily', maxOccurrences: 5 });
     await ds.getRepository(ScheduledMessage).update(job.id, { status: ScheduledMessageStatus.SENDING });
     expect(await service.failInterruptedJobs()).toBe(1);
-    const stored = await service.findOne('sessA', job.id);
-    expect(stored.status).toBe(ScheduledMessageStatus.PENDING);
-    expect(stored.occurrenceCount).toBe(1);
+    const interrupted = await service.findOne('sessA', job.id);
+    expect(interrupted.status).toBe(ScheduledMessageStatus.PENDING);
+    expect(interrupted.occurrenceCount).toBe(1);
     expect(sendText).not.toHaveBeenCalled();
+
+    await ds.getRepository(ScheduledMessage).update(job.id, { sendAtUtc: new Date(Date.now() - 1_000) });
+    await service.processDueJobs(new Date());
+    expect(sendText).toHaveBeenCalledTimes(1);
+    const continued = await service.findOne('sessA', job.id);
+    expect(continued.status).toBe(ScheduledMessageStatus.PENDING);
+    expect(continued.occurrenceCount).toBe(2);
+    expect(new Date(continued.sendAtUtc).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('refuses a second active recurring job at the per-session cap', async () => {

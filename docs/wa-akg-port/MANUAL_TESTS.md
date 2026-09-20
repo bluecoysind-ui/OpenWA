@@ -31,14 +31,18 @@ Ban-risk: any bulk or scheduled send must show pacing copy in the UI (WP7) and m
 ## WP4 — Scheduler / auto-reply / bot
 
 - [ ] One-shot job: PENDING → SENDING → SENT; timezone stored.
+- [ ] Recurring job: fires, process restart mid-SENDING, interrupted occurrence is not resent, next fire still sends.
+- [ ] Pause a pending/recurring job (no send while paused); resume and it sends on the next due tick.
 - [ ] Two nodes: only one claim (affected rows = 1).
-- [ ] Kill during SENDING: recovery marks FAILED/UNKNOWN, **no auto-resend**.
+- [ ] Kill during SENDING: recovery marks FAILED/UNKNOWN, **no auto-resend** (one-shot); recurring skips that fire only.
 - [ ] Overdue beyond max-lateness: not sent.
 - [ ] `SEND_PACING_LIMITED`: job rescheduled, not FAILED.
 - [ ] Pending-job cap and max-horizon rejected with 400.
 - [ ] Auto-reply EXACT/CONTAINS/STARTS_WITH; regex off unless flagged; access lists first.
 - [ ] Commands silent unless `BOT_COMMANDS=true` **and** session enabled.
 - [ ] Welcome / autoRead / alwaysOnline use existing APIs; inbound auto-send is per-session opt-in.
+- [ ] `#sticker` via caption on an image/video **in a group**.
+- [ ] `#sticker` via reply to an image/video **in a group**.
 
 ## WP5 — Stickers
 

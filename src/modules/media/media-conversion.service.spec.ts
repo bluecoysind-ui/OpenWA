@@ -225,6 +225,16 @@ describe('MediaConversionService', () => {
       expect(runFfmpeg).not.toHaveBeenCalled();
     });
 
+    it('rejects sticker base64 above the media cap with 413, before ffmpeg', async () => {
+      const service = makeService(config());
+      const oversized = Buffer.alloc(51 * 1024 * 1024).toString('base64');
+
+      await expect(service.convertToSticker(SESSION, { base64: oversized })).rejects.toBeInstanceOf(
+        PayloadTooLargeException,
+      );
+      expect(runFfmpeg).not.toHaveBeenCalled();
+    });
+
     it('rejects a request carrying neither url nor base64', async () => {
       await expect(makeService(config()).convertToVoice(SESSION, {})).rejects.toThrow(
         /Either url or base64 must be provided/,
@@ -278,6 +288,14 @@ describe('MediaConversionService', () => {
       const encodeArgs = (runFfmpeg.mock.calls[0] as unknown[])[3] as string[];
       expect(encodeArgs[encodeArgs.indexOf('-t') + 1]).toBe('8');
       expect(encodeArgs).toContain('libwebp');
+    });
+
+    it('forwards mediaConversion.timeoutMs into ffmpeg for sticker conversion', async () => {
+      const service = makeService(config({ 'mediaConversion.timeoutMs': 1234 }));
+
+      await service.convertToSticker(SESSION, { base64: 'AAAA' });
+
+      expect(runFfmpeg.mock.calls[0][4]).toEqual(expect.objectContaining({ timeoutMs: 1234 }));
     });
 
     it('refuses removeBg with 400 when REMOVE_BG_API_KEY is empty, never 500', async () => {

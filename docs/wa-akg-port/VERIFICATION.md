@@ -9,7 +9,7 @@ Source: `_reference/WA-AKG` (package.json `1.6.4`), not OpenWA docs. Route inven
 | Status | Count |
 | --- | ---: |
 | EXISTED | 62 |
-| IMPLEMENTED | 20 |
+| IMPLEMENTED | 21 |
 | EXTENDED | 7 |
 | SKIPPED-INTENTIONAL | 13 |
 | OUT-OF-SCOPE | 13 |
@@ -25,7 +25,7 @@ Totals include every exported HTTP verb (and the NextAuth catch-all with no verb
 | Universal `POST .../send` | Q5 | Typed send routes already exist. |
 | Multipart `POST .../media` | Q5 / send-pacing | JSON typed sends + pacing; no second multipart pipeline. |
 | Native `listMessage` / `LIST_MESSAGES` | Q1 | Text-list helper only; env stub unused/reserved. |
-| Scheduler recurrence / `cronExpression` | Q2 | Daily/weekly/monthly on the same row (no cron). |
+| Scheduler recurrence / `cronExpression` | Q2 | Recurrence is daily/weekly/monthly on the same row (IANA, DST). No cron string / node-cron. |
 | Dual scheduler loops | D7 / D25 | Single 5s claim loop. |
 | Broadcast pause/cancel worker flag | Q3 | Existing bulk cancel; no WA-AKG-style cancelled worker. |
 | `GET /chat/:jid` | D24 | List + history already cover the pane. |
@@ -53,10 +53,10 @@ No unexplained skips.
 | Gate | Proof |
 | --- | --- |
 | OpenAPI vs checklist | `openapi.json` 215 ops; new paths `/api/features`, `.../scheduled-messages`, `.../bot-config`, `.../media/files`, `.../media/convert/sticker`, `.../messages/send-text-list`, `.../webhooks/{id}/deliveries`, `POST .../contacts/check` present. |
-| e2e new routes | 9 suites / 49 tests: `scheduled-messages`, `bot-config`, `media-persist`, `media-sticker`, `webhook-deliveries`, `wp3-session-contacts`, `automation-rules`, `app` (features). Full e2e: **31 passed / 243 tests** (3 skip, 3 todo). |
+| e2e new routes | 9 suites / 49 tests: `scheduled-messages`, `bot-config`, `media-persist`, `media-sticker`, `webhook-deliveries`, `wp3-session-contacts`, `automation-rules`, `app` (features). Full e2e: **31 passed / 245 tests** (3 skip, 3 todo). |
 | Role / session-scope / audit | Fence: `features.controller.ts :: get`. Session-scoped controllers use existing session param guards. Scheduler audit: `scheduled_message_created/cancelled` with `jobId`+`chatId` only (D31). `test:docs` audit-coverage + fence coverage green (282). |
 | Frontend ↔ OpenAPI | `npm run check:frontend-openapi` — **118 unique ops match**. |
-| Frontend typecheck / node --test / build | `tsc --noEmit` pass; `npm test` 55 pass; `npm run build` pass. Live no-session panes: **unverified** (servers not co-started). |
+| Frontend typecheck / node --test / build | `tsc --noEmit` pass; `npm test` 57 pass; `npm run build` pass. Live no-session panes: **unverified** (servers not co-started). |
 | Frozen frontend | `git diff main --numstat -- frontend`: new `akg-*` files + registration-only rows in `FRONTEND_CHANGES.md`. `GatewayApp.tsx` slots only. |
 | Dashboard | `git diff main -- dashboard` empty. |
 | Flags default off / inert | `feature-flags.spec.ts`; `does not subscribe when BOT_COMMANDS is off`; `404s list/get/delete when the flag is off`; `does not start the tick loop when SCHEDULED_MESSAGES is off`. |
@@ -65,7 +65,7 @@ No unexplained skips.
 | Env parity | `docs-env-example.spec.ts` + compose forwards. |
 | Security | Media URL fetch uses `withSafeFetch` SSRF guard. Audit/logs omit message bodies and `REMOVE_BG_API_KEY`. Bulk check max 50 + `CONTACT_CHECK_RATE` 429. |
 | Attribution | `ATTRIBUTION.md`: no WA-AKG code adapted. |
-| Unit Jest vs BASELINE | 13 suites / 43 tests failed (BASELINE 48 Windows FS/chmod/symlink/patch/SIGKILL names). Subset. |
+| Unit Jest vs BASELINE | 13 suites / 41 tests failed (BASELINE 48 Windows FS/chmod/symlink/patch/SIGKILL names). Subset; no new names. |
 
 API-only (has backend, no dedicated pane): `GET .../messages?q=` (overlay Search uses `GET /api/search`); presence/typing (composer already); pairing (existing session QR/pair flow); `GET .../media/convert` without sticker (sticker tool uses `/sticker`); MCP tools (docs/24, not Gateway).
 
@@ -214,6 +214,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 | WA-AKG item | status | OpenWA | proof | frontend | notes |
 | --- | --- | --- | --- | --- | --- |
 | `ping` `id` `uptime` `menu` `sticker` | IMPLEMENTED | `bot-commands.service.ts` | `bot-commands.service.spec.ts` | AutomationPanel enables | BOT_COMMANDS off: no subscribe |
+| `#sticker` caption / reply media | IMPLEMENTED | convertToSticker (ffmpeg, pack/author, no remove.bg) | `converts a captioned image`; `converts a reply`; group caption+reply specs; `rejects sticker base64 above the media cap`; `forwards mediaConversion.timeoutMs`; `ffmpeg-run.spec` hang kill (POSIX); concurrent cooldown specs; D26 | AutomationPanel | size cap before ffmpeg |
 | aliases `s` `stiker` `help` | IMPLEMENTED | ALIASES map | `accepts WA-AKG aliases` | n/a (inbound) | A4 |
 | `sticker nobg/removebg` inbound media | SKIPPED-INTENTIONAL | no remove.bg on #sticker | D26 | StickerTool uses convert API | caption/reply convert has no nobg |
 | OWNER fromMe macros | SKIPPED-INTENTIONAL | skip fromMe | spec `skips fromMe`; D32 | | loop protection |
@@ -233,7 +234,7 @@ Columns: WA-AKG item | status | OpenWA | proof | frontend | notes
 
 | WA-AKG item | status | OpenWA | proof | frontend | notes |
 | --- | --- | --- | --- | --- | --- |
-| node-cron recurrence + 30s dual loop | IMPLEMENTED | 5s claim loop; daily/weekly/monthly | scheduler-recurrence.spec; D25 Q2 | SchedulerPanel | skip-missed; pause; no cron |
+| node-cron recurrence + 30s dual loop | IMPLEMENTED | 5s claim loop; daily/weekly/monthly | scheduler-recurrence.spec (DST gap snap-forward, overlap earlier offset); scheduler.service.spec crash-then-continue; D25 Q2 | SchedulerPanel | skip-missed; pause; no cron; crash fails that occurrence only |
 | IANA tz at create | IMPLEMENTED | `timezone` on row | e2e | akg-datetime | naive refused |
 | Broadcast delay/jitter | EXISTED | bulk pacing | send-pacing | AkgBulkNote | |
 | Webhook events received/sent/status/connection/group/contact/deleted/edited/participant/test | EXISTED | SUBSCRIBABLE_EVENTS | webhooks e2e | WebhooksPanel | |

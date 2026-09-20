@@ -174,9 +174,9 @@ func TestRouting(t *testing.T) {
 		{"Calls.CreateLink", func(c *Client) { c.Calls.CreateLink(ctx, "s1", CreateCallLinkRequest{}) }, "POST", "/api/sessions/s1/calls/link"},
 
 		{"ScheduledMessages.List", func(c *Client) { c.ScheduledMessages.List(ctx, "s1") }, "GET", "/api/sessions/s1/scheduled-messages"},
-		{"ScheduledMessages.Create", func(c *Client) { c.ScheduledMessages.Create(ctx, "s1", map[string]any{}) }, "POST", "/api/sessions/s1/scheduled-messages"},
+		{"ScheduledMessages.Create", func(c *Client) { c.ScheduledMessages.Create(ctx, "s1", CreateScheduledMessageRequest{}) }, "POST", "/api/sessions/s1/scheduled-messages"},
 		{"ScheduledMessages.Get", func(c *Client) { c.ScheduledMessages.Get(ctx, "s1", "j1") }, "GET", "/api/sessions/s1/scheduled-messages/j1"},
-		{"ScheduledMessages.Update", func(c *Client) { c.ScheduledMessages.Update(ctx, "s1", "j1", map[string]any{}) }, "PATCH", "/api/sessions/s1/scheduled-messages/j1"},
+		{"ScheduledMessages.Update", func(c *Client) { c.ScheduledMessages.Update(ctx, "s1", "j1", UpdateScheduledMessageRequest{}) }, "PATCH", "/api/sessions/s1/scheduled-messages/j1"},
 		{"ScheduledMessages.Delete", func(c *Client) { c.ScheduledMessages.Delete(ctx, "s1", "j1") }, "DELETE", "/api/sessions/s1/scheduled-messages/j1"},
 		{"BotConfig.Get", func(c *Client) { c.BotConfig.Get(ctx, "s1") }, "GET", "/api/sessions/s1/bot-config"},
 		{"BotConfig.Update", func(c *Client) { c.BotConfig.Update(ctx, "s1", map[string]any{}) }, "PUT", "/api/sessions/s1/bot-config"},

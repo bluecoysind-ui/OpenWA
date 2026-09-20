@@ -160,6 +160,8 @@ Groups and labels: no new code. Inventory (list/get/join/leave/create, invite ge
 
 ## D26 — `#sticker` accepts an https URL, an image/video caption, or a reply to image/video. Caption/reply uses the existing media download + sticker converter (ffmpeg gate, size/duration caps, pack/author from bot-config). No remove.bg on this path. URL form unchanged. Commands that match set `_openwaCommandHandled` so automation skips that message. Welcome fires once per group.join event via BOT_INBOUND_PORT (SessionModule does not import BotModule). GET bot-config returns in-memory defaults without inserting a row. alwaysOnline is applied on PUT when a live engine exists, not on session:ready.
 
+## D33 — Scheduler recurrence request/response fields are typed in every SDK (JS interfaces, Python TypedDicts, PHP phpstan shapes, Go structs, Java records+builders). They are not JS-only.
+
 ## D27 — WP5 sticker-pack EXIF is an in-repo WebP writer (no node-webpmux). Existing WebP stays byte-identical unless packName/packAuthor are set. Empty REMOVE_BG_API_KEY with removeBg=true is 400, never 500; the key is never logged.
 
 ## D28 — quoted.fileUrl is set only when MEDIA_PERSIST already stored that quoted message's bytes (no extra WhatsApp download). Stored files are addressed by messageId under `sessions/{id}/chat/`. GET/DELETE/list are OPERATOR and 404 when the flag is off. MEDIA_PERSIST_TTL_DAYS default 30. webhook_deliveries and media_objects are excluded from backup. `hasMedia` omitted when false; `type` omitted when unknown so `{id,body}`-only quotes stay identical.

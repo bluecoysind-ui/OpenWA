@@ -6,9 +6,9 @@ Capability checklist against WA-AKG 1.6.4 (historical `_reference/WA-AKG` paths)
 
 - **Message extras:** poll `selectableCount`, sticker `packName`/`author`, multi-forward `toChatIds[]` (cap 10, 201/207/502), text-list helper (formatted text, not native `listMessage`).
 - **Chat/contacts/profile:** mute `durationSec`, bulk number check (max 50, paced), GET own profile.
-- **Scheduler:** delayed text or media URL; IANA timezone; `sendAt` ISO instant with offset; at-most-once claim; daily/weekly/monthly recurrence on the same row (until and/or maxOccurrences, skip-missed, pause); crash recovery never auto-resends a fire.
+- **Scheduler:** delayed text or media URL; IANA timezone; `sendAt` ISO instant with offset; at-most-once claim; daily/weekly/monthly recurrence on the same row (until and/or maxOccurrences, skip-missed, pause); crash recovery fails only that occurrence and the series continues; DST gaps snap forward, overlaps pick the earlier offset. Recurrence fields typed in JS/Python/PHP/Go/Java SDKs.
 - **Auto-reply:** `equals` / `contains` / `startsWith`; `regex` behind `AUTO_REPLY_REGEX`; `chatContext`; reply media URL; cooldown; enable toggle. Access lists first.
-- **Bot config:** access mode + lists, prefix, commands on/off, `autoRead`, `alwaysOnline`, welcome on `group.join` (paced `sendText`), sticker pack/author for `#sticker` media converts. Commands are a core module (`BOT_COMMANDS` + per-session enabled). `#sticker` accepts a URL, a captioned image/video, or a reply to image/video (no remove.bg).
+- **Bot config:** access mode + lists, prefix, commands on/off, `autoRead`, `alwaysOnline`, welcome on `group.join` (paced `sendText`), sticker pack/author for `#sticker` media converts. Commands are a core module (`BOT_COMMANDS` + per-session enabled). `#sticker` accepts a URL, a captioned image/video, or a reply to image/video (no remove.bg). Size cap is enforced before ffmpeg; conversion uses `mediaConversion.timeoutMs`; per-sender cooldown holds under concurrent senders.
 - **Stickers:** convert endpoint; in-repo WebP EXIF; remove.bg only when `REMOVE_BG_API_KEY` is set.
 - **Webhooks:** delivery history (status, HTTP code, duration, attempt, error snippet — no bodies); `scheduled.message.*`; `message.poll_vote` behind flag.
 - **Media persist:** list/get/delete stored inbound files when `MEDIA_PERSIST=true`.
@@ -75,4 +75,4 @@ Capability checklist against WA-AKG 1.6.4 (historical `_reference/WA-AKG` paths)
 
 ## Manual-test pointers
 
-See [MANUAL_TESTS.md](./MANUAL_TESTS.md). On a real number, at least: one scheduled send, one welcome on group join, one auto-reply, sticker convert ± remove-bg, bulk/check with the pacing copy visible, and a 501 on the other engine for each engine-split action.
+See [MANUAL_TESTS.md](./MANUAL_TESTS.md). On a real number, at least: one scheduled send, one recurring send that survives a restart, pause/resume, one welcome on group join, one auto-reply, `#sticker` via caption and via reply in a group, sticker convert ± remove-bg, bulk/check with the pacing copy visible, and a 501 on the other engine for each engine-split action.
