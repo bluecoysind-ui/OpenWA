@@ -143,4 +143,10 @@ export class QRCodeResponseDto {
 
   @ApiProperty({ enum: SessionStatus, example: SessionStatus.QR_READY })
   status!: SessionStatus;
+
+  @ApiProperty({
+    description: 'When this QR string is expected to rotate (epoch ms). WhatsApp refreshes about every 20s.',
+    required: false,
+  })
+  qrExpiresAt?: number;
 }

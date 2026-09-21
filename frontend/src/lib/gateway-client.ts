@@ -155,6 +155,15 @@ export async function listSessions() {
   }
 }
 
+export async function disconnectSession(sessionId: string) {
+  try {
+    const stopped = await openwa.disconnectSession(sessionId);
+    return ok(toGatewaySession(stopped), "Session stopped");
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : "Could not stop session");
+  }
+}
+
 export async function connectSession(sessionId: string, body: unknown = {}) {
   try {
     const payload = (body ?? {}) as { name?: string; proxy?: string; webhooks?: Array<{ url: string }> };
@@ -193,15 +202,16 @@ function asDataUrl(qrCode: string): string {
 export async function getQr(sessionId: string) {
   try {
     const data = await openwa.getSessionQr(sessionId);
-        return ok({
-          qrCode: asDataUrl(data.qrCode),
-          qrExpiresAt: null as number | null,
-          pairingCode: null as string | null,
-          pairingPhone: null as string | null,
-          pairingExpiresAt: null as number | null,
-        });
+    return ok({
+      qrCode: asDataUrl(data.qrCode),
+      qrExpiresAt: data.qrExpiresAt ?? null,
+      pairingCode: null as string | null,
+      pairingPhone: null as string | null,
+      pairingExpiresAt: null as number | null,
+    });
   } catch (err) {
-    return fail(err instanceof Error ? err.message : "QR unavailable");
+    const message = err instanceof Error ? err.message : "QR unavailable";
+    return fail(message);
   }
 }
 

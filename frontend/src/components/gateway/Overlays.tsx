@@ -93,12 +93,13 @@ function QrModal() {
     secondsLeft !== null
       ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`
       : null;
-  const timerLabel =
-    secondsLeft === null
-      ? "Waiting for QR…"
+  const timerLabel = !qrSrc
+    ? "Generating QR…"
+    : secondsLeft === null
+      ? "Scan the QR code below"
       : secondsLeft > 0
         ? `QR expires in ${countdown}`
-        : "QR expired — revoking session…";
+        : "QR expired — waiting for a new code…";
 
   const pairingSecondsLeft =
     pairingExpiresAt !== null ? Math.max(0, Math.ceil((pairingExpiresAt - now) / 1000)) : null;
@@ -551,9 +552,11 @@ export function ToolsPanel() {
                 <button className="text-xs text-muted" onClick={() => openOverlay("qr", s.sessionId)}>
                   QR
                 </button>
-                <button className="text-xs text-muted" onClick={() => void reconnect(s.sessionId)}>
-                  Reconnect
-                </button>
+                {s.status !== "connected" && s.status !== "connecting" ? (
+                  <button className="text-xs text-muted" onClick={() => void reconnect(s.sessionId)}>
+                    {s.phoneNumber ? "Restart link" : "Reconnect"}
+                  </button>
+                ) : null}
                 <button className="text-xs text-muted" onClick={() => openOverlay("webhooks", s.sessionId)}>
                   Hooks
                 </button>

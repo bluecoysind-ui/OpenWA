@@ -47,6 +47,7 @@ import { PluginsModule } from './core/plugins';
 import { PluginsApiModule } from './modules/plugins/plugins.module';
 import { AgentToolsModule } from './core/agent-tools/agent-tools.module';
 import { IntegrationModule } from './modules/integration/integration.module';
+import { BluecoysModule } from './modules/bluecoys/bluecoys.module';
 import { SearchModule } from './modules/search/search.module';
 import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
 
@@ -298,6 +299,7 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     AuthModule,
     EngineModule,
     SessionModule,
+    BluecoysModule,
     MessageModule,
     TemplateModule,
     WebhookModule,

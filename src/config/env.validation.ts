@@ -519,6 +519,22 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     );
   }
 
+  if (str('BLUECOYS_INTEGRATION_ENABLED') === 'true') {
+    const base = str('BLUECOYS_BASE_URL') ?? 'https://bluecoys.com';
+    try {
+      const parsed = new URL(base);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        errors.push('BLUECOYS_BASE_URL must use http or https');
+      }
+    } catch {
+      errors.push(`BLUECOYS_BASE_URL must be a valid URL (got ${JSON.stringify(base)})`);
+    }
+  }
+
+  for (const key of ['BLUECOYS_QR_TTL_MS', 'BLUECOYS_CALLBACK_TIMEOUT_MS']) {
+    checkPositiveInt(key);
+  }
+
   if (errors.length > 0) {
     throw new Error(`Invalid environment configuration:\n  - ${errors.join('\n  - ')}`);
   }

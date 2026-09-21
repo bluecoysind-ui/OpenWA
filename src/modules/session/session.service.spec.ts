@@ -1169,6 +1169,24 @@ describe('SessionService', () => {
       expect(registry.proxyUrl('sess-uuid-1')).toBe('socks5://p.invalid:1080');
     });
 
+    it('recovers a stranded disconnected engine instead of "already started"', async () => {
+      (repository.findOne as jest.Mock).mockResolvedValue(
+        createMockSession({ status: SessionStatus.DISCONNECTED }),
+      );
+      (repository.update as jest.Mock).mockResolvedValue({ affected: 1 });
+      mockEngine.initialize.mockResolvedValue(undefined);
+      const intern = lifecycle as unknown as {
+        engines: { set: (id: string, e: unknown) => void };
+        reconnectStates: Map<string, unknown>;
+      };
+      intern.engines.set('sess-uuid-1', mockEngine);
+      expect(intern.reconnectStates.has('sess-uuid-1')).toBe(false);
+
+      await service.start('sess-uuid-1');
+
+      expect(mockEngine.forceDestroy).toHaveBeenCalled();
+    });
+
     it('should throw BadRequestException if session already started', async () => {
       const session = createMockSession();
       (repository.findOne as jest.Mock).mockResolvedValue(session);
@@ -1968,6 +1986,23 @@ describe('SessionService', () => {
       (repository.update as jest.Mock).mockResolvedValue({ affected: 1 });
 
       expect(() => i.scheduleReconnect('sess-uuid-1', createMockSession())).not.toThrow();
+    });
+
+    it('re-seeds reconnect state when disconnect arrives after state was cleared', () => {
+      const i = lifecycle as unknown as {
+        reconnectStates: Map<string, { attempts: number; timer: NodeJS.Timeout | null; maxAttempts: number; baseDelay: number }>;
+        scheduleReconnect: (id: string, session: Session) => void;
+        executeReconnect: (...args: unknown[]) => Promise<void>;
+      };
+      const exec = jest.spyOn(i, 'executeReconnect').mockResolvedValue(undefined);
+      expect(i.reconnectStates.has('sess-uuid-1')).toBe(false);
+
+      i.scheduleReconnect('sess-uuid-1', createMockSession());
+      const state = i.reconnectStates.get('sess-uuid-1');
+      expect(state).toBeDefined();
+      expect(state!.timer).not.toBeNull();
+      if (state?.timer) clearTimeout(state.timer);
+      exec.mockRestore();
     });
   });
 
