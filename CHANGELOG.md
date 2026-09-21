@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gateway chat header parks archive/mute/pin/read behind a ⋮ menu so the 68px bar is not a row of labels.
 - Media conversion saturates with `429` (was `503`): `MEDIA_CONVERSION_CONCURRENCY` default 2, hard max 4, wait queue of 2; `#sticker` replies `busy, try again`.
 - Baileys `listMessage`, `buttonsResponseMessage`, `templateButtonReplyMessage` and `listResponseMessage` now classify as `type: "text"` (they previously fell through to `unknown`). Consumers filtering on `type` will see those shapes as text. Thanks @gabrielmmoraes1999.
 - The PostgreSQL data connection is pinned to UTC: parameters bind as UTC, naive timestamps read back as UTC, every pooled connection sets its session `TimeZone`, and boot fails when the effective zone is not UTC year round.

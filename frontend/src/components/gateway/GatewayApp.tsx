@@ -727,19 +727,16 @@ function Conversation() {
             <div className="text-xs text-wa">{chat.online ? "online" : chat.lastSeen || "offline"}</div>
           </div>
         </button>
-        <IconBtn onClick={() => openOverlay("search")}>
+        <IconBtn onClick={() => openOverlay("search")} aria-label="Search messages">
           <IconSearch />
         </IconBtn>
-        <IconBtn>
-          <IconPhone />
-        </IconBtn>
-        <IconBtn>
-          <IconVideo />
-        </IconBtn>
-        <IconBtn>
-          <IconDots />
-        </IconBtn>
-        {sessionId ? <ChatHeaderActions sessionId={sessionId} chatId={id} /> : null}
+        {sessionId ? (
+          <ChatHeaderActions sessionId={sessionId} chatId={id} />
+        ) : (
+          <IconBtn aria-label="Chat actions" disabled>
+            <IconDots />
+          </IconBtn>
+        )}
       </div>
       {busy ? (
         <div className="px-4 pt-1">
