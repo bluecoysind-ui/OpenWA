@@ -53,6 +53,17 @@ public final class ContactsResource {
             CheckNumberResponse.class);
     }
 
+    /** Bulk number-on-WhatsApp lookup. Max 50. OPERATOR. GET check/:number is unchanged. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> checkNumbers(String sessionId, List<String> numbers) {
+        return client.request(
+            HttpMethod.POST,
+            "/api/sessions/" + encodeSegment(sessionId) + "/contacts/check",
+            null,
+            Map.of("numbers", numbers),
+            Map.class);
+    }
+
     /** Get the contact's profile picture URL (or null). */
     public ProfilePictureResponse profilePicture(String sessionId, String contactId) {
         return client.request(

@@ -46,6 +46,7 @@ describe('Webhook controllers (secret leak + read authz)', () => {
       findOne: jest.fn(),
       findAll: jest.fn(),
       update: jest.fn(),
+      listDeliveries: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -132,6 +133,36 @@ describe('Webhook controllers (secret leak + read authz)', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method -- reading route metadata, not invoking
     const role = reflector.get<ApiKeyRole>(REQUIRED_ROLE_KEY, controller.findOne);
     expect(role).toBe(ApiKeyRole.OPERATOR);
+  });
+
+  it('listDeliveries requires OPERATOR and returns status/http/duration/attempt/snippet only', async () => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reading route metadata, not invoking
+    const role = reflector.get<ApiKeyRole>(REQUIRED_ROLE_KEY, controller.listDeliveries);
+    expect(role).toBe(ApiKeyRole.OPERATOR);
+    (service.listDeliveries as jest.Mock).mockResolvedValue([
+      {
+        id: 'd1',
+        webhookId: 'wh-uuid-1',
+        sessionId: 'sess-1',
+        status: 'failed',
+        httpCode: 500,
+        durationMs: 12,
+        attempt: 2,
+        errorSnippet: 'HTTP 500',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+    const result = await controller.listDeliveries('sess-1', 'wh-uuid-1');
+    expect(result[0]).toEqual({
+      id: 'd1',
+      status: 'failed',
+      httpCode: 500,
+      durationMs: 12,
+      attempt: 2,
+      errorSnippet: 'HTTP 500',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    expect(JSON.stringify(result)).not.toContain('body');
   });
 
   it('cross-session findAll requires OPERATOR role', () => {

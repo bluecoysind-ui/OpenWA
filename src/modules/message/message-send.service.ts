@@ -1,10 +1,16 @@
-import { Injectable, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryDeepPartialEntity } from 'typeorm';
 import { SessionService } from '../session/session.service';
 import { EngineRegistry } from '../../engine/engine-registry.service';
-import { SendTextMessageDto, SendMediaMessageDto, SendAudioMessageDto, MessageResponseDto } from './dto';
+import {
+  SendTextMessageDto,
+  SendMediaMessageDto,
+  SendAudioMessageDto,
+  SendStickerMessageDto,
+  MessageResponseDto,
+} from './dto';
 import { SendTemplateMessageDto } from './dto/send-template.dto';
 import { assertBase64WithinMediaCap, stripBase64DataUri } from './media-cap.util';
 import { MediaInput, IWhatsAppEngine, MessageResult } from '../../engine/interfaces/whatsapp-engine.interface';
@@ -18,6 +24,17 @@ import { SsrfBlockedError, SSRF_BLOCKED_CLIENT_MESSAGE } from '../../common/secu
 import { resolveFeatureFlags } from '../../config/feature-flags';
 import { isUniqueViolation } from '../../common/utils/db-errors';
 import { ChatMediaArchiveService } from '../chat-media/chat-media-archive.service';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+import { resolvePollChoice } from './poll-choice';
+import { formatTextList } from './format-text-list';
+import {
+  ForwardMessageDto,
+  ForwardManyResponseDto,
+  FORWARD_MAX_DESTINATIONS,
+  uniqueForwardDestinations,
+  SendTextListDto,
+} from './dto/message-actions.dto';
 
 /** Default cap on a rendered template's final text; overridable via TEMPLATE_RENDER_MAX_CHARS. */
 export const DEFAULT_TEMPLATE_RENDER_MAX_CHARS = 64 * 1024;
@@ -67,6 +84,23 @@ export interface SaveOutgoingMessageData {
  * `delayBetweenMessages` (default 3s) and a per-process concurrent-batch cap (see
  * `BulkMessageService`), and the global throttler enforces per-key rate limits.
  */
+function destErrorPayload(error: unknown): { code: string; message: string } {
+  if (error instanceof HttpException) {
+    const status = error.getStatus();
+    const body = error.getResponse();
+    const raw =
+      typeof body === 'string'
+        ? body
+        : typeof body === 'object' && body !== null && 'message' in body
+          ? (body as { message: string | string[] }).message
+          : error.message;
+    const message = Array.isArray(raw) ? raw.join('; ') : String(raw);
+    const code = typeof body === 'object' && body !== null && 'code' in body ? String(body.code) : `HTTP_${status}`;
+    return { code, message };
+  }
+  return { code: 'SEND_FAILED', message: error instanceof Error ? error.message : String(error) };
+}
+
 @Injectable()
 export class MessageSendService {
   private readonly logger = createLogger('MessageSend');
@@ -87,6 +121,8 @@ export class MessageSendService {
     // archived — the inline row copy and the read endpoint are unaffected either way.
     @Optional()
     private readonly chatMediaArchive?: ChatMediaArchiveService,
+    @Optional()
+    private readonly auditService?: AuditService,
   ) {}
 
   async sendText(sessionId: string, dto: SendTextMessageDto): Promise<MessageResponseDto> {
@@ -423,9 +459,17 @@ export class MessageSendService {
 
   async sendPoll(
     sessionId: string,
-    dto: { chatId: string; name: string; options: string[]; allowMultipleAnswers?: boolean; quotedMessageId?: string },
+    dto: {
+      chatId: string;
+      name: string;
+      options: string[];
+      allowMultipleAnswers?: boolean;
+      selectableCount?: number;
+      quotedMessageId?: string;
+    },
   ): Promise<MessageResponseDto> {
-    const finalDto = await this.applySendingGate(sessionId, 'poll', dto);
+    const choice = resolvePollChoice(dto);
+    const finalDto = await this.applySendingGate(sessionId, 'poll', { ...dto, ...choice });
     const engine = this.getEngine(sessionId);
 
     // Save message as pending BEFORE sending. A poll has no plain-text body, so store the
@@ -442,7 +486,8 @@ export class MessageSendService {
       result = await engine.sendPollMessage(finalDto.chatId, {
         name: finalDto.name,
         options: finalDto.options,
-        allowMultipleAnswers: finalDto.allowMultipleAnswers === true,
+        allowMultipleAnswers: choice.allowMultipleAnswers,
+        ...(dto.selectableCount !== undefined ? { selectableCount: choice.selectableCount } : {}),
         quotedMessageId: finalDto.quotedMessageId,
       });
     } catch (error) {
@@ -451,7 +496,7 @@ export class MessageSendService {
     return this.persistSentState(message, result);
   }
 
-  async sendSticker(sessionId: string, dto: SendMediaMessageDto): Promise<MessageResponseDto> {
+  async sendSticker(sessionId: string, dto: SendStickerMessageDto | SendMediaMessageDto): Promise<MessageResponseDto> {
     const finalDto = await this.applySendingGate(sessionId, 'sticker', dto);
     const engine = this.getEngine(sessionId);
     const media = this.buildMediaInput(finalDto);
@@ -551,7 +596,50 @@ export class MessageSendService {
     return this.persistSentState(message, result);
   }
 
-  async forward(
+  async sendTextList(sessionId: string, dto: SendTextListDto): Promise<MessageResponseDto> {
+    const text = formatTextList(dto.title, dto.options, dto.footer);
+    return this.sendText(sessionId, {
+      chatId: dto.chatId,
+      text,
+      quotedMessageId: dto.quotedMessageId,
+      mentions: dto.mentions,
+    });
+  }
+
+  async forward(sessionId: string, dto: ForwardMessageDto): Promise<MessageResponseDto | ForwardManyResponseDto> {
+    const dests = uniqueForwardDestinations(dto);
+    if (dests.length === 0) {
+      throw new BadRequestException('at least one of toChatId or toChatIds is required');
+    }
+    if (dests.length > FORWARD_MAX_DESTINATIONS) {
+      throw new BadRequestException(`at most ${FORWARD_MAX_DESTINATIONS} unique forward destinations`);
+    }
+    if (dests.length === 1) {
+      return this.forwardOne(sessionId, { fromChatId: dto.fromChatId, toChatId: dests[0], messageId: dto.messageId });
+    }
+
+    await this.auditService?.logInfo(AuditAction.MESSAGE_MULTI_FORWARD, {
+      sessionId,
+      metadata: { count: dests.length, fromChatId: dto.fromChatId, messageId: dto.messageId },
+    });
+
+    const results: ForwardManyResponseDto['results'] = [];
+    for (const toChatId of dests) {
+      try {
+        const sent = await this.forwardOne(sessionId, {
+          fromChatId: dto.fromChatId,
+          toChatId,
+          messageId: dto.messageId,
+        });
+        results.push({ chatId: toChatId, status: 'sent', messageId: sent.messageId, timestamp: sent.timestamp });
+      } catch (error) {
+        results.push({ chatId: toChatId, status: 'failed', error: destErrorPayload(error) });
+      }
+    }
+    return { fromChatId: dto.fromChatId, messageId: dto.messageId, results };
+  }
+
+  private async forwardOne(
     sessionId: string,
     dto: { fromChatId: string; toChatId: string; messageId: string },
   ): Promise<MessageResponseDto> {
@@ -793,7 +881,7 @@ export class MessageSendService {
     return error;
   }
 
-  private buildMediaInput(dto: SendMediaMessageDto): MediaInput {
+  private buildMediaInput(dto: SendMediaMessageDto | SendStickerMessageDto): MediaInput {
     const base64 = stripBase64DataUri(dto.base64);
     if (!dto.url && !base64) {
       throw new BadRequestException('Either url or base64 must be provided');
@@ -818,6 +906,8 @@ export class MessageSendService {
       caption: dto.caption,
       mentions: dto.mentions,
       quotedMessageId: dto.quotedMessageId,
+      packName: (dto as SendStickerMessageDto).packName,
+      packAuthor: (dto as SendStickerMessageDto).author,
     };
   }
 }

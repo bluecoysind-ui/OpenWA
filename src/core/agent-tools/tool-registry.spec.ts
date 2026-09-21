@@ -91,11 +91,17 @@ describe('v1 tool surface snapshot', () => {
       'LabelRemoveFromChat',
       'AutomationRuleFindAll',
       'AutomationRuleFindOne',
+      'SchedulerFindAll',
+      'SchedulerFindOne',
+      'SchedulerCreate',
+      'SchedulerCancel',
+      'BotConfigGet',
+      'WebhookListDeliveries',
     ].sort();
 
     const actualNames = [...allAgentTools({} as never)].map(t => t.name).sort();
 
     expect(actualNames).toEqual(expected);
-    expect(expected).toHaveLength(51);
+    expect(expected).toHaveLength(57);
   });
 });

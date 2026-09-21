@@ -79,6 +79,25 @@ describe('App smoke (e2e)', () => {
     return request(app.getHttpServer()).get('/api/sessions').expect(401);
   });
 
+  it('GET /api/features is VIEWER and returns booleans only', async () => {
+    const authService = app.get(AuthService);
+    const { rawKey } = await authService.createApiKey({ name: 'e2e-features', role: ApiKeyRole.VIEWER });
+    await request(app.getHttpServer()).get('/api/features').expect(401);
+    const res = await request(app.getHttpServer()).get('/api/features').set('X-API-Key', rawKey).expect(200);
+    const body = res.body as Record<string, unknown>;
+    for (const key of [
+      'scheduler',
+      'botCommands',
+      'mediaPersist',
+      'removeBgConfigured',
+      'regexRules',
+      'pollVoteEvents',
+    ]) {
+      if (typeof body[key] !== 'boolean') throw new Error(`${key} is not a boolean`);
+    }
+    if ('removeBgApiKey' in body) throw new Error('secret leaked on /api/features');
+  });
+
   it('GET an unknown route returns 404', () => {
     return request(app.getHttpServer()).get('/api/this-route-does-not-exist').expect(404);
   });

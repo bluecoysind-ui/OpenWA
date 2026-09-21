@@ -18,6 +18,7 @@ import com.rmyndharis.openwa.model.SuccessResult;
 import com.rmyndharis.openwa.model.UpdateSessionConfigRequest;
 import com.rmyndharis.openwa.model.UpdateSessionProxyRequest;
 import java.util.List;
+import java.util.Map;
 
 /** Sessions resource — lifecycle management for WhatsApp sessions. */
 public final class SessionsResource {
@@ -70,6 +71,13 @@ public final class SessionsResource {
     /** Get a single session by id. */
     public SessionResponse get(String id) {
         return client.request(HttpMethod.GET, "/api/sessions/" + encodeSegment(id), null, null, SessionResponse.class);
+    }
+
+    /** Read the logged-in account profile (phone, push name, about, picture URL). VIEWER. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getOwnProfile(String id) {
+        return client.request(
+                HttpMethod.GET, "/api/sessions/" + encodeSegment(id) + "/profile", null, null, Map.class);
     }
 
     /** Create a new session. Requires an OPERATOR-level key. */

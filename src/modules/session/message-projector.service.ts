@@ -16,6 +16,7 @@ import { resolveFeatureFlags } from '../../config/feature-flags';
 import { StatusStoreService } from '../status-store/status-store.service';
 import { ChatMediaArchiveService } from '../chat-media/chat-media-archive.service';
 import { AutomationRulesService } from '../automation/automation-rules.service';
+import { MediaPersistService } from '../media/media-persist.service';
 import { buildIncomingStatus } from '../status-store/incoming-status';
 import type { StatusUpdate } from '../status-store/entities/status-update.entity';
 import {
@@ -109,6 +110,8 @@ export class MessageProjector {
     // Optional for the same reason. Absent simply means no autoreply rules are evaluated.
     @Optional()
     private readonly automationRules?: AutomationRulesService,
+    @Optional()
+    private readonly mediaPersist?: MediaPersistService,
   ) {
     this.mutationProjector = new MessageMutationProjector(
       this.messageRepository,
@@ -231,6 +234,8 @@ export class MessageProjector {
       incoming.senderPhone = await this.lidResolver.resolveSenderPhone(id, incoming.author ?? incoming.from);
     }
 
+    await this.mediaPersist?.attachQuotedFileUrl(id, incoming).catch(() => undefined);
+
     const outcome = await this.persistInboundMessage(id, engine, incoming);
     if (!outcome) return;
     this.dispatchInboundMessage(id, finalMessage, outcome);
@@ -329,6 +334,7 @@ export class MessageProjector {
       // storage. Gated on `persisted` because the archive updates the row by id, and on a failed
       // insert there is no row to point at the file. A no-op unless archiving is enabled.
       void this.chatMediaArchive?.archive(dbMessage).catch(() => undefined);
+      void this.mediaPersist?.persistInbound(id, finalMessage).catch(() => undefined);
     }
 
     // Dispatch to webhooks with potentially modified message

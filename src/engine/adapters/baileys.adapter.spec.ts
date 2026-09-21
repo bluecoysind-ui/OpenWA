@@ -1648,6 +1648,18 @@ describe('BaileysAdapter location + contact + poll sends', () => {
       poll: { name: 'Toppings?', values: ['Cheese', 'Ham', 'Olives'], selectableCount: 0 },
     });
   });
+
+  it('sendPollMessage honours an explicit selectableCount', async () => {
+    const adapter = await ready();
+    await adapter.sendPollMessage('120363000@g.us', {
+      name: 'Pick two',
+      options: ['A', 'B', 'C'],
+      selectableCount: 2,
+    });
+    expect(fakeSock.sendMessage).toHaveBeenCalledWith('120363000@g.us', {
+      poll: { name: 'Pick two', values: ['A', 'B', 'C'], selectableCount: 2 },
+    });
+  });
 });
 
 describe('BaileysAdapter messaging', () => {
@@ -2784,7 +2796,7 @@ describe('BaileysAdapter inbound fan-out', () => {
       quotedMessage: { id: string; body: string };
     };
     expect(msg.body).toBe('reply text');
-    expect(msg.quotedMessage).toEqual({ id: 'QUOTED_ID', body: 'original message' });
+    expect(msg.quotedMessage).toEqual({ id: 'QUOTED_ID', body: 'original message', type: 'text' });
   });
 
   it('REVOKE protocolMessage: fires onMessageRevoked and NOT onMessage', async () => {

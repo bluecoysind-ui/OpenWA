@@ -1116,6 +1116,15 @@ curl -X GET "$BASE/api/sessions/$SESSION_ID/webhooks" \
   -H "X-API-Key: $API_KEY"
 ```
 
+#### GET /api/sessions/:sessionId/webhooks/:id/deliveries
+
+Recent HTTP attempts against this webhook (OPERATOR). Status, HTTP code, duration, attempt, error snippet only — never bodies.
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/webhooks/f1e2d3c4-b5a6-7890-1234-567890abcdef/deliveries" \
+  -H "X-API-Key: $API_KEY"
+```
+
 #### GET /api/sessions/:sessionId/webhooks/:id
 
 Get a single webhook by ID, scoped to the session.
@@ -1458,7 +1467,7 @@ curl "$BASE/api/infra/export-data" \
 
 #### POST /api/infra/import-data
 
-Replace all Data DB rows with a prior export (destructive, all-or-nothing). Every one of the 16 migration tables is emptied first, so a key you omit restores **empty** rather than untouched — send a body produced by `GET /api/infra/export-data`, not a hand-built subset. All 16 keys are shown below for that reason.
+Replace all Data DB rows with a prior export (destructive, all-or-nothing). Every one of the 18 migration tables is emptied first, so a key you omit restores **empty** rather than untouched — send a body produced by `GET /api/infra/export-data`, not a hand-built subset. All 18 keys are shown below for that reason.
 
 ```bash
 curl -X POST "$BASE/api/infra/import-data" \
@@ -1470,7 +1479,7 @@ curl -X POST "$BASE/api/infra/import-data" \
       "webhooks": [], "messages": [], "messageBatches": [], "templates": [], "baileysStoredMessages": [],
       "lidMappings": [], "chatStates": [], "pluginInstances": [], "conversationMappings": [], "ingressEvents": [],
       "webhookDeliveryFailures": [], "webhookOutboxEvents": [], "integrationDeliveryFailures": [], "statusUpdates": [],
-      "automationRules": []
+      "automationRules": [], "scheduledMessages": [], "botConfigs": []
     }
   }'
 ```
@@ -1737,7 +1746,8 @@ curl -X GET "$BASE/api/search?q=invoice&direction=incoming&limit=20" \
 
 Server-side transcoding into the shapes WhatsApp clients actually play. Disabled by default; set
 `MEDIA_CONVERSION_ENABLED=true`, and `ffmpeg` must be runnable (the official Docker image ships it)
-or the routes answer `503`. Nothing is converted implicitly — run media through here first, then
+or the routes answer `503`. Concurrent conversions are capped (`MEDIA_CONVERSION_CONCURRENCY`, default
+2, hard max 4) with a wait queue of 2; saturation answers `429`. Nothing is converted implicitly — run media through here first, then
 post the result.
 
 #### GET /api/sessions/:sessionId/media/convert
@@ -1773,6 +1783,46 @@ curl -X POST "$BASE/api/sessions/$SESSION_ID/media/convert/video" \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "url": "https://example.com/clip.mov" }'
+```
+
+#### POST /api/sessions/:sessionId/media/convert/sticker
+
+Convert image or short video into a 512×512 WebP sticker (OPERATOR). Same `url`/`base64` as voice.
+Optional `packName`/`author` EXIF. `removeBg: true` requires `REMOVE_BG_API_KEY` (empty key → 400).
+
+```bash
+curl -X POST "$BASE/api/sessions/$SESSION_ID/media/convert/sticker" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "url": "https://example.com/pic.png", "packName": "OpenWA", "author": "OpenWA" }'
+```
+
+#### GET /api/sessions/:sessionId/media/files
+
+List inbound files stored when `MEDIA_PERSIST=true` (OPERATOR; 404 when the flag is off).
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/media/files" \
+  -H "X-API-Key: $API_KEY"
+```
+
+#### GET /api/sessions/:sessionId/media/files/:messageId
+
+Fetch stored inbound media bytes (OPERATOR; 404 when the flag is off or the file is missing).
+
+```bash
+curl -X GET "$BASE/api/sessions/$SESSION_ID/media/files/true_628123456789@c.us_3EB0ABCD" \
+  -H "X-API-Key: $API_KEY" \
+  -o stored.bin
+```
+
+#### DELETE /api/sessions/:sessionId/media/files/:messageId
+
+Delete a stored inbound file (OPERATOR; 404 when the flag is off or the file is missing).
+
+```bash
+curl -X DELETE "$BASE/api/sessions/$SESSION_ID/media/files/true_628123456789@c.us_3EB0ABCD" \
+  -H "X-API-Key: $API_KEY"
 ```
 
 ### 07.17 Real-time (WebSocket)

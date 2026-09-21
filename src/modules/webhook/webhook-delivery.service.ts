@@ -9,8 +9,10 @@ import { setTimeout } from 'node:timers/promises';
 import { Webhook } from './entities/webhook.entity';
 import { WebhookOutboxService } from './webhook-outbox.service';
 import { WebhookDeliveryFailure } from './entities/webhook-delivery-failure.entity';
-import { recordWebhookDeliveryFailure } from './utils/record-delivery-failure';
+import { recordWebhookDeliveryFailure, statusCodeFromError } from './utils/record-delivery-failure';
 import { postWebhookPayload, recordTerminalFailure } from './utils/deliver-once';
+import { recordWebhookDeliveryAttempt } from './utils/record-delivery-attempt';
+import { WebhookDeliveryLog } from './entities/webhook-delivery-log.entity';
 import { createLogger } from '../../common/services/logger.service';
 import { DEFAULT_WEBHOOK_MEDIA_INLINE_MAX_BYTES, shedInlineMedia } from '../../common/utils/inline-media';
 import { incrementWebhookDeliveryFailures } from '../../common/metrics/webhook-delivery-metrics';
@@ -118,6 +120,9 @@ export class WebhookDeliveryService implements OnModuleInit, OnModuleDestroy {
     @Optional()
     @InjectQueue(QUEUE_NAMES.WEBHOOK)
     private readonly webhookQueue?: Queue<WebhookJobData>,
+    @Optional()
+    @InjectRepository(WebhookDeliveryLog, 'data')
+    private readonly deliveryLogRepo?: Repository<WebhookDeliveryLog>,
   ) {
     this.queueEnabled = configService.get<boolean>('queue.enabled', false);
     // Bound fan-out: cap how many matching webhooks are delivered CONCURRENTLY for one event. Without
@@ -741,8 +746,22 @@ export class WebhookDeliveryService implements OnModuleInit, OnModuleDestroy {
       headers['X-OpenWA-Signature'] = this.generateSignature(body, webhook.secret);
     }
 
+    const started = Date.now();
     try {
-      await postWebhookPayload(webhook.url, body, headers, this.configService.get<number>('webhook.timeout', 10000));
+      const { status } = await postWebhookPayload(
+        webhook.url,
+        body,
+        headers,
+        this.configService.get<number>('webhook.timeout', 10000),
+      );
+      await recordWebhookDeliveryAttempt(this.deliveryLogRepo, {
+        webhookId: webhook.id,
+        sessionId: payload.sessionId,
+        status: 'success',
+        httpCode: status,
+        durationMs: Date.now() - started,
+        attempt,
+      });
 
       // The receiver already answered 2xx — the delivery SUCCEEDED. A bookkeeping failure here (e.g.
       // the lastTriggeredAt update on a flaky DB) must not reach the catch below: it would retry an
@@ -766,6 +785,16 @@ export class WebhookDeliveryService implements OnModuleInit, OnModuleDestroy {
         action: 'webhook_delivered',
       });
     } catch (error) {
+      const clientError = redactSsrfError(error);
+      await recordWebhookDeliveryAttempt(this.deliveryLogRepo, {
+        webhookId: webhook.id,
+        sessionId: payload.sessionId,
+        status: 'failed',
+        httpCode: statusCodeFromError(clientError),
+        durationMs: Date.now() - started,
+        attempt,
+        errorSnippet: clientError,
+      });
       this.logger.error(`Webhook delivery failed for ${webhook.id}`, String(error), {
         webhookId: webhook.id,
         attempt,

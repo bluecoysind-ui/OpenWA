@@ -1011,9 +1011,12 @@ func TestWebhookEventWireValues(t *testing.T) {
 		EventMessageReceived:      "message.received",
 		EventMessageSent:          "message.sent",
 		EventMessageAck:           "message.ack",
-		EventMessageFailed:        "message.failed",
-		EventMessageRevoked:       "message.revoked",
+		EventMessageFailed:          "message.failed",
+		EventScheduledMessageSent:   "scheduled.message.sent",
+		EventScheduledMessageFailed: "scheduled.message.failed",
+		EventMessageRevoked:         "message.revoked",
 		EventMessageReaction:      "message.reaction",
+		EventMessagePollVote:      "message.poll_vote",
 		EventMessageEdited:        "message.edited",
 		EventSessionStatus:        "session.status",
 		EventSessionQR:            "session.qr",
@@ -1389,6 +1392,21 @@ func TestConvertVideo(t *testing.T) {
 	}
 	if got := string(rt.lastRaw); got != `{"url":"https://example.com/c.mov"}` {
 		t.Fatalf("body = %s, want the url only", got)
+	}
+}
+
+func TestConvertSticker(t *testing.T) {
+	rt := &recordTransport{status: 200, body: `{"base64":"UklGRg==","mimetype":"image/webp","bytes":8}`}
+	c := newTestClient(t, rt)
+
+	if _, err := c.Media.ConvertSticker(context.Background(), "s1", ConvertMediaInput{URL: "https://example.com/p.png", PackName: "Pack"}); err != nil {
+		t.Fatalf("ConvertSticker: %v", err)
+	}
+	if got, want := rt.lastReq.URL.Path, "/api/sessions/s1/media/convert/sticker"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	if got := string(rt.lastRaw); got != `{"url":"https://example.com/p.png","packName":"Pack"}` {
+		t.Fatalf("body = %s, want url+packName", got)
 	}
 }
 

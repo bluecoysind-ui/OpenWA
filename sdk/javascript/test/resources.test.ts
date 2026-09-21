@@ -173,6 +173,38 @@ describe('MediaResource — exact paths', () => {
     expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/convert/video');
     expect(t.lastCall!.body).toEqual({ url: 'https://example.com/clip.mov' });
   });
+
+  it('convertSticker POSTs pack metadata to /convert/sticker', async () => {
+    const t = new MockTransport().on('POST', /\/media\/convert\/sticker$/, {
+      body: { base64: 'UklGRg==', mimetype: 'image/webp', bytes: 8 },
+    });
+    await client(t).media.convertSticker('s', {
+      url: 'https://example.com/pic.png',
+      packName: 'Pack',
+      author: 'Author',
+    });
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/convert/sticker');
+    expect(t.lastCall!.body).toEqual({
+      url: 'https://example.com/pic.png',
+      packName: 'Pack',
+      author: 'Author',
+    });
+  });
+
+  it('listFiles / getFile / deleteFile hit MEDIA_PERSIST routes', async () => {
+    const t = new MockTransport()
+      .on('GET', /\/media\/files$/, { body: [] })
+      .on('GET', /\/media\/files\/m1$/, { text: 'BYTES', contentType: 'application/octet-stream' })
+      .on('DELETE', /\/media\/files\/m1$/, { status: 204 });
+    const c = client(t);
+    await c.media.listFiles('s');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/files');
+    const file = await c.media.getFile('s', 'm1');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/media/files/m1');
+    expect(new TextDecoder().decode(file.data)).toBe('BYTES');
+    await c.media.deleteFile('s', 'm1');
+    expect(t.lastCall!.method).toBe('DELETE');
+  });
 });
 
 describe('ContactsResource — exact paths', () => {
@@ -250,10 +282,13 @@ describe('WebhooksResource — exact paths', () => {
         body: { id: 'w1', sessionId: 's', url: 'u', events: ['*'], active: false, createdAt: '', updatedAt: '' },
       })
       .on('DELETE', /\/webhooks\/w1$/, { status: 204 })
-      .on('POST', /\/webhooks\/w1\/test$/, { body: { success: true } });
+      .on('POST', /\/webhooks\/w1\/test$/, { body: { success: true } })
+      .on('GET', /\/webhooks\/w1\/deliveries$/, { body: [] });
     const c = client(t);
     await c.webhooks.list('s');
     await c.webhooks.get('s', 'w1');
+    await c.webhooks.deliveries('s', 'w1');
+    expect(t.lastCall!.url).toBe('http://x/api/sessions/s/webhooks/w1/deliveries');
     // Server DTO field is `retryCount` (NOT `retries`) — body must forward verbatim.
     const created = await c.webhooks.create('s', { url: 'u', events: ['*'], retryCount: 5 });
     expect(t.lastCall!.body).toEqual({ url: 'u', events: ['*'], retryCount: 5 });
@@ -461,12 +496,14 @@ describe('HealthResource + auth — exact paths', () => {
       .on('GET', /\/health$/, { body: { status: 'ok', version: '0.7.2' } })
       .on('GET', /\/health\/live$/, { body: { status: 'ok' } })
       .on('GET', /\/health\/ready$/, { body: { status: 'ok', details: {} } })
+      .on('GET', /\/features$/, { body: { scheduler: true, botCommands: false, mediaPersist: false, removeBgConfigured: false, regexRules: false, pollVoteEvents: false } })
       .on('POST', /\/auth\/validate$/, { body: { valid: true, role: 'admin' } });
     const c = client(t);
     await c.health.check();
     expect(t.lastCall!.url).toBe('http://x/api/health');
     await c.health.live();
     await c.health.ready();
+    await c.health.features();
     await c.auth();
     expect(t.lastCall!.method).toBe('POST');
     expect(t.lastCall!.url).toBe('http://x/api/auth/validate');

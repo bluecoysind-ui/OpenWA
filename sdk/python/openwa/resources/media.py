@@ -55,6 +55,46 @@ class MediaResource:
             body=_conversion_body(url, base64),
         )
 
+    def convert_sticker(
+        self,
+        session_id: str,
+        *,
+        url: Optional[str] = None,
+        base64: Optional[str] = None,
+        pack_name: Optional[str] = None,
+        author: Optional[str] = None,
+        remove_bg: Optional[bool] = None,
+    ) -> ConvertedMedia:
+        """Convert image or video into a 512×512 WebP sticker. Requires an OPERATOR-level key."""
+        body = _conversion_body(url, base64)
+        if pack_name is not None:
+            body["packName"] = pack_name
+        if author is not None:
+            body["author"] = author
+        if remove_bg is not None:
+            body["removeBg"] = remove_bg
+        return self._http.request(
+            "POST",
+            f"/api/sessions/{quote_segment(session_id)}/media/convert/sticker",
+            body=body,
+        )
+
+    def list_files(self, session_id: str) -> list:
+        """List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off."""
+        return self._http.request("GET", f"/api/sessions/{quote_segment(session_id)}/media/files")
+
+    def get_file(self, session_id: str, message_id: str) -> dict:
+        """Fetch stored inbound media bytes. 404 when MEDIA_PERSIST is off or the file is missing."""
+        data, content_type = self._http.request_bytes(
+            "GET",
+            f"/api/sessions/{quote_segment(session_id)}/media/files/{quote_segment(message_id)}",
+        )
+        return {"data": data, "contentType": content_type}
+
+    def delete_file(self, session_id: str, message_id: str) -> None:
+        """Delete a stored inbound media file. OPERATOR."""
+        self._http.request("DELETE", f"/api/sessions/{quote_segment(session_id)}/media/files/{quote_segment(message_id)}")
+
 
 def _conversion_body(url: Optional[str], base64: Optional[str]) -> dict:
     """Send only the field that was given: a blank one reads as supplied-but-empty."""

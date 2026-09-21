@@ -65,6 +65,16 @@ func (s *SessionsService) Get(ctx context.Context, sessionID string) (*SessionRe
 	return &out, nil
 }
 
+// GetOwnProfile reads the logged-in account profile. VIEWER.
+func (s *SessionsService) GetOwnProfile(ctx context.Context, sessionID string) (map[string]any, error) {
+	var out map[string]any
+	err := s.client.do(ctx, "GET", "/api/sessions/"+pathEscape(sessionID)+"/profile", nil, nil, &out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Create provisions a new session.
 func (s *SessionsService) Create(ctx context.Context, body CreateSessionRequest) (*SessionResponse, error) {
 	var out SessionResponse

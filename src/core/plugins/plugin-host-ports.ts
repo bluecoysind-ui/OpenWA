@@ -34,6 +34,7 @@ export interface PluginMessagePort {
     sessionId: string,
     dto: { chatId: string; latitude: number; longitude: number; description?: string },
   ): Promise<MessageResponseDto>;
+  sendSticker(sessionId: string, dto: { chatId: string; url?: string; caption?: string }): Promise<MessageResponseDto>;
 }
 
 /** Live-engine resolution + the deleted-session probe the capability gates rely on. */
@@ -114,3 +115,12 @@ export const PLUGIN_CONVERSATION_MAPPING_PORT = Symbol('PLUGIN_CONVERSATION_MAPP
 export const PLUGIN_INSTANCE_PORT = Symbol('PLUGIN_INSTANCE_PORT');
 /** Search-registry mutations, bound to SearchProviderRegistry by SearchModule. */
 export const PLUGIN_SEARCH_REGISTRY_PORT = Symbol('PLUGIN_SEARCH_REGISTRY_PORT');
+/** Bot-config access lists, welcome, auto-read — resolved lazily so SessionModule never imports BotModule. */
+export const BOT_INBOUND_PORT = Symbol('BOT_INBOUND_PORT');
+
+export interface BotInboundPort {
+  senderAllowed(sessionId: string, sender: string | null | undefined, isGroup: boolean): Promise<boolean>;
+  looksLikeCommand(sessionId: string, body: string | null | undefined): Promise<boolean>;
+  handleGroupJoin(sessionId: string, groupId: string): Promise<void>;
+  maybeAutoRead(sessionId: string, chatId: string): Promise<void>;
+}

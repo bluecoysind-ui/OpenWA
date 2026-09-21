@@ -32,3 +32,13 @@ func (s *HealthService) Ready(ctx context.Context) (*HealthReadyResponse, error)
 	}
 	return &out, nil
 }
+
+// Features returns deployment-wide boolean feature flags (no secrets).
+func (s *HealthService) Features(ctx context.Context) (*FeatureFlagsResponse, error) {
+	var out FeatureFlagsResponse
+	err := s.client.do(ctx, "GET", "/api/features", nil, nil, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

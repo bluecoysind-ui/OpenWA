@@ -55,6 +55,24 @@ describe('ContactService', () => {
     expect(getNumberId).toHaveBeenCalledWith('628123');
   });
 
+  it('checkNumbers normalizes, dedupes engine calls, and keeps per-input rows', async () => {
+    const checkNumbers = jest.fn().mockResolvedValue([
+      { number: '628123456789', exists: true, chatId: '628123456789@c.us' },
+    ]);
+    const audit = { logInfo: jest.fn().mockResolvedValue(undefined) };
+    const engines = new EngineRegistry();
+    engines.set('s1', { checkNumbers } as unknown as IWhatsAppEngine);
+    const svc = new ContactService(engines, audit as never);
+    const out = await svc.checkNumbers('s1', ['+62 812-345-6789', '628123456789', 'nope']);
+    expect(checkNumbers).toHaveBeenCalledWith(['628123456789']);
+    expect(out).toEqual([
+      { input: '+62 812-345-6789', normalized: '628123456789', exists: true, chatId: '628123456789@c.us' },
+      { input: '628123456789', normalized: '628123456789', exists: true, chatId: '628123456789@c.us' },
+      { input: 'nope', normalized: null, exists: false, chatId: null, error: 'invalid' },
+    ]);
+    expect(audit.logInfo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ sessionId: 's1' }));
+  });
+
   it('delegates resolveContactPhone to the engine', async () => {
     const resolveContactPhone = jest.fn().mockResolvedValue('628123456789');
     await expect(makeService({ resolveContactPhone }).resolveContactPhone('s1', '123@lid')).resolves.toBe(

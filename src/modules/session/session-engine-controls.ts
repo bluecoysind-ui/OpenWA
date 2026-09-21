@@ -56,6 +56,7 @@ export interface SessionEngineControlsHost {
   fences: SessionLifecycleFences;
   broadcaster: SessionStatusBroadcaster;
   cancelReconnect(id: string): void;
+  isStrandedDisconnectedEngine(id: string, session: Session): boolean;
   initializeEngine(id: string, session: Session): Promise<void>;
   isSessionRetired(id: string): Promise<boolean>;
   purgeAuthDirsIfDeleted(id: string): Promise<void>;
@@ -160,7 +161,18 @@ export class SessionEngineControls {
       const session = await this.requireSession(id);
 
       if (this.engines.has(id)) {
-        throw new BadRequestException('Session is already started');
+        if (this.host.isStrandedDisconnectedEngine(id, session)) {
+          const zombie = this.engines.get(id)!;
+          this.logger.warn(`Recovering stranded disconnected engine for session: ${session.name}`, {
+            sessionId: id,
+            action: 'start_stranded_engine_recovery',
+          });
+          await this.fences.teardownEngineSafely(id, zombie, e => e.forceDestroy(), 'force-destroy');
+          this.engines.deleteIfLive(id, zombie);
+          this.host.cancelReconnect(id);
+        } else {
+          throw new BadRequestException('Session is already started');
+        }
       }
       const maxConcurrentSessions = resolveMaxConcurrentSessions(this.configService);
       if (maxConcurrentSessions !== null) {
@@ -672,35 +684,41 @@ export class SessionEngineControls {
         this.stoppingSessions.add(id);
         this.host.cancelReconnect(id);
 
-        const engine = this.engines.get(id);
-        if (!engine) {
-          // Either never started, or still inside initializeEngine (no Map entry yet). The stop mark
-          // above is what aborts the initializing case via start()'s existing guard.
-          notRunning.push(id);
-          return;
-        }
         try {
-          const tornDown = await this.fences.destroyEngineSafely(id, engine);
-          // The engine leaves the Map regardless of teardown outcome so it stops holding a
-          // concurrency slot — but only a completed teardown counts as `stopped`. A throw/timeout
-          // means the Chromium/socket may still be alive and writing, so the id lands in `failed`
-          // and the caller (the infra import) can flag restartRequired instead of reporting a
-          // clean stop for a wedged engine.
-          this.engines.deleteIfLive(id, engine);
-          if (tornDown) {
-            stopped.push(id);
-          } else {
+          const engine = this.engines.get(id);
+          if (!engine) {
+            // Either never started, or still inside initializeEngine (no Map entry yet). The stop mark
+            // above is what aborts the initializing case via start()'s existing guard.
+            notRunning.push(id);
+            return;
+          }
+          try {
+            const tornDown = await this.fences.destroyEngineSafely(id, engine);
+            // The engine leaves the Map regardless of teardown outcome so it stops holding a
+            // concurrency slot — but only a completed teardown counts as `stopped`. A throw/timeout
+            // means the Chromium/socket may still be alive and writing, so the id lands in `failed`
+            // and the caller (the infra import) can flag restartRequired instead of reporting a
+            // clean stop for a wedged engine.
+            this.engines.deleteIfLive(id, engine);
+            if (tornDown) {
+              stopped.push(id);
+            } else {
+              failed.push(id);
+            }
+          } catch (err) {
+            // destroyEngineSafely never throws today (it isolates via teardownEngineSafely), but defend
+            // against a future change so a single orphan cannot abort the batch.
+            this.logger.error(`Failed to stop orphan engine for session ${id}`, String(err), {
+              sessionId: id,
+              action: 'stop_orphan_failed',
+            });
+            this.engines.deleteIfLive(id, engine);
             failed.push(id);
           }
-        } catch (err) {
-          // destroyEngineSafely never throws today (it isolates via teardownEngineSafely), but defend
-          // against a future change so a single orphan cannot abort the batch.
-          this.logger.error(`Failed to stop orphan engine for session ${id}`, String(err), {
-            sessionId: id,
-            action: 'stop_orphan_failed',
-          });
-          this.engines.deleteIfLive(id, engine);
-          failed.push(id);
+        } finally {
+          // Lease-loss teardown is not an operator stop: leaving the mark would block the next
+          // executeReconnect until a manual start() clears it.
+          this.stoppingSessions.delete(id);
         }
       }),
     );

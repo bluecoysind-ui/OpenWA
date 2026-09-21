@@ -15,8 +15,11 @@ const (
 	EventMessageSent          WebhookEvent = "message.sent"
 	EventMessageAck           WebhookEvent = "message.ack"
 	EventMessageFailed        WebhookEvent = "message.failed"
+	EventScheduledMessageSent WebhookEvent = "scheduled.message.sent"
+	EventScheduledMessageFailed WebhookEvent = "scheduled.message.failed"
 	EventMessageRevoked       WebhookEvent = "message.revoked"
 	EventMessageReaction      WebhookEvent = "message.reaction"
+	EventMessagePollVote      WebhookEvent = "message.poll_vote"
 	EventMessageEdited        WebhookEvent = "message.edited"
 	EventSessionStatus        WebhookEvent = "session.status"
 	EventSessionQR            WebhookEvent = "session.qr"
@@ -185,4 +188,15 @@ type WebhookDeliveryFailure struct {
 	LastError      string `json:"lastError"`
 	// CreatedAt is the ISO timestamp of when the delivery was finally abandoned.
 	CreatedAt string `json:"createdAt"`
+}
+
+// WebhookDeliveryAttempt is one HTTP attempt against a webhook (Q6). Bodies are never stored.
+type WebhookDeliveryAttempt struct {
+	ID           string  `json:"id"`
+	Status       string  `json:"status"`
+	HTTPCode     *int    `json:"httpCode"`
+	DurationMs   int     `json:"durationMs"`
+	Attempt      int     `json:"attempt"`
+	ErrorSnippet *string `json:"errorSnippet"`
+	CreatedAt    string  `json:"createdAt"`
 }

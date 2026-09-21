@@ -302,6 +302,23 @@ describe('SessionController — muteChat', () => {
 
     expect(sessionService.muteChat).toHaveBeenCalledWith('sess-uuid-1', '628123@c.us', null);
   });
+
+  it('maps durationSec onto muteUntil from Date.now', async () => {
+    const spy = jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    try {
+      await controller.muteChat('sess-uuid-1', { chatId: '628123@c.us', durationSec: 60 });
+      expect(sessionService.muteChat).toHaveBeenCalledWith('sess-uuid-1', '628123@c.us', 1_700_000_060_000);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('rejects durationSec together with muteUntil', async () => {
+    await expect(
+      controller.muteChat('sess-uuid-1', { chatId: '628123@c.us', durationSec: 60, muteUntil: 1 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(sessionService.muteChat).not.toHaveBeenCalled();
+  });
 });
 
 describe('SessionController findAll name filter', () => {

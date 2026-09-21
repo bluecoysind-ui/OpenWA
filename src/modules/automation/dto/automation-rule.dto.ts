@@ -1,11 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose, plainToInstance } from 'class-transformer';
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
 import { ToStrictBoolean, ToStrictNumber } from '../../../common/utils/strict-boolean';
 import { MESSAGE_TEXT_MAX_LENGTH } from '../../message/dto/send-message.dto';
 import { WebhookFilters } from '../../webhook/filters/filter-types';
 import { IsValidWebhookFilters } from '../../webhook/filters/filter-validation';
+import { AutomationChatContext, AutomationMatchMode } from '../automation-match';
 import { AutomationRule } from '../entities/automation-rule.entity';
+
+const MATCH_MODES = Object.values(AutomationMatchMode);
+const CHAT_CONTEXTS = Object.values(AutomationChatContext);
 
 /** Longest quiet period a rule may ask for: one day. */
 export const AUTOMATION_COOLDOWN_MAX_SECONDS = 86_400;
@@ -60,6 +64,36 @@ export class CreateAutomationRuleDto {
   @ToStrictBoolean()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({
+    enum: MATCH_MODES,
+    default: AutomationMatchMode.CONTAINS,
+    description: 'Body matcher applied after webhook-filter conditions. regex requires AUTO_REPLY_REGEX=true.',
+  })
+  @IsOptional()
+  @IsIn(MATCH_MODES)
+  matchMode?: AutomationMatchMode;
+
+  @ApiPropertyOptional({
+    description: 'Pattern for matchMode. Omitted = no extra body match (conditions-only).',
+    maxLength: 1024,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024)
+  matchPattern?: string | null;
+
+  @ApiPropertyOptional({ enum: CHAT_CONTEXTS, default: AutomationChatContext.ALL })
+  @IsOptional()
+  @IsIn(CHAT_CONTEXTS)
+  chatContext?: AutomationChatContext;
+
+  @ApiPropertyOptional({
+    description: 'http(s) image URL sent as the reply (SSRF-safe fetch at send time). replyText becomes the caption.',
+  })
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  replyMediaUrl?: string | null;
 }
 
 export class UpdateAutomationRuleDto {
@@ -98,6 +132,27 @@ export class UpdateAutomationRuleDto {
   @ToStrictBoolean()
   @IsBoolean()
   enabled?: boolean;
+
+  @ApiPropertyOptional({ enum: MATCH_MODES })
+  @IsOptional()
+  @IsIn(MATCH_MODES)
+  matchMode?: AutomationMatchMode;
+
+  @ApiPropertyOptional({ maxLength: 1024, nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1024)
+  matchPattern?: string | null;
+
+  @ApiPropertyOptional({ enum: CHAT_CONTEXTS })
+  @IsOptional()
+  @IsIn(CHAT_CONTEXTS)
+  chatContext?: AutomationChatContext;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  replyMediaUrl?: string | null;
 }
 
 export class AutomationRuleResponseDto {
@@ -128,6 +183,22 @@ export class AutomationRuleResponseDto {
   @ApiProperty()
   @Expose()
   cooldownSeconds!: number;
+
+  @ApiProperty({ enum: MATCH_MODES })
+  @Expose()
+  matchMode!: AutomationMatchMode;
+
+  @ApiPropertyOptional({ nullable: true })
+  @Expose()
+  matchPattern!: string | null;
+
+  @ApiProperty({ enum: CHAT_CONTEXTS })
+  @Expose()
+  chatContext!: AutomationChatContext;
+
+  @ApiPropertyOptional({ nullable: true })
+  @Expose()
+  replyMediaUrl!: string | null;
 
   @ApiProperty()
   @Expose()

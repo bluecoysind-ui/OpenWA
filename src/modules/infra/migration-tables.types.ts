@@ -248,6 +248,43 @@ export interface AutomationRuleRow {
   conditions: string | null;
   replyText: string;
   cooldownSeconds: number;
+  matchMode?: string;
+  matchPattern?: string | null;
+  chatContext?: string;
+  replyMediaUrl?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface BotConfigRow {
+  id: string;
+  sessionId: string;
+  accessMode: string;
+  allowList: string | string[];
+  blockList: string | string[];
+  prefix: string;
+  commandsEnabled: boolean | number;
+  autoRead: boolean | number;
+  alwaysOnline: boolean | number;
+  welcomeMessage: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface ScheduledMessageRow {
+  id: string;
+  sessionId: string;
+  chatId: string;
+  sendAtUtc: string | Date;
+  timezone: string;
+  text: string | null;
+  mediaUrl: string | null;
+  mediaType: string;
+  caption: string | null;
+  status: string;
+  attemptCount: number;
+  lastError: string | null;
+  sentMessageId: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -269,6 +306,8 @@ export interface MigrationTables {
   integrationDeliveryFailures: IntegrationDeliveryFailureRow[];
   statusUpdates: StatusUpdateRow[];
   automationRules: AutomationRuleRow[];
+  scheduledMessages: ScheduledMessageRow[];
+  botConfigs: BotConfigRow[];
 }
 
 export type TableCounts = { [K in keyof MigrationTables]: number };

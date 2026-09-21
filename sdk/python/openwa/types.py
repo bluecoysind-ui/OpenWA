@@ -38,6 +38,9 @@ SessionStatus = Literal[
 ChatState = Literal["typing", "recording", "paused"]
 MessageDirection = Literal["incoming", "outgoing"]
 DeliveryStatus = Literal["pending", "sent", "delivered", "read", "failed"]
+RecurrenceKind = Literal["none", "daily", "weekly", "monthly"]
+ScheduledMessageStatus = Literal["pending", "sending", "sent", "failed", "cancelled", "paused"]
+ScheduledMediaType = Literal["text", "image", "video", "document", "audio"]
 # The three windows WhatsApp accepts for a pinned message: 24 hours, 7 days, 30 days.
 PinDurationSeconds = Literal[86400, 604800, 2592000]
 # WhatsApp status font family: 0 (default), 1, 2, 6 (bold), 7, 8, 9, 10.
@@ -65,8 +68,9 @@ MessageType = Literal[
     "unknown",
 ]
 WebhookEvent = Literal[
-    "message.received", "message.sent", "message.ack", "message.failed", "message.revoked",
-    "message.reaction", "message.edited", "session.status", "session.qr", "session.authenticated",
+    "message.received", "message.sent", "message.ack", "message.failed",
+    "scheduled.message.sent", "scheduled.message.failed", "message.revoked",
+    "message.reaction", "message.poll_vote", "message.edited", "session.status", "session.qr", "session.authenticated",
     "session.disconnected", "session.reconnect_loop", "session.restriction", "presence.update",
     "group.join", "group.leave", "group.update", "group.join_request",
     "call.received", "status.received",
@@ -354,6 +358,15 @@ class SendTextRequest(TypedDict):
     quotedMessageId: NotRequired[str]
 
 
+class SendTextListRequest(TypedDict):
+    chatId: Jid
+    title: str
+    options: list[str]
+    footer: NotRequired[str]
+    quotedMessageId: NotRequired[str]
+    mentions: NotRequired[list[str]]
+
+
 class SendMediaRequest(TypedDict):
     chatId: Jid
     url: NotRequired[str]
@@ -418,7 +431,8 @@ class ReplyMessageRequest(TypedDict):
 
 class ForwardMessageRequest(TypedDict):
     fromChatId: Jid
-    toChatId: Jid
+    toChatId: NotRequired[Jid]
+    toChatIds: NotRequired[list[Jid]]
     messageId: str
 
 
@@ -464,6 +478,7 @@ class SendPollRequest(TypedDict):
     # Options to vote on (WhatsApp allows between 2 and 12).
     options: list[str]
     allowMultipleAnswers: NotRequired[bool]
+    selectableCount: NotRequired[int]
     # Quote an earlier message, turning this send into a reply. Engine-specific: whatsapp-web.js
     # matches the serialized message id, Baileys the raw key id of a message it has already stored.
     quotedMessageId: NotRequired[str]
@@ -473,7 +488,7 @@ class SendPollRequest(TypedDict):
 ListMessagesQuery = TypedDict(
     "ListMessagesQuery",
     # ``after`` is a keyset cursor: the id of the last message of the previous page.
-    {"chatId": Jid, "from": Jid, "limit": int, "offset": int, "after": str, "inlineMedia": bool},
+    {"chatId": Jid, "from": Jid, "limit": int, "offset": int, "after": str, "inlineMedia": bool, "q": str},
     total=False,
 )
 
@@ -951,6 +966,73 @@ class WebhookDeliveryFailure(TypedDict):
     lastError: str
     # ISO timestamp of when the delivery was finally abandoned.
     createdAt: str
+
+
+# ── Scheduled messages ────────────────────────────────────────────
+
+
+class CreateScheduledMessageRequest(TypedDict):
+    """Create a one-shot or recurring delayed send. Recurring jobs need until and/or maxOccurrences."""
+
+    chatId: str
+    #: ISO-8601 instant with offset (Z or ±HH:MM). Naive local datetimes are refused.
+    sendAt: str
+    timezone: NotRequired[str]
+    text: NotRequired[str]
+    mediaUrl: NotRequired[str]
+    mediaType: NotRequired[ScheduledMediaType]
+    caption: NotRequired[str]
+    recurrence: NotRequired[RecurrenceKind]
+    interval: NotRequired[int]
+    daysOfWeek: NotRequired[list[int]]
+    dayOfMonth: NotRequired[int]
+    until: NotRequired[str]
+    maxOccurrences: NotRequired[int]
+
+
+class UpdateScheduledMessageRequest(TypedDict, total=False):
+    """Partial update of a pending or paused job. ``status`` is only pending↔paused."""
+
+    sendAt: str
+    timezone: str
+    text: str
+    mediaUrl: str | None
+    mediaType: ScheduledMediaType
+    caption: str | None
+    recurrence: RecurrenceKind
+    interval: int
+    daysOfWeek: list[int] | None
+    dayOfMonth: int | None
+    until: str | None
+    maxOccurrences: int | None
+    status: Literal["pending", "paused"]
+
+
+class ScheduledMessageRecord(TypedDict):
+    """A stored scheduled send, one-shot or recurring."""
+
+    id: str
+    sessionId: str
+    chatId: str
+    sendAt: str
+    timezone: str
+    text: str | None
+    mediaUrl: str | None
+    mediaType: ScheduledMediaType
+    caption: str | None
+    status: ScheduledMessageStatus
+    recurrence: RecurrenceKind
+    interval: int
+    daysOfWeek: list[int] | None
+    dayOfMonth: int | None
+    until: str | None
+    maxOccurrences: int | None
+    occurrenceCount: int
+    attemptCount: int
+    lastError: str | None
+    sentMessageId: str | None
+    createdAt: str
+    updatedAt: str
 
 
 # ── Chat ──────────────────────────────────────────────────────────

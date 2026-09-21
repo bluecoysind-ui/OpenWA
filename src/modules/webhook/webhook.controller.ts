@@ -1,7 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { WebhookService } from './webhook.service';
-import { CreateWebhookDto, UpdateWebhookDto, WebhookResponseDto, WebhookTestResponseDto } from './dto';
+import {
+  CreateWebhookDto,
+  UpdateWebhookDto,
+  WebhookResponseDto,
+  WebhookTestResponseDto,
+  WebhookDeliveryAttemptDto,
+} from './dto';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
 
@@ -50,6 +56,31 @@ export class WebhookController {
   @ApiResponse({ status: 404, description: 'Webhook not found' })
   async findOne(@Param('sessionId') sessionId: string, @Param('id') id: string): Promise<WebhookResponseDto> {
     return WebhookResponseDto.fromEntity(await this.webhookService.findOne(sessionId, id));
+  }
+
+  @Get(':id/deliveries')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({
+    summary: 'List recent delivery attempts for a webhook (status, HTTP code, duration, attempt, error snippet)',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiParam({ name: 'id', description: 'Webhook ID' })
+  @ApiResponse({ status: 200, description: 'Recent attempts, newest first', type: [WebhookDeliveryAttemptDto] })
+  @ApiResponse({ status: 404, description: 'Webhook not found' })
+  async listDeliveries(
+    @Param('sessionId') sessionId: string,
+    @Param('id') id: string,
+  ): Promise<WebhookDeliveryAttemptDto[]> {
+    const rows = await this.webhookService.listDeliveries(sessionId, id);
+    return rows.map(row => ({
+      id: row.id,
+      status: row.status,
+      httpCode: row.httpCode,
+      durationMs: row.durationMs,
+      attempt: row.attempt,
+      errorSnippet: row.errorSnippet,
+      createdAt: row.createdAt,
+    }));
   }
 
   @Put(':id')

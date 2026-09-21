@@ -18,7 +18,8 @@ import { EngineRefusedError } from '../../common/errors/engine-refused.error';
 import { loadRemoteMediaBuffer } from '../../common/media/load-remote-media';
 import { chatKind, userPart } from '../identity/wa-id';
 import { chatHistoryMediaBudgetBytes, coerceDeclaredSize, ingestMediaBudgetBytes } from './inbound-media-cap';
-import { buildIncomingMessageBase } from './message-mapper';
+import { buildIncomingMessageBase, mapWwebjsMessageType } from './message-mapper';
+import { buildQuotedMessage, quotedCaption } from '../quoted-payload';
 import { buildVCard } from './vcard';
 import { EngineNotSupportedError } from '../../common/errors/engine-not-supported.error';
 import { RecipientUnreachableError } from '../../common/errors/recipient-unreachable.error';
@@ -500,9 +501,9 @@ export class WwebjsMessaging {
         this.client().sendMessage(to, messageMedia, {
           sendMediaAsSticker: true,
           ...this.quoteOptions(media.quotedMessageId),
-          // Same options bag every other media send uses, so the library tags a sticker exactly as it
-          // tags an image. Omitted when empty to leave an untagged sticker call unchanged.
           ...(media.mentions?.length ? { mentions: media.mentions } : {}),
+          ...(media.packName ? { stickerName: media.packName } : {}),
+          ...(media.packAuthor ? { stickerAuthor: media.packAuthor } : {}),
         }),
       media.quotedMessageId,
     );
@@ -521,7 +522,9 @@ export class WwebjsMessaging {
     // only used as a custom poll id), so cast to the constructor's options type to pass just
     // allowMultipleAnswers.
     type PollSendOptions = ConstructorParameters<typeof Poll>[2];
-    const pollOptions = { allowMultipleAnswers: poll.allowMultipleAnswers === true } as PollSendOptions;
+    const allowMultiple =
+      poll.allowMultipleAnswers === true || (typeof poll.selectableCount === 'number' && poll.selectableCount !== 1);
+    const pollOptions = { allowMultipleAnswers: allowMultiple } as PollSendOptions;
     const msg = await this.sendResolved(
       chatId,
       to =>
@@ -737,7 +740,14 @@ export class WwebjsMessaging {
       if (msg.hasQuotedMsg) {
         try {
           const quoted = await msg.getQuotedMessage();
-          out.quotedMessage = { id: quoted.id._serialized, body: quoted.body };
+          const caption = quotedCaption(quoted);
+          out.quotedMessage = buildQuotedMessage({
+            id: quoted.id._serialized,
+            body: quoted.body,
+            type: quoted.type ? mapWwebjsMessageType(String(quoted.type)) : undefined,
+            hasMedia: quoted.hasMedia ? true : undefined,
+            ...(caption ? { caption } : {}),
+          });
         } catch (error) {
           this.host.logger.warn(`Failed to resolve quoted message for ${msg.id._serialized}: ${String(error)}`);
         }

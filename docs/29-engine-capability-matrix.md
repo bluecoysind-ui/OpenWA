@@ -3,7 +3,7 @@
 Three-way comparison of every capability: the **Baileys library** (`@whiskeysockets/baileys`
 7.0.0-rc14), the **whatsapp-web.js library** (1.34.7), and what **OpenWA actually exposes** through
 its adapter layer and REST API — including which "supported" cells only work because OpenWA patches
-the installed library. Coverage is total: all 113 `IWhatsAppEngine` methods (29.4), **all 152
+the installed library. Coverage is total: all 115 `IWhatsAppEngine` methods (29.4), **all 152
 Baileys + 81 whatsapp-web.js library methods** (29.5), all 34 + 31 library events (29.5.4), and all
 9 install-time patches (29.3). If it exists upstream or in OpenWA, it has a row here.
 
@@ -25,7 +25,7 @@ Statuses used in the tables:
 
 Two complementary views:
 
-- **29.4 — the OpenWA contract view.** Rows are the 113 `IWhatsAppEngine` methods; use it to see
+- **29.4 — the OpenWA contract view.** Rows are the 115 `IWhatsAppEngine` methods; use it to see
   what a REST caller gets per engine. Source of truth: `src/engine/engine-capability-matrix.ts`
   (per-cell `evidence` strings cite the exact library `file:symbol` inspected).
 - **29.5 — the full engine inventory.** Rows are **every method the installed libraries expose**,
@@ -37,14 +37,14 @@ Two complementary views:
 ## 29.2 Adapter architecture
 
 OpenWA never calls a WhatsApp library directly from a controller. Every session owns one engine
-instance behind the neutral `IWhatsAppEngine` interface (113 methods +
+instance behind the neutral `IWhatsAppEngine` interface (115 methods +
 `EngineEventCallbacks`), and all modules go through it:
 
 ```mermaid
 flowchart LR
     subgraph OpenWA["OpenWA"]
         API["REST API controllers"] --> SVC["Modules / services"]
-        SVC --> IF["IWhatsAppEngine - 113 methods"]
+        SVC --> IF["IWhatsAppEngine - 115 methods"]
         IF --> WA["WhatsAppWebJsAdapter"]
         IF --> BA["BaileysAdapter"]
         SVC --> STORE["OpenWA-side stores"]
@@ -203,7 +203,7 @@ opens `if (!channel) return false;` before its try, so its `false` conflates _ch
 _WhatsApp refused_, and the adapter answers 403 for both. That distinction is ours to make in our own
 adapter and involves no library change.
 
-## 29.4 Full capability matrix — the OpenWA contract view (113 methods)
+## 29.4 Full capability matrix — the OpenWA contract view (115 methods)
 
 Legend recap: **✅** supported · **✅🔧ⁿ** supported via OpenWA patch `🔧ⁿ` (29.3) ·
 **❌ gap** adapter-gap · **❌ lib** library-limitation. Column headers carry the engine-wide
@@ -252,6 +252,10 @@ socket is caught by the transport instead. No REST route: the session watchdog p
 | `sendChatState`       | ✅                  | ✅               | ✅              |
 | `sendSeen`            | ✅                  | ✅               | ✅              |
 
+whatsapp-web.js `Poll` only supports `allowMultipleAnswers` (boolean). OpenWA maps `selectableCount !== 1` (including `0` = unlimited) to that flag. Baileys honours the real count (`1` single, `0` unlimited, `2–N` capped). A conflict with `allowMultipleAnswers` is HTTP 400.
+
+`sendStickerMessage` pack metadata: wwjs `stickerName`/`stickerAuthor`. Baileys needs WebP EXIF; no in-tree dependency writes WhatsApp sticker EXIF (sharp converts only). Pack fields are accepted and ignored on Baileys until WP5 — the sticker still sends.
+
 ### 29.4.3 Message management
 
 | Method                | Baileys adapter 🔧⁵ | wwjs adapter 🔧¹ | OpenWA REST     |
@@ -292,6 +296,7 @@ socket is caught by the transport instead. No REST route: the session watchdog p
 | `getBlockedContacts`  | ✅                  | ✅               | ✅          |
 | `checkNumberExists`   | ✅                  | ✅               | ✅          |
 | `getNumberId`         | ✅                  | ✅               | ✅          |
+| `checkNumbers`        | ✅                  | ✅               | ✅          |
 | `getPhoneNumber`      | ✅                  | ✅               | ✅          |
 | `getPushName`         | ✅                  | ✅               | ✅          |
 | `resolveContactPhone` | ✅                  | ✅               | ✅          |
@@ -382,6 +387,7 @@ answers 501.
 
 | Method                 | Baileys adapter 🔧⁵ | wwjs adapter 🔧¹ | OpenWA REST |
 | ---------------------- | ------------------- | ---------------- | ----------- |
+| `getOwnProfile`        | ✅                  | ✅               | ✅          |
 | `setProfileName`       | ✅                  | ✅               | ✅          |
 | `setProfilePicture`    | ✅                  | ✅               | ✅          |
 | `deleteProfilePicture` | ✅                  | ✅               | ✅          |
@@ -396,9 +402,9 @@ answers 501.
 | `rejectCall`          | ✅                  | ❌ lib           | ⚠️ baileys only |
 | `createCallLink`      | ✅                  | ✅               | ✅              |
 
-**Totals:** 113 methods → 226 adapter cells: **199 ✅, 27 ❌** (2 adapter-gaps, 25
-library-limitations, 0 uncertain) across 26 methods. From the REST caller's side: **89** methods
-work on any engine (87 fully supported + 2 store-backed status reads), **14** are Baileys-only,
+**Totals:** 115 methods → 230 adapter cells: **203 ✅, 27 ❌** (2 adapter-gaps, 25
+library-limitations, 0 uncertain) across 26 methods. From the REST caller's side: **91** methods
+work on any engine (89 fully supported + 2 store-backed status reads), **14** are Baileys-only,
 **9** are wwjs-only (the 2 store-backed rows excluded); `sendCatalog`, unavailable on both engines,
 is not exposed.
 
@@ -576,16 +582,16 @@ with zero OpenWA surface. Baileys-only; whatsapp-web.js has no community API at 
 
 **Queries** (8)
 
-| Library method                 | OpenWA exposure         |
-| ------------------------------ | ----------------------- |
-| `executeUSyncQuery`            | ❌ **not exposed**      |
-| `fetchAccountReachoutTimelock` | ⚙️ internal wiring      |
-| `fetchBlocklist`               | ✅ `getBlockedContacts` |
-| `fetchDisappearingDuration`    | ❌ **not exposed**      |
-| `fetchNewChatMessageCap`       | ❌ **not exposed**      |
-| `fetchStatus`                  | ❌ **not exposed**      |
-| `getUSyncDevices`              | ❌ **not exposed**      |
-| `onWhatsApp`                   | ✅ `getNumberId`        |
+| Library method                 | OpenWA exposure                  |
+| ------------------------------ | -------------------------------- |
+| `executeUSyncQuery`            | ❌ **not exposed**               |
+| `fetchAccountReachoutTimelock` | ⚙️ internal wiring               |
+| `fetchBlocklist`               | ✅ `getBlockedContacts`          |
+| `fetchDisappearingDuration`    | ❌ **not exposed**               |
+| `fetchNewChatMessageCap`       | ❌ **not exposed**               |
+| `fetchStatus`                  | ✅ `getOwnProfile`               |
+| `getUSyncDevices`              | ❌ **not exposed**               |
+| `onWhatsApp`                   | ✅ `getNumberId`, `checkNumbers` |
 
 **Profile, contacts & presence** (12)
 
@@ -618,7 +624,7 @@ with zero OpenWA surface. Baileys-only; whatsapp-web.js has no community API at 
 | `generateMessageTag`              | 🔩 plumbing                                                                                                                                                                 |
 | `logout`                          | ❌ **not exposed** — deliberately bypassed: it resolves on a socket write flush, not an IQ ack, so the unlink uses a raw `remove-companion-device` IQ via `query()` instead |
 | `onUnexpectedError`               | 🔩 plumbing                                                                                                                                                                 |
-| `profilePictureUrl`               | ✅ `getProfilePicture`                                                                                                                                                      |
+| `profilePictureUrl`               | ✅ `getProfilePicture`, `getOwnProfile`                                                                                                                                     |
 | `query`                           | ⚙️ internal transport (deadline-bounded iq queries inside read methods)                                                                                                     |
 | `registerSocketEndHandler`        | 🔩 plumbing                                                                                                                                                                 |
 | `rejectCall`                      | ✅ `rejectCall`                                                                                                                                                             |
@@ -729,19 +735,19 @@ with zero OpenWA surface. Baileys-only; whatsapp-web.js has no community API at 
 
 **Contacts & numbers** (11)
 
-| Library method                 | OpenWA exposure                                                  |
-| ------------------------------ | ---------------------------------------------------------------- |
-| `deleteAddressbookContact`     | ✅ `deleteContact`                                               |
-| `getBlockedContacts`           | ✅ `getBlockedContacts`                                          |
-| `getContactById`               | ✅ `getContactById`, `blockContact`, `unblockContact`            |
-| `getContactDeviceCount`        | ❌ **not exposed**                                               |
-| `getContactLidAndPhone`        | ✅ `resolveContactPhone`                                         |
-| `getContacts`                  | ⚙️ read via a direct page walk, not `Client.getContacts` (#1501) |
-| `getCountryCode`               | ❌ **not exposed**                                               |
-| `getFormattedNumber`           | ❌ **not exposed**                                               |
-| `getNumberId`                  | ✅ `checkNumberExists`, `getNumberId`                            |
-| `isRegisteredUser`             | ❌ **not exposed**                                               |
-| `saveOrEditAddressbookContact` | ✅ `upsertContact`                                               |
+| Library method                 | OpenWA exposure                                                        |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `deleteAddressbookContact`     | ✅ `deleteContact`                                                     |
+| `getBlockedContacts`           | ✅ `getBlockedContacts`                                                |
+| `getContactById`               | ✅ `getContactById`, `blockContact`, `unblockContact`, `getOwnProfile` |
+| `getContactDeviceCount`        | ❌ **not exposed**                                                     |
+| `getContactLidAndPhone`        | ✅ `resolveContactPhone`                                               |
+| `getContacts`                  | ⚙️ read via a direct page walk, not `Client.getContacts` (#1501)       |
+| `getCountryCode`               | ❌ **not exposed**                                                     |
+| `getFormattedNumber`           | ❌ **not exposed**                                                     |
+| `getNumberId`                  | ✅ `checkNumberExists`, `getNumberId`, `checkNumbers`                  |
+| `isRegisteredUser`             | ❌ **not exposed**                                                     |
+| `saveOrEditAddressbookContact` | ✅ `upsertContact`                                                     |
 
 **Business** (2)
 
@@ -752,15 +758,15 @@ with zero OpenWA surface. Baileys-only; whatsapp-web.js has no community API at 
 
 **Profile & presence** (7)
 
-| Library method            | OpenWA exposure           |
-| ------------------------- | ------------------------- |
-| `deleteProfilePicture`    | ✅ `deleteProfilePicture` |
-| `getProfilePicUrl`        | ✅ `getProfilePicture`    |
-| `sendPresenceAvailable`   | ✅ `setOnlinePresence`    |
-| `sendPresenceUnavailable` | ✅ `setOnlinePresence`    |
-| `setDisplayName`          | ✅ `setProfileName`       |
-| `setProfilePicture`       | ✅ `setProfilePicture`    |
-| `setStatus`               | ✅ `setProfileStatus`     |
+| Library method            | OpenWA exposure                         |
+| ------------------------- | --------------------------------------- |
+| `deleteProfilePicture`    | ✅ `deleteProfilePicture`               |
+| `getProfilePicUrl`        | ✅ `getProfilePicture`, `getOwnProfile` |
+| `sendPresenceAvailable`   | ✅ `setOnlinePresence`                  |
+| `sendPresenceUnavailable` | ✅ `setOnlinePresence`                  |
+| `setDisplayName`          | ✅ `setProfileName`                     |
+| `setProfilePicture`       | ✅ `setProfilePicture`                  |
+| `setStatus`               | ✅ `setProfileStatus`                   |
 
 **Misc** (1)
 
@@ -966,18 +972,18 @@ adapter boundary — none silently stubs.
 Recomputed from `engine-capability-matrix.ts`, `upstream-surface.snapshot.json`, and a scan of the
 adapter sources — re-derive the same way when anything changes:
 
-- **113** interface methods → **226** adapter cells: **199 ✅** / **27 ❌** (2 adapter-gaps, 25
+- **115** interface methods → **230** adapter cells: **203 ✅** / **27 ❌** (2 adapter-gaps, 25
   library-limitations, 0 uncertain), spanning **26** methods.
-- Of the 199 ✅ cells, **10 wwjs cells carry an explicit patch dependency** (4 × 🔧² status send,
+- Of the 203 ✅ cells, **10 wwjs cells carry an explicit patch dependency** (4 × 🔧² status send,
   1 × 🔧³ channel link preview, 1 × 🔧⁴ ready-sync, 3 × 🔧⁷ participant arity, 1 × 🔧⁹ group
   description) and one baileys cell
   does (1 × 🔧⁶ newsletter-create parse); the whole wwjs column additionally
   depends on 🔧¹, the whole Baileys column on 🔧⁵ — so every row rests on a patch on each side,
   even though no row carries a row-level mark on both.
-- REST caller's view: **89** engine-neutral (87 + 2 store-backed status reads), **14** Baileys-only,
+- REST caller's view: **91** engine-neutral (89 + 2 store-backed status reads), **14** Baileys-only,
   **9** wwjs-only; `sendCatalog` (unavailable on both engines) is not exposed.
 - Full engine inventory (29.5), split by the exposure legend rather than lumped: Baileys **152**
-  socket methods — 48 wired into interface methods, 5 internal wiring, 29 plumbing, **70 ❌ not
+  socket methods — 49 wired into interface methods, 5 internal wiring, 29 plumbing, **69 ❌ not
   exposed** (incl. the whole 23-method community cluster); wwjs **81** Client methods — 43 wired,
   3 internal wiring, 1 class plumbing, **34 ❌ not exposed** (26 real capabilities + 8
   session/transport settings that are not WhatsApp capabilities). The backlog is the ❌ rows minus
@@ -996,3 +1002,23 @@ adapter sources — re-derive the same way when anything changes:
 - Remaining adapter-gaps (fixable in this repo, ranked): **#1** `getChannelMessages` (Baileys —
   fetch is one line, `BinaryNode`→`ChannelMessage` parser is the work); **#2** `subscribeToChannel`
   (wwjs — two-step `getChannelByInviteCode` → `subscribeToChannel`, needs live verification).
+
+## 29.9 REST extras (not IWhatsAppEngine methods)
+
+Gateway-owned routes added for the WA-AKG capability port. They are not adapter cells; engine
+split still surfaces as HTTP 501 from the method they call.
+
+| REST | Engines | Notes |
+| --- | --- | --- |
+| `GET /api/features` | both | VIEWER booleans only. No secrets. |
+| `…/scheduled-messages` | both | One-shot; send goes through MessageService (pacing + SSRF). |
+| `…/bot-config` | both | `alwaysOnline` / `autoRead` / welcome honour engine 501. |
+| `…/messages/send-text-list` | both | Formatted text, not native listMessage. |
+| `…/messages/forward` `toChatIds[]` | both | N>1 → 201/207/502 + per-dest results. Cap 10. |
+| `…/messages/send-poll` `selectableCount` | both | wwjs maps ≠1 to `allowMultipleAnswers`; Baileys keeps the integer (`0` = unlimited). |
+| `…/messages/send-sticker` pack/author | wwjs native; Baileys via convert EXIF | Fields accepted on both. |
+| `…/contacts/check` bulk | both | Max 50, paced; 429 when limited. |
+| `…/media/convert/sticker` | both (ffmpeg) | 503 if ffmpeg missing; remove.bg only with key. |
+| `…/media/files` | both | 404 when `MEDIA_PERSIST` is off. |
+| `…/webhooks/:id/deliveries` | both | OPERATOR; metadata only. |
+| `message.poll_vote` webhook | Baileys | Off unless `POLL_VOTE_EVENTS`; options not decrypted. |

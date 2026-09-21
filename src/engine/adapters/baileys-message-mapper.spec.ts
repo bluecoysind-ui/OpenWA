@@ -195,7 +195,7 @@ describe('extractBaileysContext (quoted body shares the live body extractor)', (
 
   it('carries a quoted contact card as its vCard', () => {
     const vcard = 'BEGIN:VCARD\nFN:Alice\nEND:VCARD';
-    expect(quoted({ contactMessage: { vcard } })).toEqual({ id: 'wamid.original', body: vcard });
+    expect(quoted({ contactMessage: { vcard } })).toEqual({ id: 'wamid.original', body: vcard, type: 'contact' });
   });
 
   it('carries a quoted poll question', () => {
@@ -215,7 +215,7 @@ describe('extractBaileysContext (quoted body shares the live body extractor)', (
           contextInfo: { stanzaId: 'wamid.prompt', quotedMessage: { conversation: 'Pick one' } },
         },
       }).quotedMessage,
-    ).toEqual({ id: 'wamid.prompt', body: 'Pick one' });
+    ).toEqual({ id: 'wamid.prompt', body: 'Pick one', type: 'text' });
   });
 });
 

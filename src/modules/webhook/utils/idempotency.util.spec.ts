@@ -180,6 +180,24 @@ describe('Idempotency Utils', () => {
       );
     });
 
+    it('is retry-stable for message.poll_vote: the same occurrence regenerates the same key', () => {
+      const at = '2026-06-20T00:00:00.000Z';
+      const data = { sessionId: 'A', pollMessageId: 'POLL1', voter: '628111@c.us' };
+      expect(generateIdempotencyKey('message.poll_vote', data, at)).toBe(
+        generateIdempotencyKey('message.poll_vote', data, at),
+      );
+      expect(generateIdempotencyKey('message.poll_vote', data, at)).toBe(
+        'pollvote_A_POLL1_628111@c.us_2026-06-20T00:00:00.000Z',
+      );
+    });
+
+    it('gives two voters on the same poll DISTINCT message.poll_vote keys', () => {
+      const at = '2026-06-20T00:00:00.000Z';
+      const a = generateIdempotencyKey('message.poll_vote', { sessionId: 'A', pollMessageId: 'P', voter: 'V1' }, at);
+      const b = generateIdempotencyKey('message.poll_vote', { sessionId: 'A', pollMessageId: 'P', voter: 'V2' }, at);
+      expect(a).not.toBe(b);
+    });
+
     it('gives two senders reacting to the same message DISTINCT message.reaction keys', () => {
       const at = '2026-06-20T00:00:00.000Z';
       const a = generateIdempotencyKey('message.reaction', { sessionId: 'A', messageId: 'M', senderId: 'S1' }, at);

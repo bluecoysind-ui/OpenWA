@@ -882,6 +882,17 @@ describe('WhatsAppWebJsAdapter.sendPollMessage', () => {
     expect(poll.options.allowMultipleAnswers).toBe(false);
   });
 
+  it('maps selectableCount other than 1 to allowMultipleAnswers true', async () => {
+    const sendMessage = jest.fn().mockResolvedValue({ id: { _serialized: 'POLL3' }, timestamp: 1700000012 });
+    await readyAdapter({ sendMessage }).sendPollMessage('120363000@g.us', {
+      name: 'Q',
+      options: ['A', 'B', 'C'],
+      selectableCount: 2,
+    });
+    const [, poll] = sendMessage.mock.calls[0] as [string, { options: { allowMultipleAnswers: boolean } }];
+    expect(poll.options.allowMultipleAnswers).toBe(true);
+  });
+
   it('rejects with EngineNotReadyError when the session is not connected', async () => {
     const adapter = new WhatsAppWebJsAdapter({ sessionId: 's', sessionDataPath: './data/sessions', puppeteer: {} });
     await expect(adapter.sendPollMessage('x@c.us', { name: 'Q', options: ['A', 'B'] })).rejects.toBeInstanceOf(
@@ -4073,6 +4084,21 @@ describe('outbound document mode (#989)', () => {
       });
       const [, , opts] = sendMessage.mock.calls[0] as [string, unknown, Record<string, unknown>];
       expect(Object.keys(opts)).not.toContain('mentions');
+    });
+
+    it('passes stickerName/stickerAuthor when pack metadata is set', async () => {
+      const sendMessage = jest.fn().mockResolvedValue(sentMessage);
+      await ready({ sendMessage }).sendStickerMessage('628@c.us', {
+        mimetype: 'image/webp',
+        data: Buffer.from([1]).toString('base64'),
+        packName: 'OpenWA',
+        packAuthor: 'Bot',
+      });
+      expect(sendMessage).toHaveBeenCalledWith(
+        '628@c.us',
+        expect.anything(),
+        expect.objectContaining({ sendMediaAsSticker: true, stickerName: 'OpenWA', stickerAuthor: 'Bot' }),
+      );
     });
 
     // A sticker's mimetype is an instruction, not a label: whatsapp-web.js returns the media

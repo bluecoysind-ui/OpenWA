@@ -663,7 +663,7 @@ export function logoutSession(id: string) {
 }
 
 export function getSessionQr(id: string) {
-  return request<{ qrCode: string; status: string }>(`/sessions/${id}/qr`);
+  return request<{ qrCode: string; status: string; qrExpiresAt?: number }>(`/sessions/${id}/qr`);
 }
 
 export function requestPairingCode(id: string, phoneNumber: string) {
@@ -1199,3 +1199,6 @@ export function sendRaw(method: string, path: string, bodyText: string) {
     }
   });
 }
+
+export * from "./openwa/akg-api";
+

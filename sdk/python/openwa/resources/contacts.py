@@ -40,6 +40,12 @@ class ContactsResource:
     def check(self, session_id: str, number: str) -> CheckNumberResponse:
         return self._http.request("GET", f"/api/sessions/{quote_segment(session_id)}/contacts/check/{quote_segment(number)}")
 
+    def check_numbers(self, session_id: str, numbers: List[str]) -> dict:
+        """Bulk number-on-WhatsApp lookup. Max 50. OPERATOR. GET check/:number is unchanged."""
+        return self._http.request(
+            "POST", f"/api/sessions/{quote_segment(session_id)}/contacts/check", body={"numbers": numbers}
+        )
+
     def profile_picture(self, session_id: str, contact_id: str) -> ProfilePictureResponse:
         return self._http.request(
             "GET", f"/api/sessions/{quote_segment(session_id)}/contacts/{quote_segment(contact_id)}/profile-picture"

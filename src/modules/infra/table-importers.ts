@@ -17,6 +17,8 @@ import type {
   IntegrationDeliveryFailureRow,
   StatusUpdateRow,
   AutomationRuleRow,
+  ScheduledMessageRow,
+  BotConfigRow,
 } from './migration-tables.types';
 
 // A per-table restore step for importData: which backup key to read, the exact INSERT text (kept in
@@ -406,8 +408,8 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
   defineTableImporter({
     key: 'automationRules',
     label: 'automation rule',
-    sql: `INSERT INTO automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "createdAt", "updatedAt")
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    sql: `INSERT INTO automation_rules (id, "sessionId", name, enabled, conditions, "replyText", "cooldownSeconds", "matchMode", "matchPattern", "chatContext", "replyMediaUrl", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     id: (rule: AutomationRuleRow) => rule.id,
     map: (rule: AutomationRuleRow) => [
       rule.id,
@@ -417,8 +419,57 @@ export const TABLE_IMPORTERS: AnyTableImporter[] = [
       rule.conditions ?? null,
       rule.replyText,
       rule.cooldownSeconds ?? 60,
+      rule.matchMode ?? 'contains',
+      rule.matchPattern ?? null,
+      rule.chatContext ?? 'all',
+      rule.replyMediaUrl ?? null,
       rule.createdAt,
       rule.updatedAt,
+    ],
+  }),
+  defineTableImporter({
+    key: 'scheduledMessages',
+    label: 'scheduled message',
+    sql: `INSERT INTO scheduled_messages (id, "sessionId", "chatId", "sendAtUtc", timezone, text, "mediaUrl", "mediaType", caption, status, "attemptCount", "lastError", "sentMessageId", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+    id: (job: ScheduledMessageRow) => job.id,
+    map: (job: ScheduledMessageRow) => [
+      job.id,
+      job.sessionId,
+      job.chatId,
+      job.sendAtUtc,
+      job.timezone ?? 'UTC',
+      job.text ?? null,
+      job.mediaUrl ?? null,
+      job.mediaType ?? 'text',
+      job.caption ?? null,
+      job.status ?? 'pending',
+      job.attemptCount ?? 0,
+      job.lastError ?? null,
+      job.sentMessageId ?? null,
+      job.createdAt,
+      job.updatedAt,
+    ],
+  }),
+  defineTableImporter({
+    key: 'botConfigs',
+    label: 'bot config',
+    sql: `INSERT INTO bot_configs (id, "sessionId", "accessMode", "allowList", "blockList", prefix, "commandsEnabled", "autoRead", "alwaysOnline", "welcomeMessage", "createdAt", "updatedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    id: (row: BotConfigRow) => row.id,
+    map: (row: BotConfigRow) => [
+      row.id,
+      row.sessionId,
+      row.accessMode ?? 'all',
+      typeof row.allowList === 'string' ? row.allowList : JSON.stringify(row.allowList ?? []),
+      typeof row.blockList === 'string' ? row.blockList : JSON.stringify(row.blockList ?? []),
+      row.prefix ?? '#',
+      row.commandsEnabled ?? true,
+      row.autoRead ?? false,
+      row.alwaysOnline ?? false,
+      row.welcomeMessage ?? null,
+      row.createdAt,
+      row.updatedAt,
     ],
   }),
 ];
@@ -443,6 +494,8 @@ const EXPECTED_TABLE_KEYS: ReadonlyArray<keyof MigrationTables> = [
   'integrationDeliveryFailures',
   'statusUpdates',
   'automationRules',
+  'scheduledMessages',
+  'botConfigs',
 ];
 const importerKeys = TABLE_IMPORTERS.map(importer => importer.key);
 for (const key of EXPECTED_TABLE_KEYS) {

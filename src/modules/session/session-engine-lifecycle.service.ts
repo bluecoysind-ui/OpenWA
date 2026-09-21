@@ -1,4 +1,5 @@
 import { Injectable, HttpException, HttpStatus, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -27,6 +28,7 @@ import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
 import { HookManager } from '../../core/hooks';
 import { SessionLifecycleFences } from './session-lifecycle-fences';
+import { TERMINAL_UNLINK_REASONS } from './session-terminal-unlink-reasons';
 import { SessionStatusBroadcaster } from './session-status-broadcaster';
 import { SessionEngineLeafEvents } from './session-engine-leaf-events';
 import {
@@ -36,6 +38,7 @@ import {
 } from './session-engine-event-wiring';
 import { SessionEngineControls } from './session-engine-controls';
 import { SessionOwnershipService, nodeOwnsSession } from './session-ownership.service';
+import { BOT_INBOUND_PORT, type BotInboundPort } from '../../core/plugins/plugin-host-ports';
 
 /**
  * Eager status-history reads are opt-in. On affected freshly paired whatsapp-web.js accounts,
@@ -123,24 +126,6 @@ const ENGINE_AUTH_TIMEOUT_MESSAGE =
 function isAuthTimeoutRejection(err: unknown): boolean {
   return err === ENGINE_AUTH_TIMEOUT || (err instanceof Error && err.message === ENGINE_AUTH_TIMEOUT);
 }
-
-/**
- * Disconnect reasons that mean WhatsApp revoked this device, as opposed to a link that merely
- * dropped. Only these are audited (#1107): they are one-shot and terminal — no reconnect can
- * restore the link, only a fresh QR can — so they cannot produce the per-attempt flood that keeps
- * the rest of the disconnect transitions out of the audit log.
- *
- * Deliberately not CONFLICT (another device took over, and takeover is recoverable), not
- * DEPRECATED_VERSION (our own client is too old), and not TIMEOUT (a fault, and the single most
- * common reconnect-storm reason). The first three mirror how the whatsapp-web.js adapter classifies
- * the same states.
- *
- * BOTH engines are covered, and they spell it differently: `'logged out'` is the only reason the
- * Baileys adapter ever passes to this callback, emitted for a WhatsApp-originated loggedOut (401)
- * close — the same event, so it must audit the same way. Baileys' other two terminal closes (403
- * forbidden, 440 connectionReplaced) report through onError instead and are not unlinks.
- */
-const TERMINAL_UNLINK_REASONS = new Set(['LOGOUT', 'UNPAIRED', 'UNPAIRED_IDLE', 'logged out']);
 
 /**
  * Owns the live WhatsApp engines and every state machine around them: start/stop/logout/forceKill,
@@ -299,6 +284,8 @@ export class SessionEngineLifecycle {
     // ownsSession() default below therefore has to be TRUE, not false.
     @Optional()
     private readonly ownership?: SessionOwnershipService,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {
     // The fence Maps are handed over BY REFERENCE: they stay lifecycle fields (specs poke them
     // through the lifecycle), while the fence logic operates on the same instances.
@@ -321,6 +308,16 @@ export class SessionEngineLifecycle {
       configService: this.configService,
       statusStore: this.statusStore,
       logger: this.logger,
+      onGroupJoin: (sessionId, groupId) => {
+        try {
+          const bot = this.moduleRef?.get<typeof BOT_INBOUND_PORT, BotInboundPort>(BOT_INBOUND_PORT, {
+            strict: false,
+          });
+          void bot?.handleGroupJoin(sessionId, groupId).catch(() => undefined);
+        } catch {
+          // BotModule not loaded — welcome is a no-op.
+        }
+      },
     });
     this.eventWiring = new SessionEngineEventWiring({ logger: this.logger });
     // The wiring host is built ONCE here: arrow closures bind the live methods/state (never a
@@ -387,6 +384,7 @@ export class SessionEngineLifecycle {
       fences: this.fences,
       broadcaster: this.broadcaster,
       cancelReconnect: id => this.cancelReconnect(id),
+      isStrandedDisconnectedEngine: (id, session) => this.isStrandedDisconnectedEngine(id, session),
       initializeEngine: (id, session) => this.initializeEngine(id, session),
       isSessionRetired: id => this.isSessionRetired(id),
       purgeAuthDirsIfDeleted: id => this.purgeAuthDirsIfDeleted(id),
@@ -994,6 +992,23 @@ export class SessionEngineLifecycle {
     this.scheduleReconnect(id, session);
   }
 
+  /**
+   * True when an engine is still registered but the session row is down and nothing will reconnect it
+   * (missing or dormant reconnect state). start() uses this to tear the zombie down instead of
+   * answering "already started".
+   */
+  isStrandedDisconnectedEngine(id: string, session: Session): boolean {
+    if (!this.engines.has(id)) return false;
+    if (session.status !== SessionStatus.DISCONNECTED && session.status !== SessionStatus.FAILED) {
+      return false;
+    }
+    const reconnect = this.reconnectStates.get(id);
+    if (reconnect != null && (reconnect.timer !== null || reconnect.attempts > 0)) {
+      return false;
+    }
+    return true;
+  }
+
   private scheduleReconnect(id: string, session: Session): void {
     // Don't launch a fresh engine (Chromium) mid-shutdown: a disconnect during the drain window would
     // otherwise schedule a reconnect that races the shutdown teardown and could orphan a browser.
@@ -1004,8 +1019,21 @@ export class SessionEngineLifecycle {
       return;
     }
 
-    const state = this.reconnectStates.get(id);
-    if (!state) return;
+    if (this.stoppingSessions.has(id)) {
+      this.logger.log(`Skipping reconnect while session is tearing down: ${session.name}`, { sessionId: id });
+      return;
+    }
+
+    let state = this.reconnectStates.get(id);
+    if (!state) {
+      const { maxAttempts, baseDelay } = resolveReconnectConfig(session.config);
+      state = { attempts: 0, timer: null, maxAttempts, baseDelay };
+      this.reconnectStates.set(id, state);
+      this.logger.warn('Re-seeded reconnect state after disconnect (state was missing)', {
+        sessionId: id,
+        action: 'reconnect_state_reseeded',
+      });
+    }
 
     // All the backoff rules (budget, exponential delay, loop cadence) live in the
     // pure policy; this method only applies the effects the decision calls for.

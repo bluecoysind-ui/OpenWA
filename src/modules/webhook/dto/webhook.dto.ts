@@ -76,8 +76,11 @@ export const WEBHOOK_EVENTS = [
   'message.sent',
   'message.ack',
   'message.failed',
+  'scheduled.message.sent',
+  'scheduled.message.failed',
   'message.revoked',
   'message.reaction',
+  'message.poll_vote',
   'message.edited',
   'status.received',
   'session.status',
@@ -395,4 +398,28 @@ export class WebhookTestResponseDto {
 
   @ApiPropertyOptional({ description: 'The delivery error, when the attempt failed.', example: 'timeout' })
   error?: string;
+}
+
+/** One HTTP attempt against a webhook. Q6: no request/response bodies. */
+export class WebhookDeliveryAttemptDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ enum: ['success', 'failed'] })
+  status!: 'success' | 'failed';
+
+  @ApiPropertyOptional({ type: Number, nullable: true, description: 'HTTP status when an exchange completed.' })
+  httpCode!: number | null;
+
+  @ApiProperty({ description: 'Wall-clock duration of this attempt in milliseconds.' })
+  durationMs!: number;
+
+  @ApiProperty({ description: '1-based attempt number.' })
+  attempt!: number;
+
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Truncated error text. Never a body.' })
+  errorSnippet!: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: Date;
 }

@@ -29,6 +29,9 @@ import {
 import type { AnyToolDescriptor } from '../tool-descriptor';
 import { messageTools } from './message.tools';
 import { groupTools } from './group.tools';
+import { schedulerTools } from './scheduler.tools';
+import type { SchedulerService } from '../../../modules/scheduler/scheduler.service';
+import { CreateScheduledMessageDto } from '../../../modules/scheduler/dto/scheduled-message.dto';
 
 // Matches src/config/app-validation.ts (see message-actions.dto.spec.ts) so the DTO side of the
 // parity check runs the same validator semantics as the production pipe.
@@ -36,9 +39,10 @@ const PIPE_TRANSFORM_OPTS = { enableImplicitConversion: true };
 
 const messages = messageTools({} as unknown as MessageService);
 const groups = groupTools({} as unknown as GroupService);
+const scheduled = schedulerTools({} as unknown as SchedulerService);
 
 function tool(name: string): AnyToolDescriptor {
-  const found = [...messages, ...groups].find(t => t.name === name);
+  const found = [...messages, ...groups, ...scheduled].find(t => t.name === name);
   if (!found) throw new Error(`tool not registered: ${name}`);
   return found;
 }
@@ -127,6 +131,15 @@ const CASES: CapCase[] = [
     toolInput: { sessionId: 's1', groupId: '120363@g.us', subject: 'new subject' },
     dtoClass: GroupSubjectDto,
     dtoPayload: { subject: 'new subject' },
+  },
+  {
+    label: 'SchedulerCreate.text ↔ CreateScheduledMessageDto.text',
+    toolName: 'SchedulerCreate',
+    field: 'text',
+    cap: MESSAGE_TEXT_MAX_LENGTH,
+    toolInput: { sessionId: 's1', chatId: '628123@c.us', sendAt: '2026-09-21T15:00:00Z' },
+    dtoClass: CreateScheduledMessageDto,
+    dtoPayload: { chatId: '628123@c.us', sendAt: '2026-09-21T15:00:00Z' },
   },
   {
     label: 'GroupSetDescription.description ↔ GroupDescriptionDto.description',

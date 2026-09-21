@@ -1,9 +1,14 @@
-import { HttpException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { EngineRegistry } from '../../engine/engine-registry.service';
 import { createLogger } from '../../common/services/logger.service';
 import { IWhatsAppEngine } from '../../engine/interfaces/whatsapp-engine.interface';
 import { paginate, ListOptions } from '../../common/utils/paginate';
 import { isIndividualWid, parseWaId, toNeutralJid } from '../../engine/identity/wa-id';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+import { ContactCheckRateLimiter, readContactCheckRateConfig } from './contact-check-rate';
+import { normalizeCheckNumber } from './normalize-check-number';
+import type { NumberCheckItemDto } from './dto/check-numbers.dto';
 
 /**
  * Owns engine access for contact operations so the "session not started" guard and
@@ -12,8 +17,15 @@ import { isIndividualWid, parseWaId, toNeutralJid } from '../../engine/identity/
 @Injectable()
 export class ContactService {
   private readonly logger = createLogger('ContactService');
+  private readonly checkLimiter: ContactCheckRateLimiter;
 
-  constructor(private readonly engines: EngineRegistry) {}
+  constructor(
+    private readonly engines: EngineRegistry,
+    @Optional() private readonly auditService?: AuditService,
+  ) {
+    const { max, windowMs } = readContactCheckRateConfig();
+    this.checkLimiter = new ContactCheckRateLimiter(max, windowMs);
+  }
 
   private getEngine(sessionId: string): IWhatsAppEngine {
     // EngineRegistry.require()'s default is this exact 400 "Session is not started".
@@ -47,6 +59,38 @@ export class ContactService {
 
   getNumberId(sessionId: string, number: string) {
     return this.getEngine(sessionId).getNumberId(number);
+  }
+
+  async checkNumbers(sessionId: string, inputs: string[]): Promise<NumberCheckItemDto[]> {
+    this.checkLimiter.check(sessionId);
+    const parsed = inputs.map(input => ({ input, ...normalizeCheckNumber(input) }));
+    const uniqueNormalized: string[] = [];
+    const seen = new Set<string>();
+    for (const row of parsed) {
+      if (!row.ok) continue;
+      if (seen.has(row.normalized)) continue;
+      seen.add(row.normalized);
+      uniqueNormalized.push(row.normalized);
+    }
+    const engineHits = uniqueNormalized.length ? await this.getEngine(sessionId).checkNumbers(uniqueNormalized) : [];
+    const byNormalized = new Map(engineHits.map(h => [h.number, h]));
+    const results: NumberCheckItemDto[] = parsed.map(row => {
+      if (!row.ok) {
+        return { input: row.input, normalized: null, exists: false, chatId: null, error: row.error };
+      }
+      const hit = byNormalized.get(row.normalized);
+      return {
+        input: row.input,
+        normalized: row.normalized,
+        exists: hit?.exists === true,
+        chatId: hit?.chatId ?? null,
+      };
+    });
+    await this.auditService?.logInfo(AuditAction.CONTACT_NUMBERS_CHECKED, {
+      sessionId,
+      metadata: { count: uniqueNormalized.length, requested: inputs.length },
+    });
+    return results;
   }
 
   /**

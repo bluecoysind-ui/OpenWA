@@ -53,6 +53,10 @@ export function generateIdempotencyKey(event: string, data: Record<string, unkno
     case 'message.failed':
       return `failed_${toStr(data.sessionId)}_${toStr(data.id ?? data.messageId)}_${toStr(data.status ?? data.ack, '0')}`;
 
+    case 'scheduled.message.sent':
+    case 'scheduled.message.failed':
+      return `sched_${event}_${toStr(data.sessionId)}_${toStr(data.jobId)}`;
+
     case 'message.revoked':
       return `rev_${toStr(data.sessionId)}_${toStr(data.id ?? data.messageId)}`;
 
@@ -69,6 +73,10 @@ export function generateIdempotencyKey(event: string, data: Record<string, unkno
       // with occurredAt (captured once per dispatch, reused across retries): distinct occurrences get
       // distinct keys while retries of the same delivery stay stable.
       return `react_${toStr(data.sessionId)}_${toStr(data.messageId)}_${toStr(data.senderId)}${occurrence}`;
+
+    case 'message.poll_vote':
+      // The same voter can change their vote; salt per occurrence so a later vote is not collapsed.
+      return `pollvote_${toStr(data.sessionId)}_${toStr(data.pollMessageId)}_${toStr(data.voter)}${occurrence}`;
 
     case 'session.status':
       // Salted so repeated transitions to the same status (e.g. across disconnect/reconnect cycles)

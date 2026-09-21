@@ -40,6 +40,18 @@ export class ContactDto {
     example: 'https://pps.whatsapp.net/v/t61.24694-24/12345_678_910_n.jpg',
   })
   profilePicUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Privacy-id user-part when this contact is already known as an @lid. Never fetched extra.',
+    example: '123456789012345',
+  })
+  lid?: string;
+
+  @ApiPropertyOptional({ description: 'True when the engine already knew this contact is a business account.' })
+  isBusiness?: boolean;
+
+  @ApiPropertyOptional({ description: 'Business verified name when already present on the stored contact.' })
+  verifiedName?: string;
 }
 
 export class ProfilePictureResponseDto {

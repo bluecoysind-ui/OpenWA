@@ -22,6 +22,16 @@ type HealthReadyResponse struct {
 	Details map[string]DependencyStatus `json:"details,omitempty"`
 }
 
+// FeatureFlagsResponse is GET /api/features — booleans only, no secrets.
+type FeatureFlagsResponse struct {
+	Scheduler          bool `json:"scheduler"`
+	BotCommands        bool `json:"botCommands"`
+	MediaPersist       bool `json:"mediaPersist"`
+	RemoveBgConfigured bool `json:"removeBgConfigured"`
+	RegexRules         bool `json:"regexRules"`
+	PollVoteEvents     bool `json:"pollVoteEvents"`
+}
+
 // ── Auth ─────────────────────────────────────────────────
 
 // AuthValidateResponse reports whether the API key is valid and its role.
@@ -76,4 +86,89 @@ type LabelRecord struct {
 // AddLabelRequest applies a label to a chat.
 type AddLabelRequest struct {
 	LabelID string `json:"labelId"`
+}
+
+// ── Scheduled messages ───────────────────────────────────────────
+
+// RecurrenceKind is none (one-shot) or a calendar repeat on the same row.
+type RecurrenceKind string
+
+const (
+	RecurrenceNone    RecurrenceKind = "none"
+	RecurrenceDaily   RecurrenceKind = "daily"
+	RecurrenceWeekly  RecurrenceKind = "weekly"
+	RecurrenceMonthly RecurrenceKind = "monthly"
+)
+
+// ScheduledMessageStatus is the job lifecycle, including pause.
+type ScheduledMessageStatus string
+
+const (
+	ScheduledPending   ScheduledMessageStatus = "pending"
+	ScheduledSending   ScheduledMessageStatus = "sending"
+	ScheduledSent      ScheduledMessageStatus = "sent"
+	ScheduledFailed    ScheduledMessageStatus = "failed"
+	ScheduledCancelled ScheduledMessageStatus = "cancelled"
+	ScheduledPaused    ScheduledMessageStatus = "paused"
+)
+
+// CreateScheduledMessageRequest creates a one-shot or recurring delayed send.
+// Recurring jobs require Until and/or MaxOccurrences.
+type CreateScheduledMessageRequest struct {
+	ChatID         string         `json:"chatId"`
+	SendAt         string         `json:"sendAt"`
+	Timezone       string         `json:"timezone,omitempty"`
+	Text           string         `json:"text,omitempty"`
+	MediaURL       string         `json:"mediaUrl,omitempty"`
+	MediaType      string         `json:"mediaType,omitempty"`
+	Caption        string         `json:"caption,omitempty"`
+	Recurrence     RecurrenceKind `json:"recurrence,omitempty"`
+	Interval       int            `json:"interval,omitempty"`
+	DaysOfWeek     []int          `json:"daysOfWeek,omitempty"`
+	DayOfMonth     *int           `json:"dayOfMonth,omitempty"`
+	Until          string         `json:"until,omitempty"`
+	MaxOccurrences *int           `json:"maxOccurrences,omitempty"`
+}
+
+// UpdateScheduledMessageRequest patches a pending or paused job. Status is only pending↔paused.
+type UpdateScheduledMessageRequest struct {
+	SendAt         string                 `json:"sendAt,omitempty"`
+	Timezone       string                 `json:"timezone,omitempty"`
+	Text           string                 `json:"text,omitempty"`
+	MediaURL       *string                `json:"mediaUrl,omitempty"`
+	MediaType      string                 `json:"mediaType,omitempty"`
+	Caption        *string                `json:"caption,omitempty"`
+	Recurrence     RecurrenceKind         `json:"recurrence,omitempty"`
+	Interval       int                    `json:"interval,omitempty"`
+	DaysOfWeek     []int                  `json:"daysOfWeek,omitempty"`
+	DayOfMonth     *int                   `json:"dayOfMonth,omitempty"`
+	Until          *string                `json:"until,omitempty"`
+	MaxOccurrences *int                   `json:"maxOccurrences,omitempty"`
+	Status         ScheduledMessageStatus `json:"status,omitempty"`
+}
+
+// ScheduledMessageRecord is a stored scheduled send, one-shot or recurring.
+type ScheduledMessageRecord struct {
+	ID              string                 `json:"id"`
+	SessionID       string                 `json:"sessionId"`
+	ChatID          string                 `json:"chatId"`
+	SendAt          string                 `json:"sendAt"`
+	Timezone        string                 `json:"timezone"`
+	Text            *string                `json:"text"`
+	MediaURL        *string                `json:"mediaUrl"`
+	MediaType       string                 `json:"mediaType"`
+	Caption         *string                `json:"caption"`
+	Status          ScheduledMessageStatus `json:"status"`
+	Recurrence      RecurrenceKind         `json:"recurrence"`
+	Interval        int                    `json:"interval"`
+	DaysOfWeek      []int                  `json:"daysOfWeek"`
+	DayOfMonth      *int                   `json:"dayOfMonth"`
+	Until           *string                `json:"until"`
+	MaxOccurrences  *int                   `json:"maxOccurrences"`
+	OccurrenceCount int                    `json:"occurrenceCount"`
+	AttemptCount    int                    `json:"attemptCount"`
+	LastError       *string                `json:"lastError"`
+	SentMessageID   *string                `json:"sentMessageId"`
+	CreatedAt       string                 `json:"createdAt"`
+	UpdatedAt       string                 `json:"updatedAt"`
 }

@@ -15,6 +15,7 @@ import { MessageModule } from './modules/message/message.module';
 import { TemplateModule } from './modules/template/template.module';
 import { WebhookModule } from './modules/webhook/webhook.module';
 import { HealthModule } from './modules/health/health.module';
+import { FeaturesModule } from './modules/features/features.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { EngineModule } from './engine/engine.module';
@@ -37,6 +38,8 @@ import { MediaModule } from './modules/media/media.module';
 import { StatusStoreModule } from './modules/status-store/status-store.module';
 import { ChatMediaModule } from './modules/chat-media/chat-media.module';
 import { AutomationModule } from './modules/automation/automation.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
+import { BotModule } from './modules/bot/bot.module';
 import { TakeoverModule } from './modules/takeover/takeover.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { HooksModule } from './core/hooks';
@@ -44,6 +47,7 @@ import { PluginsModule } from './core/plugins';
 import { PluginsApiModule } from './modules/plugins/plugins.module';
 import { AgentToolsModule } from './core/agent-tools/agent-tools.module';
 import { IntegrationModule } from './modules/integration/integration.module';
+import { BluecoysModule } from './modules/bluecoys/bluecoys.module';
 import { SearchModule } from './modules/search/search.module';
 import { SqlitePermissionsBoot } from './database/sqlite-file-permissions';
 
@@ -173,6 +177,9 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
             __dirname + '/modules/integration/**/*.entity{.ts,.js}',
             __dirname + '/modules/status-store/**/*.entity{.ts,.js}',
             __dirname + '/modules/automation/**/*.entity{.ts,.js}',
+            __dirname + '/modules/scheduler/**/*.entity{.ts,.js}',
+            __dirname + '/modules/bot/**/*.entity{.ts,.js}',
+            __dirname + '/modules/media/**/*.entity{.ts,.js}',
           ],
           migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
           logging: configService.get<boolean>('dataDatabase.logging', false),
@@ -292,10 +299,12 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     AuthModule,
     EngineModule,
     SessionModule,
+    BluecoysModule,
     MessageModule,
     TemplateModule,
     WebhookModule,
     HealthModule,
+    FeaturesModule,
     SettingsModule,
     InfraModule,
     ContactModule,
@@ -311,6 +320,8 @@ if (dashboardServingEnabled && dashboardBuildPresent) {
     StatusStoreModule, // Phase 3: inbound status/story TTL store (24h purge + media persistence)
     ChatMediaModule, // opt-in chat-media archive (retention purge + orphan sweep)
     AutomationModule, // single-message autoreply rules, evaluated on the inbound dispatch
+    SchedulerModule, // delayed / recurring sends; loop idle unless SCHEDULED_MESSAGES is on
+    BotModule, // bot-config + core commands (WP4b); commands subscribe only when BOT_COMMANDS=true
     TakeoverModule, // adopts sessions whose holder's lease lapsed (crashed peer / recreated node)
     CatalogModule, // Phase 3: Catalog API (WhatsApp Business)
     PluginsApiModule, // Phase 5: Plugins API

@@ -12,6 +12,10 @@ import {
   MaxLength,
   IsIn,
   Validate,
+  ValidateIf,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import { ToStrictBoolean, ToStrictNumber } from '../../../common/utils/strict-boolean';
 import {
@@ -23,6 +27,7 @@ import {
   QUOTED_MESSAGE_ID_EXAMPLE,
 } from './send-message.dto';
 import { IsMentionWidConstraint } from './is-mention-wid.validator';
+import { IsChatWidConstraint } from './is-chat-wid.validator';
 
 /**
  * Validated DTOs for the message action endpoints. These replaced inline
@@ -133,6 +138,21 @@ export class SendPollDto {
   @IsBoolean()
   allowMultipleAnswers?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'How many options a voter may pick. `1` = single choice; `0` = unlimited (Baileys). ' +
+      'Conflicts with `allowMultipleAnswers` (HTTP 400). whatsapp-web.js only supports single vs multiple, ' +
+      'so `selectableCount !== 1` is mapped to `allowMultipleAnswers: true`.',
+    minimum: 0,
+    maximum: 12,
+  })
+  @ToStrictNumber()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  selectableCount?: number;
+
   @ApiPropertyOptional({ description: QUOTED_MESSAGE_ID_DESCRIPTION, example: QUOTED_MESSAGE_ID_EXAMPLE })
   @IsOptional()
   @IsString()
@@ -168,21 +188,99 @@ export class ReplyMessageDto {
   mentions?: string[];
 }
 
+/**
+ * Unique dest cap for one forward request. SendPacingService adds no sleep — dests run
+ * sequentially (engine RTT + persist). Typical ~0.3–2s each; 10 dests stay around the ~20s
+ * HTTP budget. Worst-case is still one engine hang times N (same class as a single forward).
+ * Fan-out beyond this belongs on send-bulk (already 202 + poll).
+ */
+export const FORWARD_MAX_DESTINATIONS = 10;
+
 export class ForwardMessageDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
   fromChatId!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description:
+      'Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged.',
+  })
+  @ValidateIf((o: ForwardMessageDto) => !o.toChatIds?.length)
   @IsString()
   @IsNotEmpty()
-  toChatId!: string;
+  toChatId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Destinations (unique with `toChatId`). Required when `toChatId` is omitted. Combined unique set capped at ' +
+      `${FORWARD_MAX_DESTINATIONS}. Each dest is paced independently. N>1 returns per-destination results ` +
+      '(201 all sent, 207 mixed, 502 all failed).',
+    type: [String],
+    maxItems: FORWARD_MAX_DESTINATIONS,
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(FORWARD_MAX_DESTINATIONS)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @Validate(IsChatWidConstraint, { each: true })
+  toChatIds?: string[];
 
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
   messageId!: string;
+}
+
+export function uniqueForwardDestinations(dto: { toChatId?: string; toChatIds?: string[] }): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of [dto.toChatId, ...(dto.toChatIds ?? [])]) {
+    if (!id) continue;
+    const trimmed = id.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+/** HTTP status for a multi-dest forward body. N=1 does not use this (existing throw-or-201). */
+export function forwardManyStatusCode(results: Array<{ status: string }>): number {
+  if (results.length === 0) return 400;
+  const failed = results.filter(r => r.status === 'failed').length;
+  if (failed === 0) return 201;
+  if (failed === results.length) return 502;
+  return 207;
+}
+
+export class ForwardDestinationResultDto {
+  @ApiProperty()
+  chatId!: string;
+
+  @ApiProperty({ enum: ['sent', 'failed'] })
+  status!: 'sent' | 'failed';
+
+  @ApiPropertyOptional()
+  messageId?: string;
+
+  @ApiPropertyOptional()
+  timestamp?: number;
+
+  @ApiPropertyOptional()
+  error?: { code: string; message: string };
+}
+
+export class ForwardManyResponseDto {
+  @ApiProperty()
+  fromChatId!: string;
+
+  @ApiProperty({ description: 'Source message id that was forwarded' })
+  messageId!: string;
+
+  @ApiProperty({ type: [ForwardDestinationResultDto] })
+  results!: ForwardDestinationResultDto[];
 }
 
 export class ReactMessageDto {
@@ -369,6 +467,63 @@ export class EditMessageDto {
 
   // An edit REPLACES the message content, so tags are re-applied rather than preserved: omitting
   // this drops whatever the original body carried.
+  @ApiPropertyOptional({ description: MENTIONS_DESCRIPTION, example: ['628123456789@c.us'], type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MENTIONS_MAX)
+  @IsString({ each: true })
+  @MaxLength(MENTION_WID_MAX_LENGTH, { each: true })
+  @Validate(IsMentionWidConstraint, { each: true })
+  mentions?: string[];
+}
+
+export const TEXT_LIST_OPTIONS_MIN = 2;
+export const TEXT_LIST_OPTIONS_MAX = 20;
+export const TEXT_LIST_OPTION_MAX_LENGTH = 200;
+export const TEXT_LIST_TITLE_MAX_LENGTH = 255;
+export const TEXT_LIST_FOOTER_MAX_LENGTH = 255;
+
+export const SEND_TEXT_LIST_BODY_EXAMPLES = {
+  minimal: {
+    summary: 'Send a numbered text list',
+    value: { chatId: '628123456789@c.us', title: 'Lunch', options: ['Pizza', 'Salad'], footer: 'Kitchen closes at 3' },
+  },
+};
+
+export class SendTextListDto {
+  @ApiProperty({ description: 'Chat ID (e.g. 628123456789@c.us)' })
+  @IsString()
+  @IsNotEmpty()
+  @Validate(IsChatWidConstraint)
+  chatId!: string;
+
+  @ApiProperty({ maxLength: TEXT_LIST_TITLE_MAX_LENGTH })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(TEXT_LIST_TITLE_MAX_LENGTH)
+  title!: string;
+
+  @ApiProperty({ type: [String], minItems: TEXT_LIST_OPTIONS_MIN, maxItems: TEXT_LIST_OPTIONS_MAX })
+  @IsArray()
+  @ArrayMinSize(TEXT_LIST_OPTIONS_MIN)
+  @ArrayMaxSize(TEXT_LIST_OPTIONS_MAX)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  @MaxLength(TEXT_LIST_OPTION_MAX_LENGTH, { each: true })
+  options!: string[];
+
+  @ApiPropertyOptional({ maxLength: TEXT_LIST_FOOTER_MAX_LENGTH })
+  @IsOptional()
+  @IsString()
+  @MaxLength(TEXT_LIST_FOOTER_MAX_LENGTH)
+  footer?: string;
+
+  @ApiPropertyOptional({ description: QUOTED_MESSAGE_ID_DESCRIPTION, example: QUOTED_MESSAGE_ID_EXAMPLE })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  quotedMessageId?: string;
+
   @ApiPropertyOptional({ description: MENTIONS_DESCRIPTION, example: ['628123456789@c.us'], type: [String] })
   @IsOptional()
   @IsArray()

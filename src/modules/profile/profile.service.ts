@@ -17,6 +17,10 @@ export class ProfileService {
     return this.engines.require(sessionId);
   }
 
+  getOwnProfile(sessionId: string) {
+    return this.getEngine(sessionId).getOwnProfile();
+  }
+
   setProfileName(sessionId: string, name: string) {
     return this.getEngine(sessionId).setProfileName(name);
   }

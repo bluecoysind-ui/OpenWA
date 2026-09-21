@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AutomationRuleController } from './automation-rule.controller';
 import type { AutomationRulesService } from './automation-rules.service';
 import type { AutomationRule } from './entities/automation-rule.entity';
+import { AutomationChatContext, AutomationMatchMode } from './automation-match';
 
 /**
  * The controller is a thin map from route params/DTOs onto AutomationRulesService, plus the
@@ -19,6 +20,10 @@ function ruleEntity(overrides: Partial<AutomationRule> = {}): AutomationRule {
     conditions: null,
     replyText: 'Thanks for reaching out — we reply within the hour.',
     cooldownSeconds: 60,
+    matchMode: AutomationMatchMode.CONTAINS,
+    matchPattern: null,
+    chatContext: AutomationChatContext.ALL,
+    replyMediaUrl: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     ...overrides,

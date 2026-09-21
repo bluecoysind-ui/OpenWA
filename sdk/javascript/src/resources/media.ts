@@ -7,7 +7,8 @@
 
 import { encodeSegment } from '../http.js';
 import type { OpenWAClient } from '../client.js';
-import type { ConvertMediaInput, ConvertedMedia, MediaConversionAvailability } from '../types.js';
+import type { ConvertMediaInput, ConvertStickerInput, ConvertedMedia, MediaConversionAvailability } from '../types.js';
+import type { BinaryResponse } from '../http.js';
 
 export class MediaResource {
   constructor(private readonly client: OpenWAClient) {}
@@ -49,6 +50,43 @@ export class MediaResource {
       method: 'POST',
       path: `/api/sessions/${encodeSegment(sessionId)}/media/convert/video`,
       body: input,
+    });
+  }
+
+  /**
+   * Convert image or video into a 512×512 WebP sticker (duration-capped). Optional pack
+   * EXIF (`packName`/`author`) and remove.bg (`removeBg`, requires REMOVE_BG_API_KEY).
+   * Requires an OPERATOR key.
+   */
+  convertSticker(sessionId: string, input: ConvertStickerInput): Promise<ConvertedMedia> {
+    return this.client.request<ConvertedMedia>({
+      method: 'POST',
+      path: `/api/sessions/${encodeSegment(sessionId)}/media/convert/sticker`,
+      body: input,
+    });
+  }
+
+  /** List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. OPERATOR. */
+  listFiles(sessionId: string): Promise<Array<{ messageId: string | null; createdAt: string; url: string }>> {
+    return this.client.request({
+      method: 'GET',
+      path: `/api/sessions/${encodeSegment(sessionId)}/media/files`,
+    });
+  }
+
+  /** Fetch stored inbound media bytes. 404 when MEDIA_PERSIST is off or the file is missing. OPERATOR. */
+  getFile(sessionId: string, messageId: string): Promise<BinaryResponse> {
+    return this.client.requestBytes({
+      method: 'GET',
+      path: `/api/sessions/${encodeSegment(sessionId)}/media/files/${encodeSegment(messageId)}`,
+    });
+  }
+
+  /** Delete a stored inbound media file. OPERATOR. */
+  deleteFile(sessionId: string, messageId: string): Promise<void> {
+    return this.client.request<void>({
+      method: 'DELETE',
+      path: `/api/sessions/${encodeSegment(sessionId)}/media/files/${encodeSegment(messageId)}`,
     });
   }
 }

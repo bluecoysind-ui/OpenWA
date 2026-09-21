@@ -267,6 +267,12 @@ export const EXPORT_TABLES: AnyExportTable[] = [
   // rule with it — exporting and re-inserting it is not optional, or a restore silently destroys
   // every autoreply rule.
   defineExportTable({ key: 'automationRules', table: 'automation_rules', optional: true }),
+
+  // scheduled_messages FKs sessions ON DELETE CASCADE, same restore reason as automation_rules.
+  defineExportTable({ key: 'scheduledMessages', table: 'scheduled_messages', optional: true }),
+
+  // bot_configs FKs sessions ON DELETE CASCADE; restore must re-insert or every session loses its bot settings.
+  defineExportTable({ key: 'botConfigs', table: 'bot_configs', optional: true }),
 ];
 
 /**
@@ -277,5 +283,7 @@ export const EXPORT_TABLES: AnyExportTable[] = [
  * entity metadata does not report it.
  */
 export const EXPORT_TABLE_EXCLUSIONS: Readonly<Record<string, string>> = {
-  // (empty today: every data-connection entity table is exported)
+  webhook_deliveries:
+    'ephemeral per-attempt log (30d / last 500); bodies are never stored and restore does not need it',
+  media_objects: 'MEDIA_PERSIST blob index; files live in StorageService, not the backup payload',
 };

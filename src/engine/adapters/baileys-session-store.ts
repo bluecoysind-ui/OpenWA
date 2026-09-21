@@ -365,18 +365,19 @@ export class BaileysSessionStore {
 
   private toNeutralContact(c: BaileysContact): Contact {
     const number = c.phoneNumber ? userPart(c.phoneNumber) : c.id.endsWith('@s.whatsapp.net') ? userPart(c.id) : '';
+    const id = this.toNeutralJid(c.id);
+    const parsed = parseWaId(id);
     return {
-      id: this.toNeutralJid(c.id),
+      id,
       name: c.name ?? c.verifiedName,
       pushName: c.notify,
       number,
-      // Baileys distinguishes the two names: `name` is documented as the one YOU saved on your
-      // WhatsApp, `notify` as the pushname the contact set themselves. Reporting true for everyone
-      // told an automation that every chat partner was in the addressbook, which is what
-      // whatsapp-web.js reports honestly from the Contact model.
       isMyContact: Boolean(c.name),
       isBlocked: false, // best-effort: blocklist state is not tracked in this slice
       profilePicUrl: c.imgUrl ?? undefined,
+      ...(parsed.kind === 'lid' ? { lid: parsed.userPart } : {}),
+      ...(c.verifiedName ? { verifiedName: c.verifiedName } : {}),
+      ...((c as { isBusiness?: boolean }).isBusiness ? { isBusiness: true } : {}),
     };
   }
 

@@ -45,6 +45,17 @@ class MessagesResource
     }
 
     /**
+     * Send a numbered text list (formatted text, not a native WhatsApp list).
+     *
+     * @param array<string,mixed> $body
+     * @return array<string,mixed>
+     */
+    public function sendTextList(string $sessionId, array $body): array
+    {
+        return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/messages/send-text-list", [], $body);
+    }
+
+    /**
      * @param array<string,mixed> $body
      * @return array<string,mixed>
      */

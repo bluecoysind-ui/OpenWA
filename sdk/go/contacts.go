@@ -41,6 +41,16 @@ func (s *ContactsService) Check(ctx context.Context, sessionID, number string) (
 	return &out, nil
 }
 
+// CheckNumbers bulk-looks up whether numbers are on WhatsApp. Max 50. OPERATOR.
+func (s *ContactsService) CheckNumbers(ctx context.Context, sessionID string, numbers []string) (map[string]any, error) {
+	var out map[string]any
+	err := s.client.do(ctx, "POST", s.base(sessionID)+"/check", nil, map[string]any{"numbers": numbers}, &out)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProfilePicture returns a contact's profile picture URL.
 func (s *ContactsService) ProfilePicture(ctx context.Context, sessionID, contactID string) (*ProfilePictureResponse, error) {
 	var out ProfilePictureResponse

@@ -73,3 +73,9 @@ class WebhooksResource:
         return self._http.request(
             "POST", f"/api/sessions/{quote_segment(session_id)}/webhooks/{quote_segment(webhook_id)}/test"
         )
+
+    def deliveries(self, session_id: str, webhook_id: str) -> list:
+        """Recent delivery attempts (status, HTTP code, duration, attempt, error snippet). OPERATOR."""
+        return self._http.request(
+            "GET", f"/api/sessions/{quote_segment(session_id)}/webhooks/{quote_segment(webhook_id)}/deliveries"
+        )

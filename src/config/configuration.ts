@@ -479,6 +479,53 @@ export default () => ({
       const n = parseInt(process.env.AUTOMATION_MAX_PER_SESSION ?? '', 10);
       return Number.isFinite(n) && n >= 0 ? n : 32;
     })(),
+    // Max regex pattern length when AUTO_REPLY_REGEX=true. Input to the matcher is truncated to
+    // this many characters as well so a huge inbound body cannot ReDoS the evaluator.
+    regexMaxPatternLength: (() => {
+      const n = parseInt(process.env.AUTO_REPLY_REGEX_MAX_PATTERN ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 256;
+    })(),
+  },
+
+  // One-shot delayed sends (WP4). Flag default ON via features.scheduledMessages; these caps apply
+  // once the scheduler module exists. Inert until a job row exists.
+  scheduler: {
+    maxPendingPerSession: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_PENDING ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 100;
+    })(),
+    maxHorizonHours: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_HORIZON_HOURS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 720;
+    })(),
+    maxLatenessMs: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_LATENESS_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 6 * 60 * 60 * 1000;
+    })(),
+    maxRecurringPerSession: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_RECURRING ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 20;
+    })(),
+    maxOccurrences: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MAX_OCCURRENCES ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 366;
+    })(),
+    minIntervalMs: (() => {
+      const n = parseInt(process.env.SCHEDULED_MESSAGES_MIN_INTERVAL_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 3_600_000;
+    })(),
+  },
+
+  bot: {
+    commandCooldownMs: (() => {
+      const n = parseInt(process.env.BOT_COMMAND_COOLDOWN_MS ?? '', 10);
+      return Number.isFinite(n) && n >= 0 ? n : 3000;
+    })(),
+  },
+
+  // remove.bg for sticker convert (WP5). Empty → endpoint fails closed; never log the value.
+  removeBg: {
+    apiKey: process.env.REMOVE_BG_API_KEY || '',
   },
 
   // Server-side media conversion (opt-in): transcodes caller-supplied audio and video into the
@@ -503,13 +550,27 @@ export default () => ({
       const n = parseInt(process.env.MEDIA_CONVERSION_MAX_OUTPUT_BYTES ?? '', 10);
       return Number.isFinite(n) && n > 0 ? n : 50 * 1024 * 1024;
     })(),
-    // At most this many ffmpeg processes at once (default 2). Each conversion spawns an external
-    // process and holds its input in heap; without a bound, requests inside the rate-limit window
-    // can stack processes for as long as each one runs. A short queue absorbs bursts; beyond it
-    // the endpoint answers 503 rather than piling on.
+    // At most this many ffmpeg processes at once (default 2, hard max 4). Each conversion spawns an
+    // external process and holds its input in heap; without a bound, requests inside the rate-limit
+    // window can stack processes for as long as each one runs. A short wait queue (2) absorbs
+    // bursts; beyond it the endpoint answers 429 rather than piling on.
     concurrency: (() => {
       const n = parseInt(process.env.MEDIA_CONVERSION_CONCURRENCY ?? '', 10);
-      return Number.isFinite(n) && n > 0 ? n : 2;
+      if (!Number.isFinite(n) || n < 1) return 2;
+      return Math.min(4, n);
+    })(),
+    // Animated-sticker wall-clock cap (ffmpeg -t). WhatsApp clients typically refuse longer loops.
+    stickerMaxDurationSec: (() => {
+      const n = parseInt(process.env.STICKER_MAX_DURATION_SEC ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 8;
+    })(),
+  },
+
+  // Inbound chat-media persistence (WP6). Flag default OFF via features.mediaPersist.
+  mediaPersist: {
+    ttlDays: (() => {
+      const n = parseInt(process.env.MEDIA_PERSIST_TTL_DAYS ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 30;
     })(),
   },
 
@@ -522,6 +583,21 @@ export default () => ({
     renderMaxChars: (() => {
       const n = parseInt(process.env.TEMPLATE_RENDER_MAX_CHARS ?? '', 10);
       return Number.isFinite(n) && n > 0 ? n : 64 * 1024;
+    })(),
+  },
+
+  // Bluecoys partner linking (GET /api/whatsapp/link-qr + outbound linked/disconnected callbacks).
+  bluecoys: {
+    enabled: process.env.BLUECOYS_INTEGRATION_ENABLED === 'true',
+    baseUrl: (process.env.BLUECOYS_BASE_URL || 'https://bluecoys.com').replace(/\/+$/, ''),
+    qrTtlMs: (() => {
+      const n = parseInt(process.env.BLUECOYS_QR_TTL_MS ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 20_000;
+    })(),
+    linkToken: process.env.BLUECOYS_LINK_TOKEN || '',
+    callbackTimeoutMs: (() => {
+      const n = parseInt(process.env.BLUECOYS_CALLBACK_TIMEOUT_MS ?? '', 10);
+      return Number.isFinite(n) && n > 0 ? n : 15_000;
     })(),
   },
 

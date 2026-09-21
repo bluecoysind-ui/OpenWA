@@ -59,4 +59,32 @@ class MediaResource
     {
         return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/convert/video", [], $media);
     }
+
+    /**
+     * Convert image or video into a 512×512 WebP sticker. Requires an OPERATOR-level key.
+     *
+     * @param array<string,mixed> $media Exactly one of url or base64; optional packName, author, removeBg.
+     * @return array<string,mixed>
+     */
+    public function convertSticker(string $sessionId, array $media): array
+    {
+        return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/convert/sticker", [], $media);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function listFiles(string $sessionId): array
+    {
+        return $this->http->request('GET', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/files") ?? [];
+    }
+
+    /** @return array{data: string, contentType: ?string} */
+    public function getFile(string $sessionId, string $messageId): array
+    {
+        return $this->http->requestBinary('GET', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/files/{$this->http->encodeSegment($messageId)}");
+    }
+
+    public function deleteFile(string $sessionId, string $messageId): void
+    {
+        $this->http->request('DELETE', "/api/sessions/{$this->http->encodeSegment($sessionId)}/media/files/{$this->http->encodeSegment($messageId)}");
+    }
 }

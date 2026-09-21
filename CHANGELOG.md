@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Sessions that dropped to `disconnected` without scheduling auto-reconnect (missing reconnect state) no longer wedge as “already started”; disconnect handling re-seeds reconnect state, and `start` recovers stranded engines.
+- Gateway reconnect: stop then start before pairing, longer QR poll, WebSocket/API `qrExpiresAt`, and clearer QR modal copy (no stuck “Waiting for QR…” when the code is loading).
+- Gateway auto-restarts linked sessions when they drop offline (dashboard load, WebSocket status, or poll) instead of requiring Reconnect; QR modal opens only when WhatsApp asks to re-pair.
+
 ### Added
 
+- Bluecoys partner linking: `GET /api/whatsapp/link-qr?username=&phone_number=` returns base64 QR + expiry (or `linked: true` when already paired); outbound callbacks to `whatsapp-linked` / `whatsapp-disconnected` on terminal unlink (opt-in via `BLUECOYS_INTEGRATION_ENABLED=true`).
+- WA-AKG capability port (additive): scheduled sends (one-shot and daily/weekly/monthly recurrence), auto-reply match modes + bot-config (`autoRead`, `alwaysOnline`, paced welcome on `group.join`, sticker pack/author), `#sticker` URL or caption/reply media convert, sticker convert/EXIF/remove.bg, webhook delivery history, optional inbound media persist, poll `selectableCount`, sticker pack metadata, multi-forward, text-list helper, bulk number check, GET own profile. Gateway UI panes in `./frontend/` (dashboard unchanged). `GET /api/features` returns VIEWER booleans only. MCP adds scheduler/bot-config/webhook-delivery reads and create/cancel scheduled writes when `MCP_READONLY=false`. Scheduler recurrence fields are typed in the JS, Python, PHP, Go, and Java SDKs.
 - Baileys inbound button, template quick-reply, list-row and native-flow replies arrive as `type: "text"` with a structured `button { id, text? }` on `message.received` (whatsapp-web.js still has no interactive reply fields). The REST chat-history route is whatsapp-web.js only and does not carry these fields. Thanks @gabrielmmoraes1999.
 - Baileys inbound business prompts that offer clickable buttons (or list rows) also carry `buttons: [{ id, text }, …]` on `message.received` (URL/call CTAs are omitted — they cannot be clicked), so choices like Sim/Não are no longer flattened away into `body` only. Thanks @gabrielmmoraes1999.
 - `POST /api/sessions/:sessionId/messages/click-button` sends a structured button/list reply against a stored WhatsApp Business prompt on Baileys (whatsapp-web.js returns `501`). Classic `buttonsMessage` / `templateMessage` / `listMessage` prompts are supported; native-flow `interactiveMessage` replies are unverified. Thanks @gabrielmmoraes1999.
@@ -19,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gateway chat header parks archive/mute/pin/read behind a ⋮ menu so the 68px bar is not a row of labels.
+- Media conversion saturates with `429` (was `503`): `MEDIA_CONVERSION_CONCURRENCY` default 2, hard max 4, wait queue of 2; `#sticker` replies `busy, try again`.
 - Baileys `listMessage`, `buttonsResponseMessage`, `templateButtonReplyMessage` and `listResponseMessage` now classify as `type: "text"` (they previously fell through to `unknown`). Consumers filtering on `type` will see those shapes as text. Thanks @gabrielmmoraes1999.
 - The PostgreSQL data connection is pinned to UTC: parameters bind as UTC, naive timestamps read back as UTC, every pooled connection sets its session `TimeZone`, and boot fails when the effective zone is not UTC year round.
 - Credentials on a `socks4://` session proxy are reported at session start as unauthenticatable: SOCKS4 sends the user name as the connect request's user id and drops the password.

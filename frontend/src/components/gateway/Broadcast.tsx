@@ -12,6 +12,7 @@ import { TEMPLATES } from "@/lib/templates";
 import { pickBulkSession, useGateway } from "@/store/gateway-store";
 import { cn } from "@/lib/cn";
 import { useProfilePictures } from "@/lib/openwa-query";
+import { AkgBulkNote } from "./akg/AkgBulkNote";
 
 /** Mirrors BULK_MAX_RECIPIENTS on the backend. */
 const MAX_RECIPIENTS = 100;
@@ -663,6 +664,10 @@ export function BroadcastPanel() {
       </div>
 
       {bulkLoading ? <div className="mt-3 wa-loadbar" /> : null}
+
+      <div className="mt-4">
+        <AkgBulkNote />
+      </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md">
         {[

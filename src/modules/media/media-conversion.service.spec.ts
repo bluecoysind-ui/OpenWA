@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   HttpException,
+  HttpStatus,
   PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import { EngineRegistry } from '../../engine/engine-registry.service';
 import { Session } from '../session/entities/session.entity';
 import * as ffmpeg from './ffmpeg';
 import * as loadRemoteMedia from '../../common/media/load-remote-media';
+import * as ssrfGuard from '../../common/security/ssrf-guard';
 
 /**
  * The behaviours worth pinning here are the ones a caller can reach: that a host without ffmpeg says
@@ -224,6 +226,16 @@ describe('MediaConversionService', () => {
       expect(runFfmpeg).not.toHaveBeenCalled();
     });
 
+    it('rejects sticker base64 above the media cap with 413, before ffmpeg', async () => {
+      const service = makeService(config());
+      const oversized = Buffer.alloc(51 * 1024 * 1024).toString('base64');
+
+      await expect(service.convertToSticker(SESSION, { base64: oversized })).rejects.toBeInstanceOf(
+        PayloadTooLargeException,
+      );
+      expect(runFfmpeg).not.toHaveBeenCalled();
+    });
+
     it('rejects a request carrying neither url nor base64', async () => {
       await expect(makeService(config()).convertToVoice(SESSION, {})).rejects.toThrow(
         /Either url or base64 must be provided/,
@@ -267,6 +279,51 @@ describe('MediaConversionService', () => {
       await expect(service.convertToVoice(SESSION, { base64: 'AAAA' })).rejects.toThrow(/Invalid data found/);
     });
 
+    it('returns WebP for sticker conversion and caps duration via ffmpeg -t', async () => {
+      const service = makeService(config({ 'mediaConversion.stickerMaxDurationSec': 8 }));
+
+      const result = await service.convertToSticker(SESSION, { base64: 'AAAA' });
+
+      expect(result.mimetype).toBe('image/webp');
+      expect(outputExtensionOf(runFfmpeg)).toBe('webp');
+      const encodeArgs = (runFfmpeg.mock.calls[0] as unknown[])[3] as string[];
+      expect(encodeArgs[encodeArgs.indexOf('-t') + 1]).toBe('8');
+      expect(encodeArgs).toContain('libwebp');
+    });
+
+    it('forwards mediaConversion.timeoutMs into ffmpeg for sticker conversion', async () => {
+      const service = makeService(config({ 'mediaConversion.timeoutMs': 1234 }));
+
+      await service.convertToSticker(SESSION, { base64: 'AAAA' });
+
+      expect(runFfmpeg.mock.calls[0][4]).toEqual(expect.objectContaining({ timeoutMs: 1234 }));
+    });
+
+    it('refuses removeBg with 400 when REMOVE_BG_API_KEY is empty, never 500', async () => {
+      const service = makeService(config({ 'removeBg.apiKey': '' }));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toThrow(
+        /REMOVE_BG_API_KEY/,
+      );
+      expect(runFfmpeg).not.toHaveBeenCalled();
+    });
+
+    it('does not log the remove.bg key when the remote call fails', async () => {
+      const service = makeService(config({ 'removeBg.apiKey': 'super-secret-rmbg' }));
+      const warn = jest.fn();
+      (service as unknown as { logger: { warn: jest.Mock } }).logger.warn = warn;
+      jest.spyOn(ssrfGuard, 'withSafeFetch').mockRejectedValue(new Error('upstream super-secret-rmbg'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA', removeBg: true })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('super-secret-rmbg');
+      expect(runFfmpeg).not.toHaveBeenCalled();
+    });
+
     // A programming error must not be relabelled as the caller's fault.
     it('lets an unexpected error through rather than reporting it as a bad request', async () => {
       runFfmpeg.mockRejectedValue(new TypeError('boom'));
@@ -277,10 +334,10 @@ describe('MediaConversionService', () => {
   });
 
   describe('concurrency gate', () => {
-    // The rate limiter caps admission per second, not how many long-running ffmpeg processes stack
-    // up while each runs toward its timeout — that bound lives here.
-    it('bounds concurrent ffmpeg runs and answers 503 past the queue instead of stacking processes', async () => {
-      // concurrency 1 → queue depth 4: five simultaneous requests fill the gate, the sixth is refused.
+    const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+
+    it('never runs more ffmpeg processes than the concurrency cap, and 429s past the wait queue', async () => {
+      // concurrency 1 + queue 2: three simultaneous sticker converts fill the gate, the fourth is 429.
       const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
       let release!: () => void;
       runFfmpeg.mockImplementation(
@@ -290,21 +347,47 @@ describe('MediaConversionService', () => {
           }),
       );
 
-      const inflight = Array.from({ length: 5 }, () => service.convertToVoice(SESSION, { base64: 'AAAA' }));
-      await new Promise(resolve => setImmediate(resolve));
+      const inflight = Array.from({ length: 3 }, () => service.convertToSticker(SESSION, { base64: 'AAAA' }));
+      await flush();
       expect(runFfmpeg).toHaveBeenCalledTimes(1);
 
-      await expect(service.convertToVoice(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(
-        ServiceUnavailableException,
-      );
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        message: 'busy, try again',
+      });
 
-      // Drain: release each run in turn so every parked task completes and nothing leaks.
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         release();
-        await new Promise(resolve => setImmediate(resolve));
+        await flush();
       }
       await Promise.all(inflight);
-      expect(runFfmpeg).toHaveBeenCalledTimes(5);
+      expect(runFfmpeg).toHaveBeenCalledTimes(3);
+    });
+
+    it('releases a slot after ffmpeg times out so a later convert can run', async () => {
+      const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
+      runFfmpeg.mockRejectedValueOnce(new ffmpeg.FfmpegConversionError('Conversion timed out after 1ms'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(BadRequestException);
+
+      runFfmpeg.mockResolvedValueOnce(Buffer.from('ok'));
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).resolves.toMatchObject({
+        mimetype: 'image/webp',
+      });
+      expect(runFfmpeg).toHaveBeenCalledTimes(2);
+    });
+
+    it('releases a slot after ffmpeg errors so a later convert can run', async () => {
+      const service = makeService(config({ 'mediaConversion.concurrency': 1 }));
+      runFfmpeg.mockRejectedValueOnce(new ffmpeg.FfmpegConversionError('ffmpeg exited with code 1', 'Invalid data'));
+
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).rejects.toBeInstanceOf(BadRequestException);
+
+      runFfmpeg.mockResolvedValueOnce(Buffer.from('ok'));
+      await expect(service.convertToSticker(SESSION, { base64: 'AAAA' })).resolves.toMatchObject({
+        mimetype: 'image/webp',
+      });
+      expect(runFfmpeg).toHaveBeenCalledTimes(2);
     });
   });
 });

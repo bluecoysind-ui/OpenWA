@@ -25,3 +25,6 @@ class HealthResource:
 
     def ready(self) -> HealthReadyResponse:
         return self._http.request("GET", "/api/health/ready")
+
+    def features(self) -> dict[str, bool]:
+        return self._http.request("GET", "/api/features")

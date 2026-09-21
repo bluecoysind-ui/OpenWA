@@ -1,6 +1,6 @@
-import { Controller, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
-import { ProfileAckResponseDto } from './dto/profile-response.dto';
+import { OwnProfileDto, ProfileAckResponseDto } from './dto/profile-response.dto';
 import { ProfileService } from './profile.service';
 import { SetProfileNameDto, SetProfileStatusDto, SetProfilePictureDto } from './dto/profile.dto';
 import { RequireRole } from '../auth/decorators/auth.decorators';
@@ -11,6 +11,20 @@ import { ENGINE_NOT_READY_409 } from '../../common/openapi/engine-status-respons
 @Controller('sessions/:sessionId/profile')
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Get the logged-in account profile',
+    description:
+      'Phone number, push name, about text, and profile picture URL. VIEWER. Session not started is the usual 400.',
+  })
+  @ApiParam({ name: 'sessionId', description: 'Session ID' })
+  @ApiResponse({ status: 200, description: 'Own profile', type: OwnProfileDto })
+  @ApiResponse({ status: 400, description: 'Session is not started' })
+  @ApiResponse({ status: 409, description: ENGINE_NOT_READY_409 })
+  async getOwnProfile(@Param('sessionId') sessionId: string): Promise<OwnProfileDto> {
+    return this.profileService.getOwnProfile(sessionId);
+  }
 
   @Put('name')
   @RequireRole(ApiKeyRole.OPERATOR)

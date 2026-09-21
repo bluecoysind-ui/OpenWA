@@ -4,6 +4,7 @@ import { TEMPLATES } from "@/lib/templates";
 import { useGateway } from "@/store/gateway-store";
 import { cn } from "@/lib/cn";
 import { BulkComposer } from "./Broadcast";
+import { StickerTool } from "./akg/StickerTool";
 
 export function Overlays() {
   const overlay = useGateway((s) => s.overlay);
@@ -92,12 +93,13 @@ function QrModal() {
     secondsLeft !== null
       ? `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`
       : null;
-  const timerLabel =
-    secondsLeft === null
-      ? "Waiting for QR…"
+  const timerLabel = !qrSrc
+    ? "Generating QR…"
+    : secondsLeft === null
+      ? "Scan the QR code below"
       : secondsLeft > 0
         ? `QR expires in ${countdown}`
-        : "QR expired — revoking session…";
+        : "QR expired — waiting for a new code…";
 
   const pairingSecondsLeft =
     pairingExpiresAt !== null ? Math.max(0, Math.ceil((pairingExpiresAt - now) / 1000)) : null;
@@ -469,6 +471,7 @@ export function ToolsPanel() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="space-y-4">
+        <StickerTool />
         <section className="glass rounded-2xl p-4">
           <h3 className="mb-3 text-sm font-semibold">Sections</h3>
           <div className="flex flex-wrap gap-2">
@@ -549,9 +552,11 @@ export function ToolsPanel() {
                 <button className="text-xs text-muted" onClick={() => openOverlay("qr", s.sessionId)}>
                   QR
                 </button>
-                <button className="text-xs text-muted" onClick={() => void reconnect(s.sessionId)}>
-                  Reconnect
-                </button>
+                {s.status !== "connected" && s.status !== "connecting" ? (
+                  <button className="text-xs text-muted" onClick={() => void reconnect(s.sessionId)}>
+                    {s.phoneNumber ? "Restart link" : "Reconnect"}
+                  </button>
+                ) : null}
                 <button className="text-xs text-muted" onClick={() => openOverlay("webhooks", s.sessionId)}>
                   Hooks
                 </button>

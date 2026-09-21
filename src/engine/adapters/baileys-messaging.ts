@@ -1,3 +1,4 @@
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import type * as BaileysLib from '@whiskeysockets/baileys';
 import type { AnyMessageContent, MiscMessageGenerationOptions, WAMessage, WASocket } from '@whiskeysockets/baileys';
 import { generateSafeLinkPreview } from './safe-link-preview';
@@ -19,12 +20,13 @@ import { toEngineParticipants } from './baileys-groups';
 import { buildVCard } from './vcard';
 import { resolveBaileysButtonClick } from './baileys-message-mapper';
 import { loadRemoteMediaBuffer } from '../../common/media/load-remote-media';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { applyStickerPackExif } from '../../common/media/webp-sticker-exif';
 import { EngineRefusedError } from '../../common/errors/engine-refused.error';
 import { MessageNotFoundError } from '../../common/errors/message-not-found.error';
 import { type createLogger } from '../../common/services/logger.service';
 import { EngineTransportError } from '../../common/errors/engine-transport.error';
 import { BAILEYS_QUERY_BUDGET_MS, withQueryDeadline } from './baileys-query-deadline';
+import { userPart } from '../identity/wa-id';
 
 /**
  * Messaging-domain operations extracted from BaileysAdapter. The adapter keeps the public
@@ -261,6 +263,25 @@ export class BaileysMessaging {
     return hit?.exists ? this.host.toNeutralJid(hit.jid) : null;
   }
 
+  async checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>> {
+    this.host.ensureReady();
+    if (numbers.length === 0) return [];
+    const results = await this.sock().onWhatsApp(...numbers);
+    if (results === undefined) {
+      throw new EngineTransportError('WhatsApp did not answer the number-check query');
+    }
+    const byUser = new Map<string, { exists: boolean; jid: string }>();
+    for (const hit of results) {
+      if (!hit?.jid) continue;
+      byUser.set(userPart(hit.jid), { exists: Boolean(hit.exists), jid: hit.jid });
+    }
+    return numbers.map(number => {
+      const hit = byUser.get(userPart(number)) ?? byUser.get(number);
+      if (!hit?.exists) return { number, exists: false, chatId: null };
+      return { number, exists: true, chatId: this.host.toNeutralJid(hit.jid) };
+    });
+  }
+
   async sendChatState(chatId: string, state: ChatState): Promise<void> {
     this.host.ensureReady();
     const presence = state === 'typing' ? 'composing' : state === 'recording' ? 'recording' : 'paused';
@@ -416,7 +437,10 @@ export class BaileysMessaging {
     // take one, so dropping it here left a documented capability doing nothing.
     return this.sendContent(
       chatId,
-      { sticker: await toWebpSticker(data, mimetype), ...this.withMentions(media.mentions) },
+      {
+        sticker: applyStickerPackExif(await toWebpSticker(data, mimetype), media.packName, media.packAuthor),
+        ...this.withMentions(media.mentions),
+      },
       await this.quoteOption(media.quotedMessageId),
     );
   }
@@ -458,7 +482,8 @@ export class BaileysMessaging {
         poll: {
           name: poll.name,
           values: poll.options,
-          selectableCount: poll.allowMultipleAnswers ? 0 : 1,
+          selectableCount:
+            typeof poll.selectableCount === 'number' ? poll.selectableCount : poll.allowMultipleAnswers ? 0 : 1,
         },
       },
       await this.quoteOption(poll.quotedMessageId),

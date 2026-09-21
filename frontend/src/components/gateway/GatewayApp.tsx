@@ -9,6 +9,10 @@ import { BroadcastPanel } from "./Broadcast";
 import { ScrapersPanel } from "./Scrapers";
 import { SettingsHub } from "./Settings";
 import { OpenWALogin } from "./OpenWALogin";
+import { ComposerExtras } from "./akg/ComposerExtras";
+import { MessageActions } from "./akg/MessageActions";
+import { ChatHeaderActions } from "./akg/ChatHeaderActions";
+import { DirectoryActions } from "./akg/DirectoryActions";
 import Aurora from "./Aurora";
 import { useProfilePicture, useProfilePictures } from "@/lib/openwa-query";
 import {
@@ -373,6 +377,7 @@ function Directory({ title, kind }: { title: string; kind: "dm" | "group" }) {
   return (
     <div className="glass scroll-thin min-w-0 flex-1 overflow-auto rounded-2xl p-4">
       <h2 className="mb-4 text-base font-semibold">{title}</h2>
+      <DirectoryActions sessionId={sessionId} kind={kind} />
       {busy ? (
         <div className="mb-3">
           <LoadBar />
@@ -722,18 +727,16 @@ function Conversation() {
             <div className="text-xs text-wa">{chat.online ? "online" : chat.lastSeen || "offline"}</div>
           </div>
         </button>
-        <IconBtn onClick={() => openOverlay("search")}>
+        <IconBtn onClick={() => openOverlay("search")} aria-label="Search messages">
           <IconSearch />
         </IconBtn>
-        <IconBtn>
-          <IconPhone />
-        </IconBtn>
-        <IconBtn>
-          <IconVideo />
-        </IconBtn>
-        <IconBtn>
-          <IconDots />
-        </IconBtn>
+        {sessionId ? (
+          <ChatHeaderActions sessionId={sessionId} chatId={id} />
+        ) : (
+          <IconBtn aria-label="Chat actions" disabled>
+            <IconDots />
+          </IconBtn>
+        )}
       </div>
       {busy ? (
         <div className="px-4 pt-1">
@@ -770,7 +773,7 @@ function Conversation() {
         ) : (
           <EmptyState>No messages in this chat yet.</EmptyState>
         )}
-        {messages.map((m) => (m.kind === "promo" ? <PromoCard key={m.id} time={m.time} /> : <MessageBubble key={m.id} chatId={id} m={m} />))}
+        {messages.map((m) => (m.kind === "promo" ? <PromoCard key={m.id} time={m.time} /> : <MessageBubble key={m.id} chatId={id} sessionId={sessionId} m={m} />))}
       </div>
       <form
         className="border-t border-line px-4 py-3"
@@ -779,6 +782,7 @@ function Conversation() {
           void submit();
         }}
       >
+        {sessionId ? <ComposerExtras sessionId={sessionId} chatId={id} /> : null}
         {attachment ? (
           <div className="mb-2 flex items-center gap-3 rounded-xl border border-line bg-white/5 px-3 py-2 text-[12.5px]">
             <span className="text-lg">{attachment.type.startsWith("image/") ? "🖼️" : attachment.type.startsWith("video/") ? "🎬" : attachment.type.startsWith("audio/") ? "🎵" : "📄"}</span>
@@ -842,7 +846,7 @@ function MessageSkeleton({ mine }: { mine: boolean }) {
   );
 }
 
-function MessageBubble({ chatId, m }: { chatId: string; m: Extract<Bubble, { kind: "text" }> }) {
+function MessageBubble({ chatId, sessionId, m }: { chatId: string; sessionId: string; m: Extract<Bubble, { kind: "text" }> }) {
   const mine = m.from === "me";
   return (
     <div className={cn("flex max-w-[68%] flex-col", mine ? "self-end" : "self-start")}>
@@ -861,6 +865,7 @@ function MessageBubble({ chatId, m }: { chatId: string; m: Extract<Bubble, { kin
         {m.time}
         {mine ? (m.pending ? " ◌" : " ✓✓") : ""}
       </div>
+      {sessionId ? <MessageActions sessionId={sessionId} chatId={chatId} messageId={m.id} /> : null}
     </div>
   );
 }

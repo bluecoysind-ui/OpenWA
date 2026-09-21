@@ -4,6 +4,7 @@ import {
   addWebhook as apiAddWebhook,
   cancelBulkJob,
   connectSession,
+  disconnectSession,
   deleteSession as apiDeleteSession,
   fetchMessageMedia,
   getQr,
@@ -45,6 +46,11 @@ const CHATS_PAGE = 30;
 const MESSAGES_PAGE = 40;
 /** How often the dashboard re-reads session status (there is no push channel). */
 const SESSION_REFRESH_MS = 10_000;
+/** Min gap between silent auto-starts for the same linked session (avoids start storms). */
+const AUTO_RESTART_COOLDOWN_MS = 15_000;
+
+const autoRestartInFlight = new Set<string>();
+const autoRestartLastAttempt = new Map<string, number>();
 /** Faster poll while a history sync is in progress, so the progress bar moves. */
 const SYNC_REFRESH_MS = 2_000;
 /** How often the open conversation / chat list are refreshed while the inbox is on screen. */
@@ -172,7 +178,11 @@ export type SettingsPanel =
   | "plugins"
   | "infra"
   | "logs"
-  | "message-tester";
+  | "message-tester"
+  | "scheduler"
+  | "automation"
+  | "media-files"
+  | "profile";
 
 /** Paging state of one loaded conversation. */
 type ThreadMeta = { cursor: string | null; hasMore: boolean; loading: boolean };
@@ -247,7 +257,7 @@ type State = {
   testProxy: (proxy: string) => Promise<{ ok: boolean; message: string; ip?: string; latencyMs?: number }>;
   reconnect: (id: string) => Promise<void>;
   removeSession: (id: string) => Promise<void>;
-  refreshQr: (id: string) => Promise<void>;
+  refreshQr: (id: string, opts?: { maxAttempts?: number }) => Promise<void>;
   watchQrSession: (id: string) => void;
   requestPairingCode: (phoneNumber: string) => Promise<boolean>;
   addHook: (url: string, events: string[]) => Promise<void>;
@@ -315,6 +325,47 @@ function patchBubble(threads: Record<string, Bubble[]>, chatId: string, id: stri
 }
 
 /** Human line for the explicit lifecycle events the gateway emits. */
+/** Linked before (phone on file) but the engine is down — start it without opening the QR modal. */
+async function autoRestartLinkedSession(sessionId: string, reason: string): Promise<void> {
+  const st = useGateway.getState();
+  if (!st.live) return;
+  if (autoRestartInFlight.has(sessionId)) return;
+  const session = st.sessions.find((s) => s.sessionId === sessionId);
+  if (!session?.phoneNumber) return;
+  if (session.status === "connected" || session.status === "connecting" || session.status === "qr_ready") return;
+  if (session.status === "logged_out") return;
+
+  const last = autoRestartLastAttempt.get(sessionId) ?? 0;
+  if (Date.now() - last < AUTO_RESTART_COOLDOWN_MS) return;
+
+  autoRestartInFlight.add(sessionId);
+  autoRestartLastAttempt.set(sessionId, Date.now());
+  try {
+    let result = await connectSession(sessionId, {});
+    if (!result.success && /already started/i.test(result.message ?? "")) {
+      await disconnectSession(sessionId);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      result = await connectSession(sessionId, {});
+    }
+    if (result.success) {
+      st.pushEvent("connection", `Auto-restarting ${session.name || sessionId} (${reason})`);
+      await useGateway.getState().refreshSessions();
+    }
+  } finally {
+    autoRestartInFlight.delete(sessionId);
+  }
+}
+
+function openQrIfRelinkNeeded(sessionId: string): void {
+  const st = useGateway.getState();
+  const session = st.sessions.find((s) => s.sessionId === sessionId);
+  if (!session?.phoneNumber) return;
+  if (st.overlay === "qr" && st.qrSession === sessionId) return;
+  st.pushToast("info", "WhatsApp needs a fresh link — scan the QR");
+  st.openOverlay("qr", sessionId);
+  void st.refreshQr(sessionId, { maxAttempts: 90 });
+}
+
 function describeStatusChange(before: GatewaySession | undefined, after: GatewaySession): string | null {
   if (!before || before.status === after.status) return null;
   const who = after.name || after.phoneNumber || after.sessionId;
@@ -386,6 +437,7 @@ function wireRealtime() {
     onDisconnect: () => useGateway.setState({ wsConnected: false }),
     onSessionStatus: ({ sessionId, status }) => {
       const mapped = mapSessionStatus(status);
+      const before = useGateway.getState().sessions.find((s) => s.sessionId === sessionId);
       useGateway.setState((s) => ({
         sessions: s.sessions.map((sess) => (sess.sessionId === sessionId ? { ...sess, status: mapped } : sess)),
       }));
@@ -397,13 +449,28 @@ function wireRealtime() {
           if (st.activeAccountId !== sessionId) st.selectAccount(sessionId);
           else void st.loadChats();
         }
+      } else if (
+        mapped === "disconnected" &&
+        before?.status === "connected" &&
+        before.phoneNumber
+      ) {
+        void autoRestartLinkedSession(sessionId, "drop detected");
+      } else if (mapped === "qr_ready") {
+        openQrIfRelinkNeeded(sessionId);
       }
     },
     onQRCode: ({ sessionId, qrCode }) => {
+      if (!qrCode) return;
+      const src = qrCode.startsWith("data:") || qrCode.startsWith("http") ? qrCode : `data:image/png;base64,${qrCode}`;
       const st = useGateway.getState();
-      if (st.overlay === "qr" && st.qrSession === sessionId && qrCode) {
-        const src = qrCode.startsWith("data:") || qrCode.startsWith("http") ? qrCode : `data:image/png;base64,${qrCode}`;
-        useGateway.setState({ qrSrc: src });
+      if (st.overlay === "qr" && st.qrSession === sessionId) {
+        useGateway.setState({ qrSrc: src, qrExpiresAt: Date.now() + 20_000 });
+        return;
+      }
+      const linked = st.sessions.find((s) => s.sessionId === sessionId)?.phoneNumber;
+      if (linked) {
+        useGateway.setState({ qrSrc: src, qrExpiresAt: Date.now() + 20_000 });
+        openQrIfRelinkNeeded(sessionId);
       }
     },
     onMessageUpsert: (event: MessageUpsertEvent) => ingestSocketMessage(event.sessionId, event.message),
@@ -488,6 +555,11 @@ export const useGateway = create<State>((set, get) => ({
         });
         get().pushEvent("connection", "Connected to OpenWA");
         wireRealtime();
+        for (const s of sessions) {
+          if (s.phoneNumber && s.status === "disconnected") {
+            void autoRestartLinkedSession(s.sessionId, "dashboard opened");
+          }
+        }
         await get().loadChats();
       } else {
         set({ live: false, wsConnected: false, sessionsLoading: false, sessionsError: result.message ?? "No sessions" });
@@ -553,8 +625,11 @@ export const useGateway = create<State>((set, get) => ({
         s,
       );
       if (line) get().pushEvent("connection", line);
-      // Announce when a history sync finishes so the chat list reloads.
       const b = before.find((x) => x.sessionId === s.sessionId);
+      if (b && b.status === "connected" && s.status === "disconnected" && s.phoneNumber) {
+        void autoRestartLinkedSession(s.sessionId, "status poll");
+      }
+      // Announce when a history sync finishes so the chat list reloads.
       if (b?.sync?.active && s.sync && !s.sync.active) {
         get().pushEvent("connection", `${s.name || s.sessionId}: history synced (${s.sync.chats} chats, ${s.sync.messages} messages)`);
         if (s.sessionId === get().activeAccountId) void get().loadChats();
@@ -952,11 +1027,49 @@ export const useGateway = create<State>((set, get) => ({
   },
 
   reconnect: async (id) => {
+    if (!get().live) {
+      get().pushToast("error", "Not connected to the gateway");
+      return;
+    }
+    const existing = get().sessions.find((s) => s.sessionId === id);
+    const needsStop =
+      existing &&
+      (existing.status === "disconnected" ||
+        existing.status === "failed" ||
+        existing.status === "logged_out" ||
+        existing.status === "qr_expired");
+
     try {
-      if (get().live) await connectSession(id, {});
+      if (needsStop) {
+        await disconnectSession(id);
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      let result = await connectSession(id, {});
+      if (!result.success && /already started/i.test(result.message ?? "")) {
+        await disconnectSession(id);
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        result = await connectSession(id, {});
+      }
+      if (!result.success) {
+        get().pushToast("error", result.message || "Failed to reconnect");
+        return;
+      }
+      set((s) => ({
+        sessions: s.sessions.map((sess) =>
+          sess.sessionId === id ? { ...sess, status: mapSessionStatus(result.data?.status ?? "connecting") } : sess,
+        ),
+      }));
       get().pushToast("success", "Reconnecting…");
+      set({
+        qrSession: id,
+        qrSrc: "",
+        qrExpiresAt: null,
+        pairingCode: "",
+        pairingPhone: "",
+        pairingExpiresAt: null,
+      });
       get().openOverlay("qr", id);
-      await get().refreshQr(id);
+      await get().refreshQr(id, { maxAttempts: 90 });
     } catch {
       get().pushToast("error", "Failed to reconnect");
     }
@@ -978,27 +1091,36 @@ export const useGateway = create<State>((set, get) => ({
     }
   },
 
-  refreshQr: async (id) => {
-    set({ qrSession: id, qrSrc: "" });
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      try {
-        const result = await getQr(id);
-        if (result.success && result.data?.qrCode) {
-          set({
-            qrSrc: result.data.qrCode,
-            qrSession: id,
-            qrExpiresAt: result.data.qrExpiresAt ?? null,
-            pairingCode: result.data.pairingCode ?? get().pairingCode,
-            pairingPhone: result.data.pairingPhone ?? get().pairingPhone,
-            pairingExpiresAt: result.data.pairingExpiresAt ?? get().pairingExpiresAt,
-          });
-          return;
-        }
-      } catch {
-        /* Retry while the session is still generating its QR code. */
+  refreshQr: async (id, opts?: { maxAttempts?: number }) => {
+    const maxAttempts = opts?.maxAttempts ?? 30;
+    set({ qrSession: id, qrSrc: "", qrExpiresAt: null });
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const result = await getQr(id);
+      if (result.success && result.data?.qrCode) {
+        set({
+          qrSrc: result.data.qrCode,
+          qrSession: id,
+          qrExpiresAt: result.data.qrExpiresAt ?? Date.now() + 20_000,
+          pairingCode: result.data.pairingCode ?? get().pairingCode,
+          pairingPhone: result.data.pairingPhone ?? get().pairingPhone,
+          pairingExpiresAt: result.data.pairingExpiresAt ?? get().pairingExpiresAt,
+        });
+        return;
+      }
+      const msg = result.message ?? "";
+      if (/already authenticated/i.test(msg)) {
+        get().closeOverlay();
+        get().pushToast("success", "Session is already linked");
+        void get().refreshSessions();
+        return;
+      }
+      if (!/not ready|wait/i.test(msg) && !result.success && attempt > 4) {
+        get().pushToast("error", msg || "QR unavailable");
+        return;
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+    get().pushToast("error", "QR not ready — wait a moment and try Reconnect again");
   },
 
   /**

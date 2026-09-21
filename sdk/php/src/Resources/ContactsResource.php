@@ -41,6 +41,22 @@ class ContactsResource
         return $this->http->request('GET', "/api/sessions/{$this->http->encodeSegment($sessionId)}/contacts/check/{$this->http->encodeSegment($number)}");
     }
 
+    /**
+     * Bulk number-on-WhatsApp lookup. Max 50. OPERATOR.
+     *
+     * @param list<string> $numbers
+     * @return array<string,mixed>
+     */
+    public function checkNumbers(string $sessionId, array $numbers): array
+    {
+        return $this->http->request(
+            'POST',
+            "/api/sessions/{$this->http->encodeSegment($sessionId)}/contacts/check",
+            [],
+            ['numbers' => $numbers]
+        );
+    }
+
     /** @return array<string,mixed> */
     public function profilePicture(string $sessionId, string $contactId): array
     {

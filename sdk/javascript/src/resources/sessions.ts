@@ -22,6 +22,13 @@ import type {
   SuccessResult,
 } from '../types.js';
 
+export interface SessionProfile {
+  phone: string | null;
+  pushName: string | null;
+  about: string | null;
+  profilePictureUrl: string | null;
+}
+
 /** Pagination for {@link SessionsResource.list}. The server applies its own default when omitted. */
 export interface ListSessionsQuery {
   limit?: number;
@@ -81,6 +88,14 @@ export class SessionsResource {
   /** Get a single session by id. */
   get(id: string): Promise<SessionResponse> {
     return this.client.request<SessionResponse>({ method: 'GET', path: `/api/sessions/${encodeSegment(id)}` });
+  }
+
+  /** Read the logged-in account profile (phone, push name, about, picture URL). VIEWER. */
+  getOwnProfile(id: string): Promise<SessionProfile> {
+    return this.client.request<SessionProfile>({
+      method: 'GET',
+      path: `/api/sessions/${encodeSegment(id)}/profile`,
+    });
   }
 
   /** Create a new session. Requires an OPERATOR-level key. */

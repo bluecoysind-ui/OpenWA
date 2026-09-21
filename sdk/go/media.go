@@ -14,8 +14,11 @@ func (s *MediaService) base(sessionID string) string {
 // Base64; Base64 wins when both are given. No mimetype is needed — the input
 // format is read from the bytes.
 type ConvertMediaInput struct {
-	URL    string `json:"url,omitempty"`
-	Base64 string `json:"base64,omitempty"`
+	URL      string `json:"url,omitempty"`
+	Base64   string `json:"base64,omitempty"`
+	PackName string `json:"packName,omitempty"`
+	Author   string `json:"author,omitempty"`
+	RemoveBg bool   `json:"removeBg,omitempty"`
 }
 
 // ConvertedMedia is the result, shaped for handing straight to a send call.
@@ -68,4 +71,43 @@ func (s *MediaService) ConvertVideo(ctx context.Context, sessionID string, in Co
 		return nil, err
 	}
 	return &out, nil
+}
+
+// ConvertSticker converts image or video into a 512×512 WebP sticker (duration-capped).
+// Optional PackName/Author EXIF and RemoveBg. Requires an OPERATOR-level key.
+func (s *MediaService) ConvertSticker(ctx context.Context, sessionID string, in ConvertMediaInput) (*ConvertedMedia, error) {
+	var out ConvertedMedia
+	err := s.client.do(ctx, "POST", s.base(sessionID)+"/convert/sticker", nil, in, &out)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// StoredMediaFile is one inbound file stored when MEDIA_PERSIST is on.
+type StoredMediaFile struct {
+	MessageID string `json:"messageId"`
+	CreatedAt string `json:"createdAt"`
+	URL       string `json:"url"`
+}
+
+// ListFiles lists inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off.
+func (s *MediaService) ListFiles(ctx context.Context, sessionID string) ([]StoredMediaFile, error) {
+	var out []StoredMediaFile
+	err := s.client.do(ctx, "GET", s.base(sessionID)+"/files", nil, nil, &out)
+	return out, err
+}
+
+// GetFile fetches stored inbound media bytes. 404 when MEDIA_PERSIST is off or the file is missing.
+func (s *MediaService) GetFile(ctx context.Context, sessionID, messageID string) (*StatusMedia, error) {
+	data, contentType, err := s.client.doRaw(ctx, "GET", s.base(sessionID)+"/files/"+pathEscape(messageID), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &StatusMedia{Data: data, ContentType: contentType}, nil
+}
+
+// DeleteFile removes a stored inbound media file.
+func (s *MediaService) DeleteFile(ctx context.Context, sessionID, messageID string) error {
+	return s.client.do(ctx, "DELETE", s.base(sessionID)+"/files/"+pathEscape(messageID), nil, nil, nil)
 }

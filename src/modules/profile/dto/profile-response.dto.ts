@@ -13,3 +13,22 @@ export class ProfileAckResponseDto {
   @ApiProperty({ description: 'Human-readable confirmation of what was changed.', example: 'Profile name updated' })
   message!: string;
 }
+
+/** Logged-in account profile. No adapter internals. */
+export class OwnProfileDto {
+  @ApiProperty({ type: String, nullable: true, example: '628123456789' })
+  phone!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Ada' })
+  pushName!: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Busy' })
+  about!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'https://pps.whatsapp.net/v/t61.24694-24/n.jpg',
+  })
+  profilePictureUrl!: string | null;
+}

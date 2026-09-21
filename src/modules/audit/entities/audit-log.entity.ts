@@ -37,10 +37,15 @@ export enum AuditAction {
   // another. Rare, security-relevant, and the in-memory error store that serves the reason to the API
   // does not survive a restart, so the audit row is the only durable record that a rebind was blocked.
   SESSION_REBIND_REJECTED = 'session_rebind_rejected',
+  BOT_CONFIG_UPDATED = 'bot_config_updated',
 
   // Message events
   MESSAGE_SENT = 'message_sent',
   MESSAGE_FAILED = 'message_failed',
+  // Multi-destination forward (N>1). One row per request, not per destination — the messages table
+  // still holds each copy. Single-dest forwards stay unaudited (MESSAGE_SENT is intentionally unemitted).
+  MESSAGE_MULTI_FORWARD = 'message_multi_forward',
+  CONTACT_NUMBERS_CHECKED = 'contact_numbers_checked',
   // Send-pacing enforcement. SEND_PACING_BLOCKED is sampled per session (at most one row per
   // session per minute, carrying the suppressed count) on the RATE_LIMIT_EXCEEDED precedent: a
   // session that hits its daily cap keeps being refused for the rest of the day, and one row per
@@ -48,6 +53,10 @@ export enum AuditAction {
   // and alert-worthy, so it is never sampled.
   SEND_PACING_BLOCKED = 'send_pacing_blocked',
   SEND_BREAKER_TRIPPED = 'send_breaker_tripped',
+  SCHEDULED_MESSAGE_CREATED = 'scheduled_message_created',
+  SCHEDULED_MESSAGE_CANCELLED = 'scheduled_message_cancelled',
+  SCHEDULED_MESSAGE_SENT = 'scheduled_message_sent',
+  SCHEDULED_MESSAGE_FAILED = 'scheduled_message_failed',
 
   // Webhook events
   WEBHOOK_CREATED = 'webhook_created',

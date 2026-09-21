@@ -662,7 +662,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     await this.ownership.release(id);
   }
 
-  async getQRCode(id: string): Promise<{ qrCode: string; status: SessionStatus }> {
+  async getQRCode(id: string): Promise<{ qrCode: string; status: SessionStatus; qrExpiresAt: number }> {
     const session = await this.findOne(id);
     const engine = this.engines.require(
       id,
@@ -678,9 +678,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       throw new BadRequestException('QR code is not ready yet. Please wait...');
     }
 
+    // WhatsApp rotates pairing QRs on a ~20s cadence; the dashboard uses this hint for the countdown.
+    const qrExpiresAt = Date.now() + 20_000;
     return {
       qrCode,
       status: session.status,
+      qrExpiresAt,
     };
   }
 

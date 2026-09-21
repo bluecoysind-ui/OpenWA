@@ -1,7 +1,9 @@
 import { type Client } from 'whatsapp-web.js';
-import { CallLinkType, MediaInput } from '../interfaces/whatsapp-engine.interface';
+import { CallLinkType, MediaInput, OwnProfile } from '../interfaces/whatsapp-engine.interface';
 import { EngineRefusedError } from '../../common/errors/engine-refused.error';
 import { toMessageMedia } from './wwebjs-messaging';
+import { userPart } from '../identity/wa-id';
+import { readWid } from '../types/whatsapp-web-js.types';
 import { type WwebjsEngineHost, withPage, reportPageDeath } from './wwebjs-host';
 
 /**
@@ -20,6 +22,32 @@ export class WwebjsProfile {
   /** See {@link withPage} for what a dead page answers here. */
   private withPage<T>(context: string, op: () => Promise<T>): Promise<T> {
     return withPage(this.host, context, op);
+  }
+
+  async getOwnProfile(): Promise<OwnProfile> {
+    this.host.ensureReady();
+    const info = this.client().info;
+    const wid = info?.wid ? readWid(info.wid) : null;
+    const phone = wid ? userPart(wid) : null;
+    const pushName = typeof info?.pushname === 'string' ? info.pushname : null;
+    let about: string | null = null;
+    let profilePictureUrl: string | null = null;
+    if (wid) {
+      try {
+        const me = await this.withPage('getOwnProfile.about', () => this.client().getContactById(wid));
+        const status = await me.getAbout();
+        about = typeof status === 'string' && status.length > 0 ? status : null;
+      } catch {
+        about = null;
+      }
+      try {
+        const url = await this.withPage('getOwnProfile.picture', () => this.client().getProfilePicUrl(wid));
+        profilePictureUrl = typeof url === 'string' && url.length > 0 ? url : null;
+      } catch {
+        profilePictureUrl = null;
+      }
+    }
+    return { phone, pushName, about, profilePictureUrl };
   }
 
   async createCallLink(type: CallLinkType, startTime: number): Promise<string> {

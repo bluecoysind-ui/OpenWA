@@ -263,6 +263,55 @@ describe('configuration search namespace', () => {
   });
 });
 
+describe('configuration — scheduler and automation port knobs', () => {
+  const keys = [
+    'SCHEDULED_MESSAGES_MAX_PENDING',
+    'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
+    'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+    'SCHEDULED_MESSAGES_MAX_RECURRING',
+    'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+    'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+    'BOT_COMMAND_COOLDOWN_MS',
+    'AUTO_REPLY_REGEX_MAX_PATTERN',
+    'REMOVE_BG_API_KEY',
+    'STICKER_MAX_DURATION_SEC',
+    'MEDIA_PERSIST_TTL_DAYS',
+    'MEDIA_CONVERSION_CONCURRENCY',
+  ];
+  const orig: Record<string, string | undefined> = {};
+  beforeEach(() => keys.forEach(k => (orig[k] = process.env[k])));
+  afterEach(() =>
+    keys.forEach(k => {
+      if (orig[k] === undefined) delete process.env[k];
+      else process.env[k] = orig[k];
+    }),
+  );
+
+  it('exposes scheduler/automation/removeBg defaults', () => {
+    keys.forEach(k => delete process.env[k]);
+    const cfg = configuration();
+    expect(cfg.scheduler).toEqual({
+      maxPendingPerSession: 100,
+      maxHorizonHours: 720,
+      maxLatenessMs: 6 * 60 * 60 * 1000,
+      maxRecurringPerSession: 20,
+      maxOccurrences: 366,
+      minIntervalMs: 3_600_000,
+    });
+    expect(cfg.bot.commandCooldownMs).toBe(3000);
+    expect(cfg.automation.regexMaxPatternLength).toBe(256);
+    expect(cfg.removeBg.apiKey).toBe('');
+    expect(cfg.mediaConversion.stickerMaxDurationSec).toBe(8);
+    expect(cfg.mediaConversion.concurrency).toBe(2);
+    expect(cfg.mediaPersist.ttlDays).toBe(30);
+  });
+
+  it('clamps MEDIA_CONVERSION_CONCURRENCY to a hard max of 4', () => {
+    process.env.MEDIA_CONVERSION_CONCURRENCY = '9';
+    expect(configuration().mediaConversion.concurrency).toBe(4);
+  });
+});
+
 describe('configuration stats namespace', () => {
   const orig = process.env.STATS_CACHE_TTL_MS;
   afterEach(() => {

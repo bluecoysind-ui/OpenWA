@@ -194,6 +194,14 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'STATS_CACHE_TTL_MS', // 0 = memo disabled
     'WEBHOOK_MAX_PER_SESSION', // 0 = unlimited
     'AUTOMATION_MAX_PER_SESSION', // 0 = unlimited
+    'AUTO_REPLY_REGEX_MAX_PATTERN',
+    'SCHEDULED_MESSAGES_MAX_PENDING', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_LATENESS_MS', // 0 = refuse any overdue job
+    'SCHEDULED_MESSAGES_MAX_RECURRING', // 0 = unlimited
+    'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+    'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+    'BOT_COMMAND_COOLDOWN_MS', // 0 = no cooldown
     'WEBHOOK_MEDIA_INLINE_MAX_BYTES', // 0 = never inline media
     'EXPORT_INLINE_MEDIA_BUDGET_BYTES', // 0 = a data export carries no inline media at all
     'MESSAGE_LIST_INLINE_MEDIA_BUDGET_BYTES', // 0 = a message list carries no inline media at all
@@ -256,6 +264,9 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     if (!Number.isInteger(n) || n < 1) {
       errors.push(`${key} must be a positive integer (got "${raw}")`);
     }
+    if (key === 'MEDIA_CONVERSION_CONCURRENCY' && Number.isInteger(n) && n > 4) {
+      errors.push(`${key} must be between 1 and 4 (got "${raw}")`);
+    }
   };
   for (const key of [
     'RATE_LIMIT_SHORT_LIMIT',
@@ -273,6 +284,8 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'REQUEST_TIMEOUT_MS',
     'HEADERS_TIMEOUT_MS',
     'KEEPALIVE_TIMEOUT_MS',
+    'CONTACT_CHECK_RATE_MAX',
+    'CONTACT_CHECK_RATE_WINDOW_MS',
     'WEBHOOK_DISPATCH_CONCURRENCY',
     // 0 would reject every webhook dispatch (a total, silent webhook outage).
     'WEBHOOK_MAX_PAYLOAD_BYTES',
@@ -283,6 +296,8 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'MEDIA_CONVERSION_TIMEOUT_MS',
     'MEDIA_CONVERSION_MAX_OUTPUT_BYTES',
     'MEDIA_CONVERSION_CONCURRENCY',
+    'STICKER_MAX_DURATION_SEC',
+    'MEDIA_PERSIST_TTL_DAYS',
     // Session ownership leases, same fall-back-silently reasoning.
     'SESSION_LEASE_TTL_MS',
     'SESSION_LEASE_HEARTBEAT_MS',
@@ -399,6 +414,12 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'MEDIA_CONVERSION_ENABLED',
     'CHAT_MEDIA_ARCHIVE_ENABLED',
     'CHAT_MEDIA_ARCHIVE_OUTBOUND',
+    // WA-AKG port (docs/wa-akg-port): opt-in except SCHEDULED_MESSAGES, which is opt-out.
+    'MEDIA_PERSIST',
+    'POLL_VOTE_EVENTS',
+    'BOT_COMMANDS',
+    'AUTO_REPLY_REGEX',
+    'SCHEDULED_MESSAGES',
     // Read with `=== 'true'` in BOTH configuration.ts and data-source.ts, and this is the one whose
     // typo fails OPEN: `DATABASE_SSL=require` is the natural Postgres spelling and reads as OFF, so
     // credentials and message bodies cross the wire in plaintext to a server the operator believed
@@ -496,6 +517,22 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     errors.push(
       `LOG_LEVEL must be one of ${LOG_LEVEL_VALUES.map(v => `"${v}"`).join(', ')} (got ${JSON.stringify(rawLogLevel)})`,
     );
+  }
+
+  if (str('BLUECOYS_INTEGRATION_ENABLED') === 'true') {
+    const base = str('BLUECOYS_BASE_URL') ?? 'https://bluecoys.com';
+    try {
+      const parsed = new URL(base);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        errors.push('BLUECOYS_BASE_URL must use http or https');
+      }
+    } catch {
+      errors.push(`BLUECOYS_BASE_URL must be a valid URL (got ${JSON.stringify(base)})`);
+    }
+  }
+
+  for (const key of ['BLUECOYS_QR_TTL_MS', 'BLUECOYS_CALLBACK_TIMEOUT_MS']) {
+    checkPositiveInt(key);
   }
 
   if (errors.length > 0) {

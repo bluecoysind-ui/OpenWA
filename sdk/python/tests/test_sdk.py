@@ -503,6 +503,14 @@ class TestMedia:
         assert backend.last_call.url == "http://localhost:2785/api/sessions/s/media/convert/video"
         assert backend.last_call.body == {"url": "https://example.com/c.mov"}
 
+    def test_convert_sticker(self):
+        backend = MockBackend().on(
+            "POST", "/media/convert/sticker", body={"base64": "UklGRg==", "mimetype": "image/webp", "bytes": 8}
+        )
+        make_client(backend).media.convert_sticker("s", url="https://example.com/p.png", pack_name="Pack")
+        assert backend.last_call.url == "http://localhost:2785/api/sessions/s/media/convert/sticker"
+        assert backend.last_call.body == {"url": "https://example.com/p.png", "packName": "Pack"}
+
 
 class TestCalls:
     def test_reject_call(self):
@@ -754,12 +762,14 @@ class TestChatsAndHealth:
         backend.on("GET", "/api/health", body={"status": "ok", "version": "0.7.2"})
         backend.on("GET", "/live", body={"status": "ok"})
         backend.on("GET", "/ready", body={"status": "ok", "details": {}})
+        backend.on("GET", "/features", body={"scheduler": True})
         backend.on("POST", "/validate", body={"valid": True, "role": "admin"})
         client = make_client(backend)
         client.health.check()
         assert backend.calls[-1].url == "http://localhost:2785/api/health"
         client.health.live()
         client.health.ready()
+        client.health.features()
         client.auth()
         assert backend.calls[-1].method == "POST"
         assert "/auth/validate" in backend.calls[-1].url

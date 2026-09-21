@@ -19,6 +19,7 @@ func TestRouting(t *testing.T) {
 	}{
 		{"Sessions.List", func(c *Client) { c.Sessions.List(ctx, nil) }, "GET", "/api/sessions"},
 		{"Sessions.Get", func(c *Client) { c.Sessions.Get(ctx, "s1") }, "GET", "/api/sessions/s1"},
+		{"Sessions.GetOwnProfile", func(c *Client) { c.Sessions.GetOwnProfile(ctx, "s1") }, "GET", "/api/sessions/s1/profile"},
 		{"Sessions.Create", func(c *Client) { c.Sessions.Create(ctx, CreateSessionRequest{}) }, "POST", "/api/sessions"},
 		{"Sessions.GetConfig", func(c *Client) { c.Sessions.GetConfig(ctx, "s1") }, "GET", "/api/sessions/s1/config"},
 		{"Sessions.UpdateConfig", func(c *Client) { c.Sessions.UpdateConfig(ctx, "s1", UpdateSessionConfigRequest{}) }, "PATCH", "/api/sessions/s1/config"},
@@ -60,6 +61,7 @@ func TestRouting(t *testing.T) {
 		{"Contacts.List", func(c *Client) { c.Contacts.List(ctx, "s1", nil) }, "GET", "/api/sessions/s1/contacts"},
 		{"Contacts.Get", func(c *Client) { c.Contacts.Get(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1"},
 		{"Contacts.Check", func(c *Client) { c.Contacts.Check(ctx, "s1", "628") }, "GET", "/api/sessions/s1/contacts/check/628"},
+		{"Contacts.CheckNumbers", func(c *Client) { c.Contacts.CheckNumbers(ctx, "s1", []string{"628"}) }, "POST", "/api/sessions/s1/contacts/check"},
 		{"Contacts.ProfilePicture", func(c *Client) { c.Contacts.ProfilePicture(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1/profile-picture"},
 		{"Contacts.ProfilePictures", func(c *Client) { c.Contacts.ProfilePictures(ctx, "s1", []string{"u1"}) }, "GET", "/api/sessions/s1/contacts/profile-pictures"},
 		{"Contacts.Phone", func(c *Client) { c.Contacts.Phone(ctx, "s1", "u1") }, "GET", "/api/sessions/s1/contacts/u1/phone"},
@@ -158,6 +160,7 @@ func TestRouting(t *testing.T) {
 		{"Health.Check", func(c *Client) { c.Health.Check(ctx) }, "GET", "/api/health"},
 		{"Health.Live", func(c *Client) { c.Health.Live(ctx) }, "GET", "/api/health/live"},
 		{"Health.Ready", func(c *Client) { c.Health.Ready(ctx) }, "GET", "/api/health/ready"},
+		{"Health.Features", func(c *Client) { c.Health.Features(ctx) }, "GET", "/api/features"},
 
 		{"Search.Search", func(c *Client) { c.Search.Search(ctx, SearchQuery{Q: "hi"}) }, "GET", "/api/search"},
 		{"Auth.Validate", func(c *Client) { c.Auth.Validate(ctx) }, "POST", "/api/auth/validate"},
@@ -169,6 +172,14 @@ func TestRouting(t *testing.T) {
 
 		{"Calls.RejectCall", func(c *Client) { c.Calls.RejectCall(ctx, "s1", "call1") }, "POST", "/api/sessions/s1/calls/call1/reject"},
 		{"Calls.CreateLink", func(c *Client) { c.Calls.CreateLink(ctx, "s1", CreateCallLinkRequest{}) }, "POST", "/api/sessions/s1/calls/link"},
+
+		{"ScheduledMessages.List", func(c *Client) { c.ScheduledMessages.List(ctx, "s1") }, "GET", "/api/sessions/s1/scheduled-messages"},
+		{"ScheduledMessages.Create", func(c *Client) { c.ScheduledMessages.Create(ctx, "s1", CreateScheduledMessageRequest{}) }, "POST", "/api/sessions/s1/scheduled-messages"},
+		{"ScheduledMessages.Get", func(c *Client) { c.ScheduledMessages.Get(ctx, "s1", "j1") }, "GET", "/api/sessions/s1/scheduled-messages/j1"},
+		{"ScheduledMessages.Update", func(c *Client) { c.ScheduledMessages.Update(ctx, "s1", "j1", UpdateScheduledMessageRequest{}) }, "PATCH", "/api/sessions/s1/scheduled-messages/j1"},
+		{"ScheduledMessages.Delete", func(c *Client) { c.ScheduledMessages.Delete(ctx, "s1", "j1") }, "DELETE", "/api/sessions/s1/scheduled-messages/j1"},
+		{"BotConfig.Get", func(c *Client) { c.BotConfig.Get(ctx, "s1") }, "GET", "/api/sessions/s1/bot-config"},
+		{"BotConfig.Update", func(c *Client) { c.BotConfig.Update(ctx, "s1", map[string]any{}) }, "PUT", "/api/sessions/s1/bot-config"},
 	}
 
 	for _, tc := range cases {

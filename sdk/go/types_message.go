@@ -121,6 +121,16 @@ type SendPollRequest struct {
 	QuotedMessageID string `json:"quotedMessageId,omitempty"`
 }
 
+// SendTextListRequest is a numbered text list sent through send-text.
+type SendTextListRequest struct {
+	ChatID          string   `json:"chatId"`
+	Title           string   `json:"title"`
+	Options         []string `json:"options"`
+	Footer          string   `json:"footer,omitempty"`
+	QuotedMessageID string   `json:"quotedMessageId,omitempty"`
+	Mentions        []string `json:"mentions,omitempty"`
+}
+
 // ReplyMessageRequest replies to a quoted message.
 type ReplyMessageRequest struct {
 	ChatID          string `json:"chatId"`
@@ -139,10 +149,12 @@ type ClickButtonRequest struct {
 }
 
 // ForwardMessageRequest forwards a message between chats.
+// ToChatID is required unless ToChatIDs is non-empty.
 type ForwardMessageRequest struct {
-	FromChatID string `json:"fromChatId"`
-	ToChatID   string `json:"toChatId"`
-	MessageID  string `json:"messageId"`
+	FromChatID string   `json:"fromChatId"`
+	ToChatID   string   `json:"toChatId,omitempty"`
+	ToChatIDs  []string `json:"toChatIds,omitempty"`
+	MessageID  string   `json:"messageId"`
 }
 
 // ReactMessageRequest adds an emoji reaction. Send an empty Emoji to remove.

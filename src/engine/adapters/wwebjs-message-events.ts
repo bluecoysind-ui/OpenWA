@@ -6,7 +6,8 @@ import {
   type EditedMessage,
 } from '../interfaces/whatsapp-engine.interface';
 import { type SerializedWid } from '../types/whatsapp-web-js.types';
-import { buildEditedMessage, buildIncomingMessageBase, mapContactFields } from './message-mapper';
+import { buildEditedMessage, buildIncomingMessageBase, mapContactFields, mapWwebjsMessageType } from './message-mapper';
+import { buildQuotedMessage, quotedCaption } from '../quoted-payload';
 import { extractWwebjsCall, wwebjsAckToDeliveryStatus } from './wwebjs-messaging';
 import { type WwebjsEngineHost } from './wwebjs-host';
 
@@ -67,10 +68,14 @@ export function registerWwebjsMessageEvents(client: Client, host: WwebjsEngineHo
       if (msg.hasQuotedMsg) {
         try {
           const quoted = await msg.getQuotedMessage();
-          incomingMessage.quotedMessage = {
+          const caption = quotedCaption(quoted);
+          incomingMessage.quotedMessage = buildQuotedMessage({
             id: quoted.id._serialized,
             body: quoted.body,
-          };
+            type: quoted.type ? mapWwebjsMessageType(String(quoted.type)) : undefined,
+            hasMedia: quoted.hasMedia ? true : undefined,
+            ...(caption ? { caption } : {}),
+          });
         } catch (error) {
           host.logger.error('Error getting quoted message', String(error));
         }

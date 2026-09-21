@@ -120,7 +120,9 @@ For any deployment where ethical, legal, or regulatory compliance matters (healt
 | Media Messages    | ✅     | Images, videos, documents, audio                          |
 | Message Reactions | ✅     | React to messages with emoji                              |
 | Message Editing   | ✅     | Send edits + live `message.edited` events on both engines |
-| Bulk Messaging    | ✅     | Send to multiple recipients                               |
+| Bulk Messaging    | ✅     | Send to multiple recipients with pacing                         |
+| Scheduled sends   | ✅     | One-shot and recurring (daily/weekly/monthly, IANA/DST) delayed text/media URL (`SCHEDULED_MESSAGES`, default on) |
+| Auto-reply / bot  | ✅     | Per-session rules + commands (`BOT_COMMANDS` / `AUTO_REPLY_REGEX` opt-in); `#sticker` URL, caption, or reply |
 | Message Status    | ✅     | Track delivery and read receipts                          |
 
 ### Advanced
@@ -339,7 +341,7 @@ curl -X POST http://localhost:2785/api/sessions/{sessionId}/webhooks \
 
 OpenWA can expose a **curated set of tools over the [Model Context Protocol](https://modelcontextprotocol.io)** so AI agents (Claude, Cursor, …) can drive WhatsApp. It is **off by default** and **additive** — every REST route keeps working unchanged.
 
-Set `MCP_ENABLED=true` to mount a stateless Streamable-HTTP transport at **`POST /mcp`** on the existing server (same port, no extra process). It mounts **25 read-only tools** by default — session, message, contact, group, webhook, label and automation-rule _reads_ — because the surface is read-only unless you opt out. Add `MCP_READONLY=false` to mount all **51 tools**, adding the write tier (send, reply, group operations). Either way it is a focused surface rather than the full API, so agents aren't overwhelmed.
+Set `MCP_ENABLED=true` to mount a stateless Streamable-HTTP transport at **`POST /mcp`** on the existing server (same port, no extra process). It mounts **29 read-only tools** by default — session, message, contact, group, webhook, label, automation-rule, scheduler, bot-config and webhook-delivery _reads_ — because the surface is read-only unless you opt out. Add `MCP_READONLY=false` to mount all **57 tools**, adding the write tier (send, reply, group operations, create/cancel scheduled message). Either way it is a focused surface rather than the full API, so agents aren't overwhelmed.
 
 ```bash
 MCP_ENABLED=true npm run start:prod   # or set MCP_ENABLED in your .env / compose

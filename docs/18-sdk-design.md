@@ -28,11 +28,11 @@ All five SDKs expose the same fluent surface:
 
 | Resource    | Methods                                                                                                                                                                                                                                                                                                  |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sessions`  | list, get, getConfig, updateConfig, getProxy, updateProxy, create, delete, start, stop, logout, forceKill, getQrCode, requestPairingCode, setOnlinePresence, stats                                                                                                                                       |
-| `messages`  | list, sendText, sendImage/Video/Audio/Document/Sticker, sendLocation, sendContact, sendTemplate, sendPoll, reply, forward, clickButton, react, delete, editMessage, history, reactions, media, pin, unpin, star, votePoll, sendBulk, batchStatus, cancelBatch                                            |
-| `contacts`  | list, get, check, profilePicture, profilePictures, phone, upsert, delete, block, unblock, listBlocked                                                                                                                                                                                                    |
+| `sessions`  | list, get, getOwnProfile, getConfig, updateConfig, getProxy, updateProxy, create, delete, start, stop, logout, forceKill, getQrCode, requestPairingCode, setOnlinePresence, stats                                                                                                                        |
+| `messages`  | list, sendText, sendTextList, sendImage/Video/Audio/Document/Sticker, sendLocation, sendContact, sendTemplate, sendPoll, reply, forward, clickButton, react, delete, editMessage, history, reactions, media, pin, unpin, star, votePoll, sendBulk, batchStatus, cancelBatch                              |
+| `contacts`  | list, get, check, checkNumbers, profilePicture, profilePictures, phone, upsert, delete, block, unblock, listBlocked                                                                                                                                                                                     |
 | `groups`    | list, get, create, joinInfo, joinGroup, add/remove/promote/demoteParticipants, setSubject, setDescription, getGroupSettings, updateGroupSettings, leave, getPicture, setPicture, deletePicture, inviteCode, revokeInviteCode, getMembershipRequests, approveMembershipRequests, rejectMembershipRequests |
-| `webhooks`  | list, listAll, deliveryFailures, get, create, update, delete, test                                                                                                                                                                                                                                       |
+| `webhooks`  | list, listAll, deliveryFailures, get, deliveries, create, update, delete, test                                                                                                                                                                                                                           |
 | `chats`     | list, subscribePresence, getPresence, markRead, markUnread, archive, pin, mute, clearMessages, delete, sendState                                                                                                                                                                                         |
 | `labels`    | list, get, chats, upsert, delete, forChat, addToChat, removeFromChat _(WhatsApp Business)_                                                                                                                                                                                                               |
 | `channels`  | list, get, messages, create, delete, mute, subscribe, unsubscribe, demoteAdmin, transferOwnership _(Newsletters)_                                                                                                                                                                                        |
@@ -42,8 +42,10 @@ All five SDKs expose the same fluent surface:
 | `templates` | list, get, create, update, delete                                                                                                                                                                                                                                                                        |
 | `profile`   | setProfileName, setProfileStatus, setProfilePicture, deleteProfilePicture                                                                                                                                                                                                                                |
 | `calls`     | rejectCall, createLink                                                                                                                                                                                                                                                                                   |
-| `media`     | conversionStatus, convertVoice, convertVideo _(OPERATOR)_                                                                                                                                                                                                                                                |
-| `health`    | check, live, ready                                                                                                                                                                                                                                                                                       |
+| `media`     | conversionStatus, convertVoice, convertVideo, convertSticker, listFiles, getFile, deleteFile _(OPERATOR)_                                                                                                                                                                                                |
+| `scheduled-messages` | list, create, get, update, delete _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                      |
+| `bot-config` | get, update _(OPERATOR; GET is VIEWER)_                                                                                                                                                                                                                                                                |
+| `health`    | check, live, ready, features                                                                                                                                                                                                                                                                                       |
 
 > The SDKs cover the user-facing resources above and stop there. The administrative and operational surfaces are deliberately left out — `auth/api-keys`, `audit`, `settings`, `stats`, `automation`, `infra`, `plugins` and the `integration` management routes are predominantly `ADMIN`-gated; `metrics` is a `@Public()` Prometheus scrape gated by `METRICS_TOKEN` rather than by role; `mcp` is a Streamable-HTTP transport mounted straight onto the Express adapter; and `ingress` is the `@Public()` receiver that integration providers post into. `docker` has no HTTP surface at all — it is an internal service module. Methods that require an `OPERATOR`-level key are annotated **OPERATOR** in the per-language tables below.
 
@@ -132,6 +134,7 @@ The top-level client also exposes:
 | `getProxy`           | `getProxy(id)`                 | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `updateProxy`        | `updateProxy(id, body)`        | Update per-session proxy settings; changes apply on the next start, not to a running engine. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                       |
 | `get`                | `get(id)`                      | Get a single session by id.                                                                                                                                                                                                                                                                                                                                     |
+| `getOwnProfile`      | `getOwnProfile(id)`            | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`             | `create(body)`                 | Create a new session (`body.name` required). **OPERATOR**                                                                                                                                                                                                                                                                                                       |
 | `delete`             | `delete(id)`                   | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`              | `start(id)`                    | Start a session and initialize the WhatsApp connection. **OPERATOR**                                                                                                                                                                                                                                                                                            |
@@ -149,6 +152,7 @@ The top-level client also exposes:
 | -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list`         | `list(sessionId, query?)`                 | List messages (filter by chat/sender); returns `{ messages, total }`.                                                                             |
 | `sendText`     | `sendText(sessionId, { chatId, text })`   | Send a text message (`text` max 4096 chars). **OPERATOR**                                                                                         |
+| `sendTextList` | `sendTextList(sessionId, body)`           | Send a numbered text list (formatted text, not a native list). **OPERATOR**                                                                       |
 | `sendImage`    | `sendImage(sessionId, body)`              | Send an image (`url` or `base64`). **OPERATOR**                                                                                                   |
 | `sendVideo`    | `sendVideo(sessionId, body)`              | Send a video (`url` or `base64`). **OPERATOR**                                                                                                    |
 | `sendAudio`    | `sendAudio(sessionId, body)`              | Send an audio file (`url` or `base64`). **OPERATOR**                                                                                              |
@@ -184,6 +188,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `list`            | `list(sessionId, query?)`              | List contacts known to the session.                                                  |
 | `get`             | `get(sessionId, contactId)`            | Get details for a single contact by JID.                                             |
 | `check`           | `check(sessionId, number)`             | Check whether a phone number is registered on WhatsApp.                              |
+| `checkNumbers`    | `checkNumbers(sessionId, body)`        | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profilePicture`  | `profilePicture(sessionId, contactId)` | Get the contact's profile picture URL (or null).                                     |
 | `profilePictures` | `profilePictures(sessionId, ids)`      | Batch-resolve profile picture URLs for up to 50 contacts in one request.             |
 | `phone`           | `phone(sessionId, contactId)`          | Resolve a contact id (e.g. a `@lid`) to a phone number.                              |
@@ -244,6 +249,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `deliveryFailures` | `deliveryFailures(query?)`    | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`             | `list(sessionId)`             | List all webhooks for a session. **OPERATOR**                                                                                                                          |
 | `get`              | `get(sessionId, id)`          | Get a single webhook by id. **OPERATOR**                                                                                                                               |
+| `deliveries`       | `deliveries(sessionId, id)`   | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`           | `create(sessionId, body)`     | Create a new webhook. **OPERATOR**                                                                                                                                     |
 | `update`           | `update(sessionId, id, body)` | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`           | `delete(sessionId, id)`       | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -339,7 +345,28 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | ------------------ | -------------------------------- | -------------------------------------------------------------------------------------------- |
 | `conversionStatus` | `conversionStatus(sessionId)`    | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(sessionId, input)` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
-| `convertVideo`     | `convertVideo(sessionId, input)` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertVideo`     | `convertVideo(sessionId, input)`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertSticker`   | `convertSticker(sessionId, input)` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
+| `listFiles`        | `listFiles(sessionId)`             | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR**  |
+| `getFile`          | `getFile(sessionId, messageId)`    | Fetch stored inbound media bytes. **OPERATOR**                                              |
+| `deleteFile`       | `deleteFile(sessionId, messageId)` | Delete a stored inbound media file. **OPERATOR**                                            |
+
+#### `scheduled-messages`
+
+| Method   | Signature                          | Description                                                                 |
+| -------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `list`   | `list(sessionId)`                  | List scheduled one-shot sends for the session.                              |
+| `create` | `create(sessionId, body)`          | Schedule a text or media-URL send. **OPERATOR**                             |
+| `get`    | `get(sessionId, jobId)`            | Get one scheduled job.                                                      |
+| `update` | `update(sessionId, jobId, body)`   | Update a pending job. **OPERATOR**                                          |
+| `delete` | `delete(sessionId, jobId)`         | Cancel a pending job. **OPERATOR**                                          |
+
+#### `bot-config`
+
+| Method   | Signature                    | Description                                              |
+| -------- | ---------------------------- | -------------------------------------------------------- |
+| `get`    | `get(sessionId)`             | Get the session bot config (defaults if never saved).    |
+| `update` | `update(sessionId, body)`    | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
 
 #### `health`
 
@@ -348,6 +375,7 @@ Media bodies share the `SendMediaRequest` shape: `{ chatId, url? | base64?, mime
 | `check` | `check()` | General health (also returns the running version).       |
 | `live`  | `live()`  | Kubernetes liveness probe (`{ status }`).                |
 | `ready` | `ready()` | Kubernetes readiness probe — checks both DB connections. |
+| `features` | `features()` | Boolean feature flags for UI gating (VIEWER; no secrets). |
 
 ### Error Handling
 
@@ -506,6 +534,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `get_proxy`            | `get_proxy(session_id) -> SessionProxy`                         | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `update_proxy`         | `update_proxy(session_id, body) -> SessionProxy`                | Update per-session proxy settings; changes apply on the next start. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                                                |
 | `get`                  | `get(session_id) -> SessionResponse`                            | Get one session.                                                                                                                                                                                                                                                                                                                                                |
+| `get_own_profile`      | `get_own_profile(session_id)`                                   | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`               | `create(body) -> SessionResponse`                               | Create a session (`body["name"]` required). **OPERATOR**                                                                                                                                                                                                                                                                                                        |
 | `delete`               | `delete(session_id) -> None`                                    | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`                | `start(session_id) -> SessionResponse`                          | Start (connect) a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                         |
@@ -519,35 +548,36 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 
 #### `client.messages`
 
-| Method          | Signature                                                              | Description                                                                                                                                       |
-| --------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list`          | `list(session_id, query=None) -> MessageListResponse`                  | List stored messages.                                                                                                                             |
-| `send_text`     | `send_text(session_id, body) -> MessageResponse`                       | Send a text message. **OPERATOR**                                                                                                                 |
-| `send_image`    | `send_image(session_id, body) -> MessageResponse`                      | Send an image. **OPERATOR**                                                                                                                       |
-| `send_video`    | `send_video(session_id, body) -> MessageResponse`                      | Send a video. **OPERATOR**                                                                                                                        |
-| `send_audio`    | `send_audio(session_id, body) -> MessageResponse`                      | Send audio. **OPERATOR**                                                                                                                          |
-| `send_document` | `send_document(session_id, body) -> MessageResponse`                   | Send a document. **OPERATOR**                                                                                                                     |
-| `send_sticker`  | `send_sticker(session_id, body) -> MessageResponse`                    | Send a sticker. **OPERATOR**                                                                                                                      |
-| `send_location` | `send_location(session_id, body) -> MessageResponse`                   | Send a location. **OPERATOR**                                                                                                                     |
-| `send_contact`  | `send_contact(session_id, body) -> MessageResponse`                    | Send a contact card. **OPERATOR**                                                                                                                 |
-| `send_template` | `send_template(session_id, body) -> MessageResponse`                   | Send a stored template. **OPERATOR**                                                                                                              |
-| `send_poll`     | `send_poll(session_id, body) -> MessageResponse`                       | Send a poll message. **OPERATOR**                                                                                                                 |
-| `reply`         | `reply(session_id, body) -> MessageResponse`                           | Reply to a message. **OPERATOR**                                                                                                                  |
-| `forward`       | `forward(session_id, body) -> MessageResponse`                         | Forward a message. **OPERATOR**                                                                                                                   |
-| `click_button`  | `click_button(session_id, body) -> MessageResponse`                    | Tap a button or list row on a stored WhatsApp Business prompt (Baileys only). **OPERATOR**                                                        |
-| `react`         | `react(session_id, body) -> SuccessResult`                             | React to a message. **OPERATOR**                                                                                                                  |
-| `delete`        | `delete(session_id, body) -> SuccessResult`                            | Delete a message. **OPERATOR**                                                                                                                    |
-| `edit_message`  | `edit_message(session_id, body) -> MessageResponse`                    | Edit the text of a message already sent. **OPERATOR**                                                                                             |
-| `history`       | `history(session_id, chat_id, query=None) -> list[ChatHistoryMessage]` | Fetch chat history.                                                                                                                               |
-| `reactions`     | `reactions(session_id, chat_id, message_id) -> list[ReactionRecord]`   | List reactions on a message.                                                                                                                      |
-| `pin`           | `pin(session_id, body) -> SuccessResult`                               | Pin a message in its chat. `durationSeconds` must be 86400, 604800 or 2592000; in a group only admins may pin. **OPERATOR**                       |
-| `vote_poll`     | `vote_poll(session_id, body) -> SuccessResult`                         | Cast a vote on a poll; `options` are the option texts, not ids. Not supported on Baileys (`501`). **OPERATOR**                                    |
-| `star`          | `star(session_id, body) -> SuccessResult`                              | Star or unstar a message. Best-effort on whatsapp-web.js, which silently ignores a message it will not star. **OPERATOR**                         |
-| `unpin`         | `unpin(session_id, body) -> SuccessResult`                             | Unpin a pinned message. **OPERATOR**                                                                                                              |
-| `media`         | `media(session_id, chat_id, message_id) -> MessageMedia`               | Fetch a message's stored media bytes: the archived file when one exists, else the inline copy on the message row. `404` when neither holds bytes. |
-| `send_bulk`     | `send_bulk(session_id, body) -> BulkMessageResponse`                   | Enqueue a bulk send batch. **OPERATOR**                                                                                                           |
-| `batch_status`  | `batch_status(session_id, batch_id) -> BatchStatusResponse`            | Get bulk batch status.                                                                                                                            |
-| `cancel_batch`  | `cancel_batch(session_id, batch_id) -> BatchStatusResponse`            | Cancel a running batch. **OPERATOR**                                                                                                              |
+| Method           | Signature                                                              | Description                                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list`           | `list(session_id, query=None) -> MessageListResponse`                  | List stored messages.                                                                                                                             |
+| `send_text`      | `send_text(session_id, body) -> MessageResponse`                       | Send a text message. **OPERATOR**                                                                                                                 |
+| `send_text_list` | `send_text_list(session_id, body) -> MessageResponse`                  | Send a numbered text list (formatted text, not a native list). **OPERATOR**                                                                       |
+| `send_image`     | `send_image(session_id, body) -> MessageResponse`                      | Send an image. **OPERATOR**                                                                                                                       |
+| `send_video`     | `send_video(session_id, body) -> MessageResponse`                      | Send a video. **OPERATOR**                                                                                                                        |
+| `send_audio`     | `send_audio(session_id, body) -> MessageResponse`                      | Send audio. **OPERATOR**                                                                                                                          |
+| `send_document`  | `send_document(session_id, body) -> MessageResponse`                   | Send a document. **OPERATOR**                                                                                                                     |
+| `send_sticker`   | `send_sticker(session_id, body) -> MessageResponse`                    | Send a sticker. **OPERATOR**                                                                                                                      |
+| `send_location`  | `send_location(session_id, body) -> MessageResponse`                   | Send a location. **OPERATOR**                                                                                                                     |
+| `send_contact`   | `send_contact(session_id, body) -> MessageResponse`                    | Send a contact card. **OPERATOR**                                                                                                                 |
+| `send_template`  | `send_template(session_id, body) -> MessageResponse`                   | Send a stored template. **OPERATOR**                                                                                                              |
+| `send_poll`      | `send_poll(session_id, body) -> MessageResponse`                       | Send a poll message. **OPERATOR**                                                                                                                 |
+| `reply`          | `reply(session_id, body) -> MessageResponse`                           | Reply to a message. **OPERATOR**                                                                                                                  |
+| `forward`        | `forward(session_id, body) -> MessageResponse`                         | Forward a message. **OPERATOR**                                                                                                                   |
+| `click_button`   | `click_button(session_id, body) -> MessageResponse`                    | Tap a button or list row on a stored WhatsApp Business prompt (Baileys only). **OPERATOR**                                                        |
+| `react`          | `react(session_id, body) -> SuccessResult`                             | React to a message. **OPERATOR**                                                                                                                  |
+| `delete`         | `delete(session_id, body) -> SuccessResult`                            | Delete a message. **OPERATOR**                                                                                                                    |
+| `edit_message`   | `edit_message(session_id, body) -> MessageResponse`                    | Edit the text of a message already sent. **OPERATOR**                                                                                             |
+| `history`        | `history(session_id, chat_id, query=None) -> list[ChatHistoryMessage]` | Fetch chat history.                                                                                                                               |
+| `reactions`      | `reactions(session_id, chat_id, message_id) -> list[ReactionRecord]`   | List reactions on a message.                                                                                                                      |
+| `pin`            | `pin(session_id, body) -> SuccessResult`                               | Pin a message in its chat. `durationSeconds` must be 86400, 604800 or 2592000; in a group only admins may pin. **OPERATOR**                       |
+| `vote_poll`      | `vote_poll(session_id, body) -> SuccessResult`                         | Cast a vote on a poll; `options` are the option texts, not ids. Not supported on Baileys (`501`). **OPERATOR**                                    |
+| `star`           | `star(session_id, body) -> SuccessResult`                              | Star or unstar a message. Best-effort on whatsapp-web.js, which silently ignores a message it will not star. **OPERATOR**                         |
+| `unpin`          | `unpin(session_id, body) -> SuccessResult`                             | Unpin a pinned message. **OPERATOR**                                                                                                              |
+| `media`          | `media(session_id, chat_id, message_id) -> MessageMedia`               | Fetch a message's stored media bytes: the archived file when one exists, else the inline copy on the message row. `404` when neither holds bytes. |
+| `send_bulk`      | `send_bulk(session_id, body) -> BulkMessageResponse`                   | Enqueue a bulk send batch. **OPERATOR**                                                                                                           |
+| `batch_status`   | `batch_status(session_id, batch_id) -> BatchStatusResponse`            | Get bulk batch status.                                                                                                                            |
+| `cancel_batch`   | `cancel_batch(session_id, batch_id) -> BatchStatusResponse`            | Cancel a running batch. **OPERATOR**                                                                                                              |
 
 #### `client.contacts`
 
@@ -556,6 +586,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `list`             | `list(session_id, query=None) -> list[ContactRecord]`               | List contacts (`query`: `limit`, `offset`).                                          |
 | `get`              | `get(session_id, contact_id) -> ContactRecord`                      | Get one contact.                                                                     |
 | `check`            | `check(session_id, number) -> CheckNumberResponse`                  | Check whether a number is on WhatsApp.                                               |
+| `check_numbers`    | `check_numbers(session_id, body)`                                   | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profile_picture`  | `profile_picture(session_id, contact_id) -> ProfilePictureResponse` | Get a contact's profile picture.                                                     |
 | `profile_pictures` | `profile_pictures(session_id, ids) -> ProfilePicturesResponse`      | Batch-resolve profile picture URLs for up to 50 contacts.                            |
 | `phone`            | `phone(session_id, contact_id) -> ContactPhoneResponse`             | Resolve a contact's phone number.                                                    |
@@ -616,6 +647,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `delivery_failures` | `delivery_failures(query=None) -> list[WebhookDeliveryFailure]` | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`              | `list(session_id) -> list[WebhookResponse]`                     | List webhooks. **OPERATOR**                                                                                                                                            |
 | `get`               | `get(session_id, webhook_id) -> WebhookResponse`                | Get one webhook. **OPERATOR**                                                                                                                                          |
+| `deliveries`        | `deliveries(session_id, webhook_id) -> list`                    | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`            | `create(session_id, body) -> WebhookResponse`                   | Create a webhook. **OPERATOR**                                                                                                                                         |
 | `update`            | `update(session_id, webhook_id, body) -> WebhookResponse`       | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`            | `delete(session_id, webhook_id) -> None`                        | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -710,6 +742,27 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `conversion_status` | `conversion_status(session_id) -> MediaConversionAvailability`          | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convert_voice`     | `convert_voice(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
 | `convert_video`     | `convert_video(session_id, *, url=None, base64=None) -> ConvertedMedia` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convert_sticker`   | `convert_sticker(session_id, *, url=None, base64=None, pack_name=None, author=None, remove_bg=None) -> ConvertedMedia` | Convert image or video into a 512×512 WebP sticker. **OPERATOR** |
+| `list_files`        | `list_files(session_id)`                                        | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR** |
+| `get_file`          | `get_file(session_id, message_id)`                              | Fetch stored inbound media bytes. **OPERATOR** |
+| `delete_file`       | `delete_file(session_id, message_id) -> None`                   | Delete a stored inbound media file. **OPERATOR** |
+
+#### `client.scheduled-messages`
+
+| Method   | Signature                                          | Description                                      |
+| -------- | -------------------------------------------------- | ------------------------------------------------ |
+| `list`   | `list(session_id)`                                 | List scheduled one-shot sends for the session.   |
+| `create` | `create(session_id, body)`                         | Schedule a text or media-URL send. **OPERATOR**  |
+| `get`    | `get(session_id, job_id)`                          | Get one scheduled job.                           |
+| `update` | `update(session_id, job_id, body)`                 | Update a pending job. **OPERATOR**               |
+| `delete` | `delete(session_id, job_id)`                       | Cancel a pending job. **OPERATOR**               |
+
+#### `client.bot-config`
+
+| Method   | Signature                          | Description                                              |
+| -------- | ---------------------------------- | -------------------------------------------------------- |
+| `get`    | `get(session_id)`                  | Get the session bot config (defaults if never saved).    |
+| `update` | `update(session_id, body)`         | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
 
 #### `client.health`
 
@@ -718,6 +771,7 @@ Resources are accessed as properties on the client (e.g. `client.messages`). All
 | `check` | `check() -> HealthResponse`      | Aggregate health check. |
 | `live`  | `live() -> dict[str, str]`       | Liveness probe.         |
 | `ready` | `ready() -> HealthReadyResponse` | Readiness probe.        |
+| `features` | `features() -> dict`          | Boolean feature flags (VIEWER; no secrets). |
 
 ### Error Handling
 
@@ -851,6 +905,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `getProxy`           | `getProxy(string $id): array`                        | Read a session's masked proxy configuration (credentials never returned).                                                                                                                                                                                                                                                                                       |
 | `updateProxy`        | `updateProxy(string $id, array $body): array`        | Update per-session proxy settings; changes apply on the next start. Send `proxyUrl: null` to clear. **OPERATOR**                                                                                                                                                                                                                                                |
 | `get`                | `get(string $id): array`                             | Get one session.                                                                                                                                                                                                                                                                                                                                                |
+| `getOwnProfile`      | `getOwnProfile(string $id): array`                   | Read the logged-in account profile.                                                                                                                                                                                                                                                                                                                             |
 | `create`             | `create(array $body): array`                         | Create a session (`$body['name']` required). **OPERATOR**                                                                                                                                                                                                                                                                                                       |
 | `delete`             | `delete(string $id): void`                           | Delete a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                  |
 | `start`              | `start(string $id): array`                           | Start a session. **OPERATOR**                                                                                                                                                                                                                                                                                                                                   |
@@ -868,6 +923,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | -------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list`         | `list(string $sessionId, array $query = []): array`                      | List stored messages.                                                                                                                             |
 | `sendText`     | `sendText(string $sessionId, array $body): array`                        | Send a text message (`send-text`). **OPERATOR**                                                                                                   |
+| `sendTextList` | `sendTextList(string $sessionId, array $body): array`                    | Send a numbered text list (formatted text, not a native list). **OPERATOR**                                                                       |
 | `sendImage`    | `sendImage(string $sessionId, array $body): array`                       | Send an image. **OPERATOR**                                                                                                                       |
 | `sendVideo`    | `sendVideo(string $sessionId, array $body): array`                       | Send a video. **OPERATOR**                                                                                                                        |
 | `sendAudio`    | `sendAudio(string $sessionId, array $body): array`                       | Send audio. **OPERATOR**                                                                                                                          |
@@ -901,6 +957,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `list`            | `list(string $sessionId, array $query = []): array`                | List contacts.                                                                       |
 | `get`             | `get(string $sessionId, string $contactId): array`                 | Get one contact.                                                                     |
 | `check`           | `check(string $sessionId, string $number): array`                  | Check whether a number is on WhatsApp.                                               |
+| `checkNumbers`    | `checkNumbers(string $sessionId, array $body): array`              | Bulk number-on-WhatsApp lookup (max 50). **OPERATOR**                                |
 | `profilePicture`  | `profilePicture(string $sessionId, string $contactId): array`      | Get a contact's profile picture.                                                     |
 | `profilePictures` | `profilePictures(string $sessionId, array $ids): array`            | Batch-resolve profile picture URLs for up to 50 contacts in one request.             |
 | `phone`           | `phone(string $sessionId, string $contactId): array`               | Resolve a contact's phone number.                                                    |
@@ -961,6 +1018,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `deliveryFailures` | `deliveryFailures(array $query = [])`                       | Deliveries that were attempted and failed — the diagnostic for a webhook that stopped arriving. A delivery a smart filter suppressed never reaches this log. **ADMIN** |
 | `list`             | `list(string $sessionId): array`                            | List webhooks. **OPERATOR**                                                                                                                                            |
 | `get`              | `get(string $sessionId, string $id): array`                 | Get one webhook. **OPERATOR**                                                                                                                                          |
+| `deliveries`       | `deliveries(string $sessionId, string $id): array`          | Recent HTTP attempts (status, HTTP code, duration, attempt, error snippet only). **OPERATOR**                                                                          |
 | `create`           | `create(string $sessionId, array $body): array`             | Create a webhook. **OPERATOR**                                                                                                                                         |
 | `update`           | `update(string $sessionId, string $id, array $body): array` | Update a webhook. **OPERATOR**                                                                                                                                         |
 | `delete`           | `delete(string $sessionId, string $id): void`               | Delete a webhook. **OPERATOR**                                                                                                                                         |
@@ -1054,7 +1112,28 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | ------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | `conversionStatus` | `conversionStatus(string $sessionId): array`           | Whether conversion is switched on for this deployment AND the ffmpeg binary can be run.      |
 | `convertVoice`     | `convertVoice(string $sessionId, array $media): array` | Convert audio into a WhatsApp voice note (Ogg/Opus, mono, tuned for speech). **OPERATOR**    |
-| `convertVideo`     | `convertVideo(string $sessionId, array $media): array` | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertVideo`     | `convertVideo(string $sessionId, array $media): array`   | Convert video into an MP4 every WhatsApp client accepts (baseline H.264 + AAC). **OPERATOR** |
+| `convertSticker`   | `convertSticker(string $sessionId, array $media): array` | Convert image or video into a 512×512 WebP sticker. **OPERATOR**                             |
+| `listFiles`        | `listFiles(string $sessionId): array`                    | List inbound files stored when MEDIA_PERSIST is on. 404 when the flag is off. **OPERATOR**   |
+| `getFile`          | `getFile(string $sessionId, string $messageId): array`   | Fetch stored inbound media bytes. **OPERATOR**                                               |
+| `deleteFile`       | `deleteFile(string $sessionId, string $messageId): void` | Delete a stored inbound media file. **OPERATOR**                                             |
+
+#### `scheduled-messages`
+
+| Method   | Signature                                                        | Description                                      |
+| -------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| `list`   | `list(string $sessionId): array`                                 | List scheduled one-shot sends for the session.   |
+| `create` | `create(string $sessionId, array $body): array`                  | Schedule a text or media-URL send. **OPERATOR**  |
+| `get`    | `get(string $sessionId, string $jobId): array`                   | Get one scheduled job.                           |
+| `update` | `update(string $sessionId, string $jobId, array $body): array`   | Update a pending job. **OPERATOR**               |
+| `delete` | `delete(string $sessionId, string $jobId): void`                 | Cancel a pending job. **OPERATOR**               |
+
+#### `bot-config`
+
+| Method   | Signature                                              | Description                                              |
+| -------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| `get`    | `get(string $sessionId): array`                        | Get the session bot config (defaults if never saved).    |
+| `update` | `update(string $sessionId, array $body): array`        | Upsert access lists, prefix, commands, welcome. **OPERATOR** |
 
 #### `health`
 
@@ -1063,6 +1142,7 @@ All payloads are associative arrays; all listed methods are synchronous and retu
 | `check` | `check(): array` | `GET /api/health`. |
 | `live`  | `live(): array`  | Liveness probe.    |
 | `ready` | `ready(): array` | Readiness probe.   |
+| `features` | `features(): array` | Boolean feature flags (VIEWER; no secrets). |
 
 ### Error Handling
 

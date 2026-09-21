@@ -44,6 +44,12 @@ import { WebhookOutboxService } from '../webhook/webhook-outbox.service';
 import { IntegrationDeliveryFailure } from '../integration/entities/integration-delivery-failure.entity';
 import { StatusUpdate } from '../status-store/entities/status-update.entity';
 import { AutomationRule } from '../automation/entities/automation-rule.entity';
+import {
+  ScheduledMessage,
+  ScheduledMediaType,
+  ScheduledMessageStatus,
+} from '../scheduler/entities/scheduled-message.entity';
+import { BotConfig } from '../bot/entities/bot-config.entity';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { BadRequestException } from '@nestjs/common';
 
@@ -82,6 +88,8 @@ describe('InfraDataController.importData round-trips export-data (no silent mess
         IntegrationDeliveryFailure,
         StatusUpdate,
         AutomationRule,
+        ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1223,6 +1231,8 @@ describe('InfraDataController.import/export preserves every data-DB table', () =
         IntegrationDeliveryFailure,
         StatusUpdate,
         AutomationRule,
+        ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1576,6 +1586,8 @@ describe('InfraDataController audit trail — import emits only on a committed r
         IntegrationDeliveryFailure,
         StatusUpdate,
         AutomationRule,
+        ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1722,6 +1734,8 @@ describe('InfraDataController.importData status_updates + runtime reconciliation
         IntegrationDeliveryFailure,
         StatusUpdate,
         AutomationRule,
+        ScheduledMessage,
+        BotConfig,
       ],
       synchronize: true,
     });
@@ -1818,6 +1832,37 @@ describe('InfraDataController.importData status_updates + runtime reconciliation
     expect(restored.cooldownSeconds).toBe(120);
     expect(restored.enabled).toBe(true);
     expect(restored.conditions).toEqual({ bodyContains: ['hello'] });
+  });
+
+  it('exports and restores scheduled_messages, which the session wipe would otherwise cascade away', async () => {
+    await seedSession('s1');
+    const jobRepo = ds.getRepository(ScheduledMessage);
+    await jobRepo.save(
+      jobRepo.create({
+        id: 'job-1',
+        sessionId: 's1',
+        chatId: '628111@c.us',
+        sendAtUtc: new Date('2026-09-21T15:00:00Z'),
+        timezone: 'Asia/Jakarta',
+        text: 'later',
+        mediaUrl: null,
+        mediaType: ScheduledMediaType.TEXT,
+        caption: null,
+        status: ScheduledMessageStatus.PENDING,
+        attemptCount: 0,
+      }),
+    );
+
+    const controller = build();
+    const dump = await controller.exportData();
+    expect(dump.counts.scheduledMessages).toBe(1);
+
+    const res = await controller.importData({ tables: dump.tables });
+    expect(res.imported).toBe(true);
+    expect(res.counts.scheduledMessages).toBe(1);
+    const restored = await jobRepo.findOneByOrFail({ id: 'job-1' });
+    expect(restored.text).toBe('later');
+    expect(restored.timezone).toBe('Asia/Jakarta');
   });
 
   it('exports and restores status_updates (the table the docs promise is covered)', async () => {

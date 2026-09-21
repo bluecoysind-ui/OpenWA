@@ -32,10 +32,17 @@
                 "session_restricted",
                 "session_restriction_lifted",
                 "session_rebind_rejected",
+                "bot_config_updated",
                 "message_sent",
                 "message_failed",
+                "message_multi_forward",
+                "contact_numbers_checked",
                 "send_pacing_blocked",
                 "send_breaker_tripped",
+                "scheduled_message_created",
+                "scheduled_message_cancelled",
+                "scheduled_message_sent",
+                "scheduled_message_failed",
                 "webhook_created",
                 "webhook_deleted",
                 "webhook_triggered",
@@ -1912,6 +1919,53 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/webhooks/{id}/deliveries": {
+      "get": {
+        "operationId": "WebhookController_listDeliveries",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Webhook ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent attempts, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookDeliveryAttemptDto"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "summary": "List recent delivery attempts for a webhook (status, HTTP code, duration, attempt, error snippet)",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/webhooks/{id}/test": {
       "post": {
         "operationId": "WebhookController_test",
@@ -2262,6 +2316,306 @@
         ]
       }
     },
+    "/api/sessions/{sessionId}/media/convert": {
+      "get": {
+        "operationId": "MediaController_conversionStatus",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports whether conversion is switched on AND the ffmpeg binary can be run, so a client can decide between converting here and converting before it sends.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionStatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Whether server-side media conversion is available",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/voice": {
+      "post": {
+        "operationId": "MediaController_convertVoice",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted bytes, ready to post to send-audio with ptt=true. WhatsApp only renders a playable mic bubble for Ogg/Opus; other formats arrive as an audio file that will not play.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither url nor base64 given, or ffmpeg refused the input."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
+          "503": {
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
+          }
+        },
+        "summary": "Convert audio into a WhatsApp voice note (Ogg/Opus)",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/video": {
+      "post": {
+        "operationId": "MediaController_convertVideo",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted bytes: baseline H.264 with AAC audio, long edge bounded at 1280, index moved to the front so the recipient can start playing before the whole file arrives.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Neither url nor base64 given, or ffmpeg refused the input."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
+          "503": {
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
+          }
+        },
+        "summary": "Convert video into a WhatsApp-compatible MP4",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/convert/sticker": {
+      "post": {
+        "operationId": "MediaController_convertSticker",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertStickerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converted 512×512 WebP sticker bytes, ready to post to send-sticker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad input, ffmpeg refused, or REMOVE_BG_API_KEY missing when removeBg=true."
+          },
+          "413": {
+            "description": "The supplied media is above the media size cap."
+          },
+          "429": {
+            "description": "The ffmpeg conversion queue is full — retry shortly."
+          },
+          "503": {
+            "description": "Conversion is disabled, or the ffmpeg binary is not runnable."
+          }
+        },
+        "summary": "Convert image or video into a WhatsApp WebP sticker",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/files": {
+      "get": {
+        "operationId": "MediaController_listStoredFiles",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored files for this session (empty when none)."
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or the session has no stored files index."
+          }
+        },
+        "summary": "List inbound files stored when MEDIA_PERSIST is on",
+        "tags": [
+          "media"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/media/files/{messageId}": {
+      "get": {
+        "operationId": "MediaController_getStoredFile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The stored bytes as an attachment.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or no stored file for this message."
+          }
+        },
+        "summary": "Fetch stored inbound media bytes for a message",
+        "tags": [
+          "media"
+        ]
+      },
+      "delete": {
+        "operationId": "MediaController_deleteStoredFile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID the API key must be authorized for",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "messageId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "File deleted"
+          },
+          "404": {
+            "description": "MEDIA_PERSIST is off, or no stored file for this message."
+          }
+        },
+        "summary": "Delete a stored inbound media file",
+        "tags": [
+          "media"
+        ]
+      }
+    },
     "/api/sessions/{sessionId}/messages": {
       "get": {
         "operationId": "MessageController_getMessages",
@@ -2327,6 +2681,15 @@
             "description": "Set false to omit inline media payloads, leaving each row's { omitted, sizeBytes } marker and the media endpoint. The inline-media budget is per response, so a paged walk pulls it afresh on every page; default true.",
             "schema": {
               "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Substring search on message body. Requires chatId. LIKE wildcards in the needle are escaped; page size is clamped to 50.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -2416,6 +2779,69 @@
           }
         },
         "summary": "Send a text message",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/messages/send-text-list": {
+      "post": {
+        "description": "Formats `*title*` plus numbered options (and optional footer) and sends it through the ordinary send-text path, including pacing. Neither engine exposes a native list message.",
+        "operationId": "MessageController_sendTextList",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendTextListDto"
+              },
+              "examples": {
+                "minimal": {
+                  "summary": "Send a numbered text list",
+                  "value": {
+                    "chatId": "628123456789@c.us",
+                    "title": "Lunch",
+                    "options": [
+                      "Pizza",
+                      "Salad"
+                    ],
+                    "footer": "Kitchen closes at 3"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session not active or invalid request"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          }
+        },
+        "summary": "Send a numbered text list (formatted text, not a native WhatsApp list)",
         "tags": [
           "messages"
         ]
@@ -2863,7 +3289,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SendMediaMessageDto"
+                "$ref": "#/components/schemas/SendStickerMessageDto"
               },
               "examples": {
                 "fromUrl": {
@@ -3076,6 +3502,7 @@
     },
     "/api/sessions/{sessionId}/messages/forward": {
       "post": {
+        "description": "`toChatId` is required unless `toChatIds` is a non-empty array. Optional `toChatIds` adds destinations (unique combined cap 10). One destination returns the usual `{ messageId, timestamp }` at 201. More than one returns per-destination results: 201 all sent, 207 mixed, 502 all failed. Each dest is paced.",
         "operationId": "MessageController_forward",
         "parameters": [
           {
@@ -3100,7 +3527,7 @@
         },
         "responses": {
           "201": {
-            "description": "Message forwarded",
+            "description": "Message forwarded (single dest: MessageResponseDto; multi: all dests sent)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3108,6 +3535,9 @@
                 }
               }
             }
+          },
+          "207": {
+            "description": "Multi-dest: some dests sent, some failed. Body is ForwardManyResponseDto."
           },
           "400": {
             "description": "The request was rejected before anything was sent. Among the causes: the recipient could not be addressed — WhatsApp reports no deliverable id for that `chatId`, which is how it says the number is not on WhatsApp — as well as body validation and a session that is not active."
@@ -3117,6 +3547,9 @@
           },
           "409": {
             "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          },
+          "502": {
+            "description": "Multi-dest: every dest failed. Body is ForwardManyResponseDto."
           }
         },
         "summary": "Forward a message to another chat",
@@ -4138,6 +4571,29 @@
         "security": []
       }
     },
+    "/api/features": {
+      "get": {
+        "description": "Deployment-wide booleans only. Scoped keys may read them (same values for every session). Never returns secrets, env dumps, or configuration objects.",
+        "operationId": "FeaturesController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Boolean flags only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Boolean feature flags for UI gating",
+        "tags": [
+          "features"
+        ]
+      }
+    },
     "/api/settings": {
       "get": {
         "operationId": "SettingsController_get",
@@ -4823,6 +5279,58 @@
           }
         },
         "summary": "Check if a phone number exists on WhatsApp",
+        "tags": [
+          "contacts"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/contacts/check": {
+      "post": {
+        "description": "Max 50 numbers, deduped after normalize. Invalid entries are per-item errors, not a 400 for the batch. Per-session rate limit (CONTACT_CHECK_RATE_MAX / WINDOW_MS, default 10/min). GET check/:number is unchanged.",
+        "operationId": "ContactController_checkNumbers",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckNumbersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-number results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckNumbersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session not started or more than 50 numbers"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          },
+          "429": {
+            "description": "Per-session contact-check rate limit"
+          }
+        },
+        "summary": "Check whether phone numbers exist on WhatsApp (bulk)",
         "tags": [
           "contacts"
         ]
@@ -6144,6 +6652,45 @@
         "summary": "Revoke group invite code and generate new one",
         "tags": [
           "groups"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/profile": {
+      "get": {
+        "description": "Phone number, push name, about text, and profile picture URL. VIEWER. Session not started is the usual 400.",
+        "operationId": "ProfileController_getOwnProfile",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Own profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnProfileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session is not started"
+          },
+          "409": {
+            "description": "The session is not connected — an engine exists for it but is not `ready`: disconnected, reconnecting, or still initializing, so the request never reached WhatsApp. Wait for `ready` and retry. A session that was never started answers `400` instead, and the session lifecycle routes answer `409` for a conflicting state rather than this. One window answers this while the session still reads `ready`: WhatsApp Web periodically reloads its own page and the engine re-injects into it — for those few seconds the answer is a `409` naming the reload; retry shortly."
+          }
+        },
+        "summary": "Get the logged-in account profile",
+        "tags": [
+          "profile"
         ]
       }
     },
@@ -7978,15 +8525,58 @@
         ]
       }
     },
-    "/api/sessions/{sessionId}/media/convert": {
+    "/api/sessions/{sessionId}/scheduled-messages": {
+      "post": {
+        "operationId": "SchedulerController_create",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduledMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, flag off, cap, or horizon."
+          }
+        },
+        "summary": "Schedule a one-shot or recurring text or media-URL send",
+        "tags": [
+          "scheduler"
+        ]
+      },
       "get": {
-        "operationId": "MediaController_conversionStatus",
+        "operationId": "SchedulerController_findAll",
         "parameters": [
           {
             "name": "sessionId",
             "required": true,
             "in": "path",
-            "description": "Session ID the API key must be authorized for",
+            "description": "Session ID",
             "schema": {
               "type": "string"
             }
@@ -7994,31 +8584,85 @@
         ],
         "responses": {
           "200": {
-            "description": "Reports whether conversion is switched on AND the ffmpeg binary can be run, so a client can decide between converting here and converting before it sends.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConversionStatusResponseDto"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                  }
                 }
               }
             }
           }
         },
-        "summary": "Whether server-side media conversion is available",
+        "summary": "List scheduled messages for the session",
         "tags": [
-          "media"
+          "scheduler"
         ]
       }
     },
-    "/api/sessions/{sessionId}/media/convert/voice": {
-      "post": {
-        "operationId": "MediaController_convertVoice",
+    "/api/sessions/{sessionId}/scheduled-messages/{jobId}": {
+      "get": {
+        "operationId": "SchedulerController_findOne",
         "parameters": [
           {
             "name": "sessionId",
             "required": true,
             "in": "path",
-            "description": "Session ID the API key must be authorized for",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job in this session."
+          }
+        },
+        "summary": "Get one scheduled message",
+        "tags": [
+          "scheduler"
+        ]
+      },
+      "patch": {
+        "operationId": "SchedulerController_update",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
             "schema": {
               "type": "string"
             }
@@ -8029,47 +8673,106 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConvertMediaDto"
+                "$ref": "#/components/schemas/UpdateScheduledMessageDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Converted bytes, ready to post to send-audio with ptt=true. WhatsApp only renders a playable mic bubble for Ogg/Opus; other formats arrive as an audio file that will not play.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                  "$ref": "#/components/schemas/ScheduledMessageResponseDto"
                 }
               }
             }
           },
-          "400": {
-            "description": "Neither url nor base64 given, or ffmpeg refused the input."
-          },
-          "413": {
-            "description": "The supplied media is above the media size cap."
-          },
-          "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
+          "409": {
+            "description": "Job is not pending or paused."
           }
         },
-        "summary": "Convert audio into a WhatsApp voice note (Ogg/Opus)",
+        "summary": "Update a pending or paused scheduled message (including pause/resume)",
         "tags": [
-          "media"
+          "scheduler"
         ]
-      }
-    },
-    "/api/sessions/{sessionId}/media/convert/video": {
-      "post": {
-        "operationId": "MediaController_convertVideo",
+      },
+      "delete": {
+        "operationId": "SchedulerController_remove",
         "parameters": [
           {
             "name": "sessionId",
             "required": true,
             "in": "path",
-            "description": "Session ID the API key must be authorized for",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "description": "Job ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Job cancelled."
+          },
+          "409": {
+            "description": "Job is not pending."
+          }
+        },
+        "summary": "Cancel a pending or paused scheduled message",
+        "tags": [
+          "scheduler"
+        ]
+      }
+    },
+    "/api/sessions/{sessionId}/bot-config": {
+      "get": {
+        "operationId": "BotConfigController_get",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotConfigResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get the session bot config (defaults if never saved)",
+        "tags": [
+          "bot"
+        ]
+      },
+      "put": {
+        "operationId": "BotConfigController_put",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "description": "Session ID",
             "schema": {
               "type": "string"
             }
@@ -8080,35 +8783,26 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConvertMediaDto"
+                "$ref": "#/components/schemas/UpdateBotConfigDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Converted bytes: baseline H.264 with AAC audio, long edge bounded at 1280, index moved to the front so the recipient can start playing before the whole file arrives.",
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConvertedMediaResponseDto"
+                  "$ref": "#/components/schemas/BotConfigResponseDto"
                 }
               }
             }
-          },
-          "400": {
-            "description": "Neither url nor base64 given, or ffmpeg refused the input."
-          },
-          "413": {
-            "description": "The supplied media is above the media size cap."
-          },
-          "503": {
-            "description": "Conversion is disabled, the ffmpeg binary is not runnable, or the conversion queue is saturated — retry shortly."
           }
         },
-        "summary": "Convert video into a WhatsApp-compatible MP4",
+        "summary": "Create or replace the session bot config",
         "tags": [
-          "media"
+          "bot"
         ]
       }
     },
@@ -10728,16 +11422,20 @@
             "description": "Chat ID in the active engine's native format (e.g. 1234567890-123@g.us on whatsapp-web.js)",
             "example": "1234567890-123@g.us"
           },
+          "durationSec": {
+            "type": "number",
+            "description": "Mute for this many seconds from now. Cannot be sent together with `muteUntil`. Positive integer, max 31536000 (365 days).",
+            "example": 3600
+          },
           "muteUntil": {
             "type": "number",
-            "description": "Absolute epoch-MILLISECONDS timestamp at which the mute expires, or `null` to unmute now. Required — omitting it is rejected rather than guessed, because the two plausible readings (unmute vs mute forever) are opposites. To mute indefinitely, send a far-future timestamp. Milliseconds, not seconds: a seconds-scale value is an instant in 1970, so the mute expires immediately while the request still answers 200.",
+            "description": "Absolute epoch-MILLISECONDS timestamp at which the mute expires, or `null` to unmute now. Required unless `durationSec` is sent — omitting both is rejected rather than guessed, because the two plausible readings (unmute vs mute forever) are opposites. To mute indefinitely, send a far-future timestamp. Milliseconds, not seconds: a seconds-scale value is an instant in 1970, so the mute expires immediately while the request still answers 200. Cannot be sent together with `durationSec`.",
             "example": 1800000000000,
             "nullable": true
           }
         },
         "required": [
-          "chatId",
-          "muteUntil"
+          "chatId"
         ]
       },
       "PinChatDto": {
@@ -10960,8 +11658,11 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -11056,8 +11757,11 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -11136,6 +11840,50 @@
           "updatedAt"
         ]
       },
+      "WebhookDeliveryAttemptDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          },
+          "httpCode": {
+            "type": "number",
+            "nullable": true,
+            "description": "HTTP status when an exchange completed."
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "Wall-clock duration of this attempt in milliseconds."
+          },
+          "attempt": {
+            "type": "number",
+            "description": "1-based attempt number."
+          },
+          "errorSnippet": {
+            "type": "string",
+            "nullable": true,
+            "description": "Truncated error text. Never a body."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "durationMs",
+          "attempt",
+          "createdAt"
+        ]
+      },
       "UpdateWebhookDto": {
         "type": "object",
         "properties": {
@@ -11154,8 +11902,11 @@
                 "message.sent",
                 "message.ack",
                 "message.failed",
+                "scheduled.message.sent",
+                "scheduled.message.failed",
                 "message.revoked",
                 "message.reaction",
+                "message.poll_vote",
                 "message.edited",
                 "status.received",
                 "session.status",
@@ -11345,6 +12096,35 @@
             "type": "boolean",
             "description": "Whether the rule is active",
             "default": true
+          },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ],
+            "default": "contains",
+            "description": "Body matcher applied after webhook-filter conditions. regex requires AUTO_REPLY_REGEX=true."
+          },
+          "matchPattern": {
+            "type": "object",
+            "description": "Pattern for matchMode. Omitted = no extra body match (conditions-only).",
+            "maxLength": 1024
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ],
+            "default": "all"
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "description": "http(s) image URL sent as the reply (SSRF-safe fetch at send time). replyText becomes the caption."
           }
         },
         "required": [
@@ -11378,6 +12158,31 @@
           "cooldownSeconds": {
             "type": "number"
           },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ]
+          },
+          "matchPattern": {
+            "type": "object",
+            "nullable": true
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ]
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -11394,6 +12199,8 @@
           "enabled",
           "replyText",
           "cooldownSeconds",
+          "matchMode",
+          "chatContext",
           "createdAt",
           "updatedAt"
         ]
@@ -11424,6 +12231,115 @@
           "enabled": {
             "type": "boolean",
             "description": "Whether the rule is active"
+          },
+          "matchMode": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "contains",
+              "startsWith",
+              "regex"
+            ]
+          },
+          "matchPattern": {
+            "type": "object",
+            "maxLength": 1024,
+            "nullable": true
+          },
+          "chatContext": {
+            "type": "string",
+            "enum": [
+              "all",
+              "group",
+              "private"
+            ]
+          },
+          "replyMediaUrl": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      },
+      "ConversionStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "True only when conversion is switched on AND the ffmpeg binary is runnable. False means a convert call will be refused, so check this before offering conversion in a UI.",
+            "example": true
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "ConvertMediaDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
+            "example": "https://example.com/note.m4a"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
+            "example": "SUQzBAAAAAAA..."
+          }
+        }
+      },
+      "ConvertedMediaResponseDto": {
+        "type": "object",
+        "properties": {
+          "base64": {
+            "type": "string",
+            "description": "The converted bytes, ready to hand straight to a send endpoint's `base64` field.",
+            "example": "T2dnUwACAAAAAAAAAAA..."
+          },
+          "mimetype": {
+            "type": "string",
+            "description": "The type the bytes now are — not the type they were.",
+            "example": "audio/ogg; codecs=opus"
+          },
+          "bytes": {
+            "type": "number",
+            "description": "Decoded size, so a caller can check a send limit without decoding.",
+            "example": 20480
+          }
+        },
+        "required": [
+          "base64",
+          "mimetype",
+          "bytes"
+        ]
+      },
+      "ConvertStickerDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
+            "example": "https://example.com/note.m4a"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
+            "example": "SUQzBAAAAAAA..."
+          },
+          "packName": {
+            "type": "string",
+            "description": "Sticker pack display name (WebP EXIF).",
+            "maxLength": 128
+          },
+          "author": {
+            "type": "string",
+            "description": "Sticker pack author (WebP EXIF).",
+            "maxLength": 128
+          },
+          "removeBg": {
+            "type": "boolean",
+            "description": "Strip the background via remove.bg before converting. Requires REMOVE_BG_API_KEY.",
+            "default": false
           }
         }
       },
@@ -11652,6 +12568,51 @@
           "timestamp"
         ]
       },
+      "SendTextListDto": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "Chat ID (e.g. 628123456789@c.us)"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "options": {
+            "minItems": 2,
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "footer": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "quotedMessageId": {
+            "type": "string",
+            "description": "Quote an earlier message, turning this send into a reply. The id is engine-specific: whatsapp-web.js matches the serialized message id, Baileys matches the raw message key id and can only quote a message it has already stored. An id that cannot be resolved fails the send rather than delivering it unquoted.",
+            "example": "true_628123456789@c.us_3EB0ABCD"
+          },
+          "mentions": {
+            "description": "WIDs to @mention (e.g. [\"62811@c.us\"]). The text/caption must also contain the @<number> token.",
+            "example": [
+              "628123456789@c.us"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "chatId",
+          "title",
+          "options"
+        ]
+      },
       "SendTemplateMessageDto": {
         "type": "object",
         "properties": {
@@ -11869,6 +12830,69 @@
           "contactNumber"
         ]
       },
+      "SendStickerMessageDto": {
+        "type": "object",
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "description": "WhatsApp chat ID",
+            "example": "628123456789@c.us"
+          },
+          "url": {
+            "type": "string",
+            "description": "Media URL (http/https)",
+            "example": "https://example.com/image.jpg"
+          },
+          "base64": {
+            "type": "string",
+            "description": "Base64 encoded media data"
+          },
+          "mimetype": {
+            "type": "string",
+            "description": "Media MIME type (required when using base64)",
+            "example": "image/jpeg"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Filename for the media. Only rendered on document sends — defaults to 'file' when omitted (a URL-based document send on whatsapp-web.js first derives the URL basename)",
+            "example": "image.jpg"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption for the media",
+            "example": "Check out this image!",
+            "maxLength": 1024
+          },
+          "mentions": {
+            "description": "WIDs to @mention (e.g. [\"62811@c.us\"]). The text/caption must also contain the @<number> token.",
+            "example": [
+              "628123456789@c.us"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quotedMessageId": {
+            "type": "string",
+            "description": "Quote an earlier message, turning this send into a reply. The id is engine-specific: whatsapp-web.js matches the serialized message id, Baileys matches the raw message key id and can only quote a message it has already stored. An id that cannot be resolved fails the send rather than delivering it unquoted.",
+            "example": "true_628123456789@c.us_3EB0ABCD"
+          },
+          "packName": {
+            "type": "string",
+            "description": "Sticker pack title. Honoured by whatsapp-web.js (`stickerName`). Baileys has no EXIF writer in-tree; the sticker still sends and pack metadata is ignored until WP5.",
+            "maxLength": 128
+          },
+          "author": {
+            "type": "string",
+            "description": "Sticker pack author. Honoured by whatsapp-web.js (`stickerAuthor`). Baileys ignores this until WP5.",
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "chatId"
+        ]
+      },
       "SendPollDto": {
         "type": "object",
         "properties": {
@@ -11897,6 +12921,12 @@
           "allowMultipleAnswers": {
             "type": "boolean",
             "description": "Allow voters to pick several options (default single choice)"
+          },
+          "selectableCount": {
+            "type": "number",
+            "description": "How many options a voter may pick. `1` = single choice; `0` = unlimited (Baileys). Conflicts with `allowMultipleAnswers` (HTTP 400). whatsapp-web.js only supports single vs multiple, so `selectableCount !== 1` is mapped to `allowMultipleAnswers: true`.",
+            "minimum": 0,
+            "maximum": 12
           },
           "quotedMessageId": {
             "type": "string",
@@ -11973,7 +13003,16 @@
             "type": "string"
           },
           "toChatId": {
-            "type": "string"
+            "type": "string",
+            "description": "Destination chat. Required unless `toChatIds` is a non-empty array. A client that sends only `toChatId` is unchanged."
+          },
+          "toChatIds": {
+            "description": "Destinations (unique with `toChatId`). Required when `toChatId` is omitted. Combined unique set capped at 10. Each dest is paced independently. N>1 returns per-destination results (201 all sent, 207 mixed, 502 all failed).",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "messageId": {
             "type": "string"
@@ -11981,7 +13020,6 @@
         },
         "required": [
           "fromChatId",
-          "toChatId",
           "messageId"
         ]
       },
@@ -13101,6 +14139,43 @@
           "details"
         ]
       },
+      "FeaturesResponseDto": {
+        "type": "object",
+        "properties": {
+          "scheduler": {
+            "type": "boolean",
+            "description": "SCHEDULED_MESSAGES is on (default on; inert until a job exists)."
+          },
+          "botCommands": {
+            "type": "boolean",
+            "description": "BOT_COMMANDS is on (opt-in). Per-session bot-config must also enable commands."
+          },
+          "mediaPersist": {
+            "type": "boolean",
+            "description": "MEDIA_PERSIST is on (opt-in). List/delete stored inbound files only when true."
+          },
+          "removeBgConfigured": {
+            "type": "boolean",
+            "description": "REMOVE_BG_API_KEY is non-empty. Never the key itself."
+          },
+          "regexRules": {
+            "type": "boolean",
+            "description": "AUTO_REPLY_REGEX is on (opt-in). EXACT/CONTAINS/STARTS_WITH need no flag."
+          },
+          "pollVoteEvents": {
+            "type": "boolean",
+            "description": "POLL_VOTE_EVENTS is on (opt-in). Webhook-only; not socket-subscribable."
+          }
+        },
+        "required": [
+          "scheduler",
+          "botCommands",
+          "mediaPersist",
+          "removeBgConfigured",
+          "regexRules",
+          "pollVoteEvents"
+        ]
+      },
       "SettingsGeneralDto": {
         "type": "object",
         "properties": {
@@ -14086,6 +15161,18 @@
             "items": {
               "type": "object"
             }
+          },
+          "scheduledMessages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "botConfigs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
           }
         },
         "required": [
@@ -14104,7 +15191,9 @@
           "webhookOutboxEvents",
           "integrationDeliveryFailures",
           "statusUpdates",
-          "automationRules"
+          "automationRules",
+          "scheduledMessages",
+          "botConfigs"
         ]
       },
       "TableCountsDto": {
@@ -14173,6 +15262,14 @@
           "automationRules": {
             "type": "number",
             "example": 2
+          },
+          "scheduledMessages": {
+            "type": "number",
+            "example": 0
+          },
+          "botConfigs": {
+            "type": "number",
+            "example": 0
           }
         },
         "required": [
@@ -14191,7 +15288,9 @@
           "webhookOutboxEvents",
           "integrationDeliveryFailures",
           "statusUpdates",
-          "automationRules"
+          "automationRules",
+          "scheduledMessages",
+          "botConfigs"
         ]
       },
       "OmittedInlineMediaDto": {
@@ -14268,7 +15367,7 @@
         "properties": {
           "tables": {
             "type": "object",
-            "description": "Every one of the 16 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
+            "description": "Every one of the 18 migration tables is emptied before the restore runs, so a key omitted here is restored EMPTY rather than left untouched. Post the whole GET /api/infra/export-data payload, not a hand-built subset.",
             "properties": {
               "sessions": {
                 "type": "array"
@@ -14316,6 +15415,12 @@
                 "type": "array"
               },
               "automationRules": {
+                "type": "array"
+              },
+              "scheduledMessages": {
+                "type": "array"
+              },
+              "botConfigs": {
                 "type": "array"
               }
             }
@@ -14562,6 +15667,19 @@
             "type": "string",
             "description": "Profile picture URL. Absent when the contact has none or their privacy settings hide it.",
             "example": "https://pps.whatsapp.net/v/t61.24694-24/12345_678_910_n.jpg"
+          },
+          "lid": {
+            "type": "string",
+            "description": "Privacy-id user-part when this contact is already known as an @lid. Never fetched extra.",
+            "example": "123456789012345"
+          },
+          "isBusiness": {
+            "type": "boolean",
+            "description": "True when the engine already knew this contact is a business account."
+          },
+          "verifiedName": {
+            "type": "string",
+            "description": "Business verified name when already present on the stored contact."
           }
         },
         "required": [
@@ -14614,6 +15732,73 @@
           "number",
           "exists",
           "whatsappId"
+        ]
+      },
+      "CheckNumbersDto": {
+        "type": "object",
+        "properties": {
+          "numbers": {
+            "minItems": 1,
+            "maxItems": 50,
+            "example": [
+              "628123456789",
+              "+62 812-345-6789"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "numbers"
+        ]
+      },
+      "NumberCheckItemDto": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "example": "628123456789"
+          },
+          "normalized": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789"
+          },
+          "exists": {
+            "type": "boolean",
+            "example": true
+          },
+          "chatId": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789@c.us"
+          },
+          "error": {
+            "type": "string",
+            "example": "invalid"
+          }
+        },
+        "required": [
+          "input",
+          "normalized",
+          "exists",
+          "chatId"
+        ]
+      },
+      "CheckNumbersResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberCheckItemDto"
+            }
+          }
+        },
+        "required": [
+          "results"
         ]
       },
       "ProfilePictureResponseDto": {
@@ -15226,6 +16411,37 @@
           "inviteCode",
           "inviteLink",
           "message"
+        ]
+      },
+      "OwnProfileDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "example": "628123456789"
+          },
+          "pushName": {
+            "type": "string",
+            "nullable": true,
+            "example": "Ada"
+          },
+          "about": {
+            "type": "string",
+            "nullable": true,
+            "example": "Busy"
+          },
+          "profilePictureUrl": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://pps.whatsapp.net/v/t61.24694-24/n.jpg"
+          }
+        },
+        "required": [
+          "phone",
+          "pushName",
+          "about",
+          "profilePictureUrl"
         ]
       },
       "SetProfileNameDto": {
@@ -16197,58 +17413,436 @@
           "message"
         ]
       },
-      "ConversionStatusResponseDto": {
+      "CreateScheduledMessageDto": {
         "type": "object",
         "properties": {
-          "available": {
-            "type": "boolean",
-            "description": "True only when conversion is switched on AND the ffmpeg binary is runnable. False means a convert call will be refused, so check this before offering conversion in a UI.",
-            "example": true
+          "chatId": {
+            "type": "string",
+            "description": "Destination chat JID",
+            "example": "628123456789@c.us"
+          },
+          "sendAt": {
+            "type": "string",
+            "description": "ISO-8601 instant with offset (UTC or ±HH:MM). Naive local datetimes are refused. Stored as UTC; `timezone` is kept for display and recurrence math.",
+            "example": "2026-09-21T15:00:00Z"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone used for display and recurrence (DST-correct). Default UTC.",
+            "example": "Asia/Jakarta",
+            "default": "UTC"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text body. Required when mediaUrl is omitted.",
+            "maxLength": 4096
+          },
+          "mediaUrl": {
+            "type": "string",
+            "description": "http(s) media URL. Fetched at send time through the SSRF-safe send path. Required when text is omitted.",
+            "example": "https://example.com/image.jpg"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ],
+            "default": "text"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption for a media send",
+            "maxLength": 1024
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "none",
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "default": "none",
+            "description": "none = one-shot. Recurring jobs require until and/or maxOccurrences."
+          },
+          "interval": {
+            "type": "number",
+            "description": "Repeat every N days/weeks/months. Default 1. Ignored when recurrence is none.",
+            "default": 1
+          },
+          "daysOfWeek": {
+            "description": "Weekdays for weekly recurrence: 0=Sun … 6=Sat. Default: weekday of sendAt.",
+            "example": [
+              1,
+              3
+            ],
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "dayOfMonth": {
+            "type": "number",
+            "description": "Day of month for monthly recurrence (1–31; 31 clamps to last day). Default: day of sendAt."
+          },
+          "until": {
+            "type": "string",
+            "description": "Inclusive end: YYYY-MM-DD (end of that day in the job timezone) or an ISO instant with offset.",
+            "example": "2026-12-31"
+          },
+          "maxOccurrences": {
+            "type": "number",
+            "description": "Max fires including the first. Required (alone or with until) when recurrence is not none. Hard-capped.",
+            "minimum": 1,
+            "maximum": 10000
           }
         },
         "required": [
-          "available"
+          "chatId",
+          "sendAt"
         ]
       },
-      "ConvertMediaDto": {
+      "ScheduledMessageResponseDto": {
         "type": "object",
         "properties": {
-          "url": {
-            "type": "string",
-            "description": "Public http(s) URL of the media to convert (server-fetched, SSRF-guarded).",
-            "example": "https://example.com/note.m4a"
+          "id": {
+            "type": "string"
           },
-          "base64": {
+          "sessionId": {
+            "type": "string"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "sendAt": {
             "type": "string",
-            "description": "Base64-encoded media to convert. Takes precedence when both are supplied.",
-            "example": "SUQzBAAAAAAA..."
+            "description": "Next (or only) fire as UTC ISO-8601"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "text": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ]
+          },
+          "caption": {
+            "type": "object",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sending",
+              "sent",
+              "failed",
+              "cancelled",
+              "paused"
+            ]
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "none",
+              "daily",
+              "weekly",
+              "monthly"
+            ]
+          },
+          "interval": {
+            "type": "number"
+          },
+          "daysOfWeek": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "dayOfMonth": {
+            "type": "object",
+            "nullable": true
+          },
+          "until": {
+            "type": "object",
+            "nullable": true,
+            "description": "Inclusive end instant (UTC ISO-8601)"
+          },
+          "maxOccurrences": {
+            "type": "object",
+            "nullable": true
+          },
+          "occurrenceCount": {
+            "type": "number"
+          },
+          "attemptCount": {
+            "type": "number"
+          },
+          "lastError": {
+            "type": "object",
+            "nullable": true
+          },
+          "sentMessageId": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "chatId",
+          "sendAt",
+          "timezone",
+          "text",
+          "mediaUrl",
+          "mediaType",
+          "caption",
+          "status",
+          "recurrence",
+          "interval",
+          "daysOfWeek",
+          "dayOfMonth",
+          "until",
+          "maxOccurrences",
+          "occurrenceCount",
+          "attemptCount",
+          "lastError",
+          "sentMessageId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateScheduledMessageDto": {
+        "type": "object",
+        "properties": {
+          "sendAt": {
+            "type": "string",
+            "description": "ISO-8601 instant with offset. Pending or paused jobs only."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA timezone"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "mediaUrl": {
+            "type": "object",
+            "nullable": true
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "video",
+              "document",
+              "audio"
+            ]
+          },
+          "caption": {
+            "type": "object",
+            "maxLength": 1024
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "none",
+              "daily",
+              "weekly",
+              "monthly"
+            ]
+          },
+          "interval": {
+            "type": "number"
+          },
+          "daysOfWeek": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "dayOfMonth": {
+            "type": "object"
+          },
+          "until": {
+            "type": "object"
+          },
+          "maxOccurrences": {
+            "type": "object",
+            "maximum": 10000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "paused"
+            ],
+            "description": "Pause or resume. Only pending↔paused."
           }
         }
       },
-      "ConvertedMediaResponseDto": {
+      "BotConfigResponseDto": {
         "type": "object",
         "properties": {
-          "base64": {
-            "type": "string",
-            "description": "The converted bytes, ready to hand straight to a send endpoint's `base64` field.",
-            "example": "T2dnUwACAAAAAAAAAAA..."
+          "sessionId": {
+            "type": "string"
           },
-          "mimetype": {
+          "accessMode": {
             "type": "string",
-            "description": "The type the bytes now are — not the type they were.",
-            "example": "audio/ogg; codecs=opus"
+            "enum": [
+              "all",
+              "allow",
+              "block"
+            ]
           },
-          "bytes": {
-            "type": "number",
-            "description": "Decoded size, so a caller can check a send limit without decoding.",
-            "example": 20480
+          "allowList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockList": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "commandsEnabled": {
+            "type": "boolean"
+          },
+          "autoRead": {
+            "type": "boolean"
+          },
+          "alwaysOnline": {
+            "type": "boolean"
+          },
+          "welcomeMessage": {
+            "type": "object",
+            "nullable": true
+          },
+          "stickerPackName": {
+            "type": "object",
+            "nullable": true
+          },
+          "stickerPackAuthor": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
-          "base64",
-          "mimetype",
-          "bytes"
+          "sessionId",
+          "accessMode",
+          "allowList",
+          "blockList",
+          "prefix",
+          "commandsEnabled",
+          "autoRead",
+          "alwaysOnline",
+          "createdAt",
+          "updatedAt"
         ]
+      },
+      "UpdateBotConfigDto": {
+        "type": "object",
+        "properties": {
+          "accessMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "allow",
+              "block"
+            ],
+            "default": "all"
+          },
+          "allowList": {
+            "description": "JIDs / user-parts allowed when accessMode is allow. Matched before rule conditions.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockList": {
+            "description": "JIDs / user-parts always denied. Evaluated before allow-list and before rule conditions.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Command prefix (e.g. #). Default #.",
+            "default": "#"
+          },
+          "commandsEnabled": {
+            "type": "boolean",
+            "description": "Per-session command switch. Global BOT_COMMANDS must also be on."
+          },
+          "autoRead": {
+            "type": "boolean",
+            "description": "Mark inbound chats read after an allowed message."
+          },
+          "alwaysOnline": {
+            "type": "boolean",
+            "description": "Set engine presence available when saved and a live engine exists."
+          },
+          "welcomeMessage": {
+            "type": "object",
+            "description": "Text sent to a group on group.join, through the paced send path. Empty disables.",
+            "maxLength": 4096,
+            "nullable": true
+          },
+          "stickerPackName": {
+            "type": "object",
+            "description": "Sticker pack title applied to #sticker media converts.",
+            "maxLength": 128,
+            "nullable": true
+          },
+          "stickerPackAuthor": {
+            "type": "object",
+            "description": "Sticker pack author applied to #sticker media converts.",
+            "maxLength": 128,
+            "nullable": true
+          }
+        }
       },
       "CatalogDto": {
         "type": "object",

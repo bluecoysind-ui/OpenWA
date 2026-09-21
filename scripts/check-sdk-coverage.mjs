@@ -291,7 +291,7 @@ const goVerbPairs = (dir) => {
         pairs.add(`${m[1]} ${normalize(`${base}/*${m[2]}`)}`);
       }
     }
-    for (const m of source.matchAll(/\.do\(\s*ctx\s*,\s*"(GET|POST|PUT|PATCH|DELETE)"\s*,\s*([^\n]+?),\s*(?:nil|[A-Za-z_&])/g)) {
+    for (const m of source.matchAll(/\.do(?:Raw)?\(\s*ctx\s*,\s*"(GET|POST|PUT|PATCH|DELETE)"\s*,\s*([^\n]+?),\s*(?:nil|[A-Za-z_&])/g)) {
       const expr = m[2]
         .split('+')
         .map((t) => t.trim())
@@ -318,9 +318,9 @@ const verbPairsOf = (sdk) => {
       sdk.name === 'javascript'
         ? [/(GET|POST|PUT|PATCH|DELETE)'\s*,\s*[\s\S]{0,80}?path:\s*[`'"]([^`'"]+)[`'"]/g]
         : sdk.name === 'python'
-          ? [/\.request\(\s*"(GET|POST|PUT|PATCH|DELETE)"\s*,\s*f?"([^"]+)"/g]
+          ? [/\.request(?:_bytes)?\(\s*"(GET|POST|PUT|PATCH|DELETE)"\s*,\s*f?"([^"]+)"/g]
           : sdk.name === 'php'
-            ? [/->request\(\s*'(GET|POST|PUT|PATCH|DELETE)'\s*,\s*['"]([^'"]+)['"]/g]
+            ? [/->request(?:Binary)?\(\s*'(GET|POST|PUT|PATCH|DELETE)'\s*,\s*['"]([^'"]+)['"]/g]
             : [/HttpMethod\.(GET|POST|PUT|PATCH|DELETE)\s*,\s*([\s\S]{2,400}?)\s*,\s*\n?\s*(?:null|new |[a-z]\w)/g];
     for (const re of patterns) {
       for (const m of src.matchAll(re)) {

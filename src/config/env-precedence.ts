@@ -69,12 +69,15 @@ export const BLANK_SHADOWED_ENV_KEYS: string[] = [
   'SEND_PACING_COLD_DAILY_CAP',
   'SEND_PACING_BREAKER_THRESHOLD',
   'SEND_PACING_BREAKER_COOLDOWN_MS',
+  'CONTACT_CHECK_RATE_MAX',
+  'CONTACT_CHECK_RATE_WINDOW_MS',
   // Server-side media conversion, same arrangement.
   'MEDIA_CONVERSION_ENABLED',
   'FFMPEG_PATH',
   'MEDIA_CONVERSION_TIMEOUT_MS',
   'MEDIA_CONVERSION_MAX_OUTPUT_BYTES',
   'MEDIA_CONVERSION_CONCURRENCY',
+  'STICKER_MAX_DURATION_SEC',
   // Session ownership / multi-node routing (docs/13). Blank-forwarded so the single-node default
   // stays untouched while .env / data/.env.generated can supply real values.
   'NODE_ID',
@@ -86,6 +89,21 @@ export const BLANK_SHADOWED_ENV_KEYS: string[] = [
   // Autoreply rule cap, blank-forwarded like the knobs above so an operator who sets nothing does
   // not have an empty string shadow a value in .env / data/.env.generated.
   'AUTOMATION_MAX_PER_SESSION',
+  'AUTO_REPLY_REGEX',
+  'AUTO_REPLY_REGEX_MAX_PATTERN',
+  'MEDIA_PERSIST',
+  'MEDIA_PERSIST_TTL_DAYS',
+  'POLL_VOTE_EVENTS',
+  'BOT_COMMANDS',
+  'SCHEDULED_MESSAGES',
+  'SCHEDULED_MESSAGES_MAX_PENDING',
+  'SCHEDULED_MESSAGES_MAX_HORIZON_HOURS',
+  'SCHEDULED_MESSAGES_MAX_LATENESS_MS',
+  'SCHEDULED_MESSAGES_MAX_RECURRING',
+  'SCHEDULED_MESSAGES_MAX_OCCURRENCES',
+  'SCHEDULED_MESSAGES_MIN_INTERVAL_MS',
+  'BOT_COMMAND_COOLDOWN_MS',
+  'REMOVE_BG_API_KEY',
   // Behaviour flags with no dashboard route: before they were forwarded, a value set in .env simply
   // never reached the container. They are blank-forwarded like everything else here so the forward
   // itself cannot pin them off.

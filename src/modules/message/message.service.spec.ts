@@ -184,6 +184,19 @@ describe('MessageService', () => {
       expect(qb.take).toHaveBeenCalledWith(100);
       expect(qb.skip).toHaveBeenCalledWith(0);
     });
+
+    it('requires chatId when q is set and escapes LIKE wildcards', async () => {
+      await expect(service.getMessages('sess-1', { q: 'hello' })).rejects.toBeInstanceOf(BadRequestException);
+
+      const qb = makeQb();
+      (repository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      await service.getMessages('sess-1', { chatId: '628999@c.us', q: '100%_off', limit: 99 });
+      expect(qb.take).toHaveBeenCalledWith(50);
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        "message.body LIKE :bodySearch ESCAPE '\\'",
+        expect.objectContaining({ bodySearch: '%100\\%\\_off%' }),
+      );
+    });
   });
 
   // ── getMessages keyset cursor ─────────────────────────────────────

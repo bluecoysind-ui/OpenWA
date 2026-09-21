@@ -63,6 +63,10 @@ export interface MediaInput extends Quotable {
   mentions?: string[];
   /** When true, send as a WhatsApp voice note (PTT). audio-only; ignored by other media types. */
   ptt?: boolean;
+  /** Sticker pack title. whatsapp-web.js `stickerName`; Baileys ignores until WP5 (WebP EXIF). */
+  packName?: string;
+  /** Sticker pack author. whatsapp-web.js `stickerAuthor`; Baileys ignores until WP5. */
+  packAuthor?: string;
 }
 
 /**
@@ -171,6 +175,12 @@ export interface IncomingMessage {
    */
   isLidSender?: boolean;
   /**
+   * Alternate JID from Baileys `key.remoteJidAlt` (LID/phone twin) when known. Additive; `from`/`chatId` stay as today.
+   */
+  remoteJidAlt?: string;
+  /** Alternate participant JID from Baileys `key.participantAlt` when known. Additive. */
+  participantAlt?: string;
+  /**
    * Best-effort phone number (MSISDN digits) of the sender, resolved from a privacy id when inline
    * resolution is enabled (`RESOLVE_LID_TO_PHONE`). `null` when the engine cannot map it. Only
    * populated for `isLidSender` messages.
@@ -194,6 +204,14 @@ export interface IncomingMessage {
   quotedMessage?: {
     id: string;
     body: string;
+    /** Neutral type of the quoted message. Additive. */
+    type?: MessageType;
+    /** Caption when the quote is media. Additive. */
+    caption?: string;
+    /** True when the quoted message carried media. Additive. */
+    hasMedia?: boolean;
+    /** Session-scoped stored-file URL. Present only when MEDIA_PERSIST stored that quote. */
+    fileUrl?: string;
   };
   location?: {
     latitude: number;
@@ -243,6 +261,12 @@ export interface Contact {
   isMyContact: boolean;
   isBlocked: boolean;
   profilePicUrl?: string;
+  /** Privacy-id user-part when `id` is already `@lid`. Never fetched; omitted when unknown. */
+  lid?: string;
+  /** Present only when the engine already had it locally — no extra per-contact network call. */
+  isBusiness?: boolean;
+  /** Business verified name when already on the stored contact. */
+  verifiedName?: string;
 }
 
 export interface Group {
@@ -390,6 +414,11 @@ export interface PollInput extends Quotable {
   options: string[];
   /** When true a voter can pick several options; default is single choice. */
   allowMultipleAnswers?: boolean;
+  /**
+   * How many options a voter may pick. `1` = single; `0` = unlimited on Baileys.
+   * whatsapp-web.js only has a boolean; `selectableCount !== 1` maps to `allowMultipleAnswers`.
+   */
+  selectableCount?: number;
 }
 
 export interface ReactionSender {
@@ -640,6 +669,15 @@ export interface ReactionEvent {
   senderId: string;
 }
 
+/** A vote on a poll. Emitted only when POLL_VOTE_EVENTS is on. */
+export interface PollVoteEvent {
+  pollMessageId: string;
+  chatId: string;
+  voter: string;
+  /** Selected option names when decrypt succeeded; omitted otherwise. */
+  selectedOptions?: string[];
+}
+
 /**
  * A group membership or metadata change, mapped at the adapter boundary to this neutral
  * shape so consumers never see engine-specific payloads:
@@ -794,6 +832,11 @@ export interface EngineEventCallbacks {
   onMessageAck?: (messageId: string, status: DeliveryStatus) => void;
   onMessageRevoked?: (message: RevokedMessage) => void;
   onMessageReaction?: (event: ReactionEvent) => void;
+  /**
+   * Fired when someone votes on a poll. Emitted only when `POLL_VOTE_EVENTS=true`. Baileys surfaces
+   * encrypted pollUpdates; selected option names are omitted unless decrypt succeeds.
+   */
+  onPollVote?: (event: PollVoteEvent) => void;
   onMessageEdited?: (message: EditedMessage) => void;
   /**
    * Fired on group membership changes (join/leave), group metadata updates
@@ -1126,6 +1169,14 @@ export interface ContactCapability {
   getNumberId(number: string): Promise<string | null>;
 
   /**
+   * Batch number-on-WhatsApp lookup. `numbers` are already-normalized digit strings (or engine-ready
+   * ids). Baileys uses `onWhatsApp(...array)`; whatsapp-web.js walks `getNumberId` with jitter.
+   * Order matches the input. A transport failure rejects the whole batch (the HTTP layer maps
+   * invalid entries itself and does not send them here).
+   */
+  checkNumbers(numbers: string[]): Promise<Array<{ number: string; exists: boolean; chatId: string | null }>>;
+
+  /**
    * Best-effort resolution of a contact id to a phone number (MSISDN digits), or `null` when the
    * engine cannot map it (e.g. a privacy `@lid` the account has never seen). The contact id is the
    * engine's native scheme; the adapter decides how to resolve it.
@@ -1274,7 +1325,20 @@ export interface CallCapability {
  * The account's OWN profile: display name, about text, and picture. Distinct from
  * ContactCapability, which reads and writes other parties.
  */
+export interface OwnProfile {
+  phone: string | null;
+  pushName: string | null;
+  about: string | null;
+  profilePictureUrl: string | null;
+}
+
 export interface ProfileCapability {
+  /**
+   * Read the logged-in account's phone, push name, about text, and profile picture URL.
+   * Adapter internals (auth state, raw wid objects) are not returned.
+   */
+  getOwnProfile(): Promise<OwnProfile>;
+
   /** Set the account's display name. */
   setProfileName(name: string): Promise<void>;
 

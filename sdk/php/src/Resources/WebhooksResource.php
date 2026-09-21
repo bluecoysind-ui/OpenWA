@@ -106,4 +106,10 @@ class WebhooksResource
     {
         return $this->http->request('POST', "/api/sessions/{$this->http->encodeSegment($sessionId)}/webhooks/{$this->http->encodeSegment($id)}/test");
     }
+
+    /** @return array<int,array<string,mixed>> */
+    public function deliveries(string $sessionId, string $id): array
+    {
+        return $this->http->request('GET', "/api/sessions/{$this->http->encodeSegment($sessionId)}/webhooks/{$this->http->encodeSegment($id)}/deliveries") ?? [];
+    }
 }

@@ -37,4 +37,13 @@ class MediaTest extends TestCase
         $this->assertSame('/api/sessions/s/media/convert/video', $backend->calls()[0]['path']);
         $this->assertSame(['url' => 'https://example.com/c.mov'], $backend->calls()[0]['body']);
     }
+
+    public function testConvertSticker(): void
+    {
+        $backend = new MockBackend();
+        $backend->on(200, ['base64' => 'UklGRg==', 'mimetype' => 'image/webp', 'bytes' => 8]);
+        $backend->makeClient()->media->convertSticker('s', ['url' => 'https://example.com/p.png', 'packName' => 'Pack']);
+        $this->assertSame('/api/sessions/s/media/convert/sticker', $backend->calls()[0]['path']);
+        $this->assertSame(['url' => 'https://example.com/p.png', 'packName' => 'Pack'], $backend->calls()[0]['body']);
+    }
 }

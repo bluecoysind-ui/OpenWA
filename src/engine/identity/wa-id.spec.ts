@@ -2,6 +2,7 @@ import {
   chatKind,
   isAddressableParticipant,
   isChannelJid,
+  isChatWid,
   isIndividualWid,
   parseWaId,
   toNeutralJid,
@@ -199,6 +200,25 @@ describe('wa-id', () => {
     it('surfaces as an individual chat, not unknown', () => {
       expect(chatKind('628111@hosted')).toBe('individual');
       expect(chatKind('4707@hosted.lid')).toBe('individual');
+    });
+  });
+
+  describe('isChatWid', () => {
+    it('accepts individuals, groups, channels, broadcast lists, and status', () => {
+      expect(isChatWid('628123456789@c.us')).toBe(true);
+      expect(isChatWid('628123456789@s.whatsapp.net')).toBe(true);
+      expect(isChatWid('111222333444555@lid')).toBe(true);
+      expect(isChatWid('120363000000000000@g.us')).toBe(true);
+      expect(isChatWid('120363401234567890@newsletter')).toBe(true);
+      expect(isChatWid('123@broadcast')).toBe(true);
+      expect(isChatWid('status@broadcast')).toBe(true);
+    });
+
+    it('rejects junk and empty user-parts', () => {
+      expect(isChatWid('')).toBe(false);
+      expect(isChatWid('not-a-jid')).toBe(false);
+      expect(isChatWid('NOT A USER@c.us')).toBe(false);
+      expect(isChatWid('@g.us')).toBe(false);
     });
   });
 });
