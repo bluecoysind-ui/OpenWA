@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Railway frontend: `frontend/railway.json` sets `NITRO_PRESET=node-server` so `node .output/server/index.mjs` exists (default Nitro preset is Vercel). Root `railway.json` is for the OpenWA API `Dockerfile` service.
 - Sessions that dropped to `disconnected` without scheduling auto-reconnect (missing reconnect state) no longer wedge as “already started”; disconnect handling re-seeds reconnect state, and `start` recovers stranded engines.
 - Gateway reconnect: stop then start before pairing, longer QR poll, WebSocket/API `qrExpiresAt`, and clearer QR modal copy (no stuck “Waiting for QR…” when the code is loading).
 - Gateway auto-restarts linked sessions when they drop offline (dashboard load, WebSocket status, or poll) instead of requiring Reconnect; QR modal opens only when WhatsApp asks to re-pair.
