@@ -8,7 +8,7 @@ for the first time.
 > Baileys / whatsapp-web.js engines). In our stack it backs the **WhatsApp login-reward
 > flow** — the blue_coys app talks to this gateway to create WhatsApp login sessions.
 
-- **Project folder:** `C:\PROJECTS\blue_coys\OpenWA`
+- **Project folder:** `D:\OpenWA` on the gateway laptop (`C:\PROJECTS\blue_coys\OpenWA` in the main repo checkout) — every `cd` below means *this folder*
 - **Default URL once running:** http://localhost:2785
 
 ---
@@ -80,9 +80,16 @@ REDIS_ENABLED=true
 CACHE_ENABLED=true
 REDIS_HOST=redis                    # the compose service name — do not change
 REDIS_PORT=6379
+AUTO_START_SESSIONS=true            # reconnect linked WhatsApp sessions by themselves after a restart
 ```
 
 Generate `DATABASE_PASSWORD` the same way as the secrets below. Storage stays local (no MinIO).
+
+> **Persistence:** Postgres, Redis and the WhatsApp session data all live in named Docker volumes,
+> so they **survive container and laptop restarts**. The only thing that deletes them is
+> `down -v` (or Docker Desktop's "Clean/Purge data"). Enable *Settings → General → "Start Docker
+> Desktop when you sign in"* so the stack comes back up on its own after a reboot, and take an
+> occasional backup: `docker exec openwa-postgres pg_dump -U openwa openwa > backup.sql`.
 
 ### 2.3 Generate the two secrets
 Run this (Node is bundled with Docker Desktop's tooling, or use any machine with Node):
@@ -113,16 +120,17 @@ Paste the two lines into `.env`.
 
 | Port | Service | When it's published to the host |
 |---|---|---|
-| **2785** | OpenWA API + dashboard | **Always** (this is the one that matters) |
+| **2785** | OpenWA API + dashboard | **Always** |
+| **8080** | WA Gateway UI (`frontend/` — sessions, QR linking, chats, webhooks, API tester) | **Always** |
 | 9000 / 9001 | MinIO S3 API / console | Only with `--profile minio` or `--profile full` |
 | 5432 | PostgreSQL | **Not** exposed to host (internal Docker network only) |
 | 6379 | Redis | **Not** exposed to host (internal Docker network only) |
 
-So for a normal run, **only port 2785 must be free.**
+So for a normal run, **ports 2785 and 8080 must be free.**
 
 ### Check if the ports are free (PowerShell)
 ```powershell
-2785, 9000, 9001 | ForEach-Object {
+2785, 8080, 9000, 9001 | ForEach-Object {
   $c = Get-NetTCPConnection -State Listen -LocalPort $_ -ErrorAction SilentlyContinue
   if ($c) {
     $procs = ($c.OwningProcess | Sort-Object -Unique | ForEach-Object {
@@ -149,7 +157,7 @@ cd C:\PROJECTS\blue_coys\OpenWA
 ```powershell
 docker compose --profile postgres --profile redis up -d --build
 ```
-This brings up **four** containers: `docker-proxy`, `api`, `postgres`, `redis`. Postgres and Redis
+This brings up **five** containers: `docker-proxy`, `api`, `frontend`, `postgres`, `redis`. Postgres and Redis
 only start when their profile is named — a plain `docker compose up` would start the API on SQLite
 with Redis off and it would then fail to reach the `postgres` host it is configured for.
 **Always include both `--profile` flags** for this stack (including `down`, `restart`, `logs`).
@@ -184,6 +192,19 @@ docker compose --profile postgres --profile redis down      # stop & remove cont
 docker compose --profile postgres --profile redis down -v   # ALSO wipe volumes (DB, Redis, sessions — fresh start)
 ```
 
+### The WA Gateway UI (`frontend/`)
+Built by `frontend/Dockerfile` and started automatically with the stack (no profile). Open
+**http://localhost:8080**; in its settings enter the API URL (`http://localhost:2785`) and your
+`API_MASTER_KEY`. Two knobs, both optional, in `.env`:
+
+```dotenv
+FRONTEND_PORT=8080                              # host port for the UI
+FRONTEND_OPENWA_URL=http://localhost:2785       # API origin baked into the browser bundle at BUILD time
+```
+If the UI will be opened from another machine (e.g. through ngrok), set `FRONTEND_OPENWA_URL` to
+the API's public URL **and** add that UI origin to `CORS_ORIGINS` in `.env`, then rebuild. The UI's
+own server-side proxy always reaches the API over the internal Docker network regardless.
+
 ### Restart / rebuild after changes
 ```powershell
 docker compose restart              # quick restart
@@ -198,7 +219,8 @@ Once the container is healthy:
 
 | What | URL |
 |---|---|
-| Dashboard (web UI) | http://localhost:2785 |
+| Dashboard (bundled with the API) | http://localhost:2785 |
+| **WA Gateway UI** (`frontend/` — the full control centre) | **http://localhost:8080** |
 | REST API base | http://localhost:2785/api |
 | Swagger API docs | http://localhost:2785/api/docs |
 | Health check | http://localhost:2785/api/health/ready |
@@ -367,7 +389,7 @@ node -e "const c=require('crypto');console.log('API_KEY_PEPPER='+c.randomBytes(3
 $p = '--profile','postgres','--profile','redis'   # this stack always names both profiles
 docker compose @p up -d --build        # start (production: API + Postgres + Redis)
 docker compose logs -f openwa-api      # watch API logs
-docker compose @p ps                   # status (all four containers)
+docker compose @p ps                   # status (all five containers)
 docker compose @p restart              # restart
 docker compose @p down                 # stop (keep data)
 docker compose @p down -v              # stop + wipe data
@@ -422,30 +444,39 @@ Transient network drops do **not** trigger the reverse — only a terminal unlin
    ```powershell
    ngrok config add-authtoken <TOKEN>
    ```
-3. Claim the account's **free static domain** so the URL never changes: ngrok dashboard →
-   **Domains** → **+ New Domain** → you get something like `your-name-abc123.ngrok-free.app`.
+3. The account's **free static domain** (so the URL never changes) is already claimed — ngrok
+   dashboard → **Domains** shows it: `overstate-upstate-wanted.ngrok-free.dev`.
 
 **Every time you run it**
 1. Start OpenWA (section 4) and confirm http://localhost:2785/api/health/ready returns 200.
 2. Open the tunnel and **leave the window open** (closing it takes the gateway offline):
    ```powershell
-   ngrok http --url=your-name-abc123.ngrok-free.app 2785
+   ngrok http --url=overstate-upstate-wanted.ngrok-free.dev 2785
    ```
    (older ngrok: use `--domain=` instead of `--url=`; without a static domain, plain
    `ngrok http 2785` works but the URL rotates on every restart.)
-3. Verify from any device: `https://your-name-abc123.ngrok-free.app/api/health/ready` → 200.
+3. Verify from any device: `https://overstate-upstate-wanted.ngrok-free.dev/api/health/ready` → 200.
+   (In a **browser** ngrok first shows a one-time "Visit Site" interstitial — click through; `curl`
+   and the blue_coys proxy never see it.)
 4. In the **deployed** blue_coys environment (bluecoys.com's env vars, not a local file) set:
    ```dotenv
-   WHATSAPP_GATEWAY_URL=https://your-name-abc123.ngrok-free.app/api/whatsapp
+   WHATSAPP_GATEWAY_URL=https://overstate-upstate-wanted.ngrok-free.dev/api/whatsapp
    ```
    The Next.js proxy `/api/whatsapp-gateway/<path>` forwards to `${WHATSAPP_GATEWAY_URL}/<path>`,
    so the frontend hits `/api/whatsapp-gateway/link-qr?...` / `link-code?...`. The proxy already
    sends `ngrok-skip-browser-warning`, so ngrok's free-tier interstitial page never gets in the way.
-5. Smoke-test from anywhere:
-   ```bash
-   curl "https://your-name-abc123.ngrok-free.app/api/whatsapp/link-code?username=test&phone_number=919999999999"
+5. Smoke-test from anywhere. ⚠️ In **PowerShell, `curl` is an alias for `Invoke-WebRequest`**,
+   which looks like a browser to ngrok, so you get ngrok's "You are about to visit…" page
+   (`ERR_NGROK_6024`) instead of the API. Send the skip header (or use `curl.exe`):
+   ```powershell
+   Invoke-RestMethod -Uri "https://overstate-upstate-wanted.ngrok-free.dev/api/whatsapp/link-code?username=test&phone_number=919999999999" -Headers @{ "ngrok-skip-browser-warning" = "1" }
+   # or
+   curl.exe -H "ngrok-skip-browser-warning: 1" "https://overstate-upstate-wanted.ngrok-free.dev/api/whatsapp/link-code?username=test&phone_number=919999999999"
    ```
-   You should get JSON with a `pairingCode` (or `linked: true`).
+   You should get JSON with a `pairingCode` (or `linked: true`). A 504 on the very first call just
+   means the WhatsApp socket is still coming up — run it again. Use a real user's **InvCode** as
+   `username` if you want to see the reward actually credited in blue_coys; a made-up name makes
+   blue_coys answer 404 to the callback (harmless for a gateway test).
 
 > Callbacks travel OpenWA → `bluecoys.com`, which is public, so nothing extra is needed for them.
 

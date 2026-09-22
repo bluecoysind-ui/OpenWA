@@ -433,6 +433,54 @@ services:
       - 'com.openwa.service=api'
       - 'com.openwa.core=true'
 
+  # ===== CORE: WA Gateway UI (frontend/) =====
+  # The standalone control-centre UI (session management, QR linking, chats, webhooks, API
+  # tester). Built by frontend/Dockerfile from the Railway recipe (NITRO_PRESET=node-server →
+  # `node .output/server/index.mjs`). Always started with the stack — no profile needed.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Browser → API origin, baked in at build time. Default = the API on this machine
+        # (open the UI at http://localhost:8080). Set FRONTEND_OPENWA_URL in .env to the
+        # public API host (e.g. the ngrok URL) when the UI is reached from elsewhere, then
+        # rebuild. The user can also override URL/key inside the UI's settings.
+        VITE_OPENWA_URL: ${FRONTEND_OPENWA_URL:-http://localhost:2785}
+    container_name: openwa-frontend
+    restart: unless-stopped
+    networks:
+      - openwa-network
+    security_opt:
+      - 'no-new-privileges:true'
+    ports:
+      - '127.0.0.1:${FRONTEND_PORT:-8080}:8080'
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      # The UI's server-side proxy routes (/api/whatsapp, /api/dashboard, …) call the API here —
+      # over the internal Docker network by service name, so this works even when 2785 is not
+      # published beyond localhost.
+      - WA_GATEWAY_URL=http://openwa-api:2785
+    depends_on:
+      openwa-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:8080/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - 'com.openwa.service=frontend'
+      - 'com.openwa.core=true'
+
   # The dashboard SPA is now bundled into the openwa-api image and served by NestJS on the
   # same port (2785) — there is no separate dashboard container. Reach it at the openwa-api
   # port directly; put your own TLS reverse proxy (nginx/Caddy/cloud LB) in front if needed.

@@ -1,0 +1,12 @@
+# Build context for frontend/Dockerfile — keep it to source + lockfile.
+node_modules/
+.output/
+.vercel/
+.vite/
+dist/
+screenshots/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
