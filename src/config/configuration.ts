@@ -586,21 +586,6 @@ export default () => ({
     })(),
   },
 
-  // Bluecoys partner linking (GET /api/whatsapp/link-qr + outbound linked/disconnected callbacks).
-  bluecoys: {
-    enabled: process.env.BLUECOYS_INTEGRATION_ENABLED === 'true',
-    baseUrl: (process.env.BLUECOYS_BASE_URL || 'https://bluecoys.com').replace(/\/+$/, ''),
-    qrTtlMs: (() => {
-      const n = parseInt(process.env.BLUECOYS_QR_TTL_MS ?? '', 10);
-      return Number.isFinite(n) && n > 0 ? n : 20_000;
-    })(),
-    linkToken: process.env.BLUECOYS_LINK_TOKEN || '',
-    callbackTimeoutMs: (() => {
-      const n = parseInt(process.env.BLUECOYS_CALLBACK_TIMEOUT_MS ?? '', 10);
-      return Number.isFinite(n) && n > 0 ? n : 15_000;
-    })(),
-  },
-
   // Storage configuration
   storage: {
     type: process.env.STORAGE_TYPE || 'local',

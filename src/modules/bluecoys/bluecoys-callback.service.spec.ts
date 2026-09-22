@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { BluecoysCallbackService } from './bluecoys-callback.service';
 
 describe('BluecoysCallbackService', () => {
@@ -18,14 +17,7 @@ describe('BluecoysCallbackService', () => {
   });
 
   it('POSTs linked callback with phone and username', async () => {
-    const config = {
-      get: (key: string) => {
-        if (key === 'bluecoys.enabled') return true;
-        if (key === 'bluecoys.baseUrl') return 'https://bluecoys.com';
-        return undefined;
-      },
-    } as ConfigService;
-    const svc = new BluecoysCallbackService(config);
+    const svc = new BluecoysCallbackService();
     await svc.notifyLinked('919608079512', 'jane');
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -39,14 +31,7 @@ describe('BluecoysCallbackService', () => {
   });
 
   it('GETs disconnected callback', async () => {
-    const config = {
-      get: (key: string) => {
-        if (key === 'bluecoys.enabled') return true;
-        if (key === 'bluecoys.baseUrl') return 'https://bluecoys.com';
-        return undefined;
-      },
-    } as ConfigService;
-    const svc = new BluecoysCallbackService(config);
+    const svc = new BluecoysCallbackService();
     await svc.notifyDisconnected('919608079512');
 
     expect(fetchMock).toHaveBeenCalledWith(
