@@ -67,7 +67,22 @@ API_MASTER_KEY=<64-hex-secret>      # your admin API key — must be >= 32 chars
 API_KEY_PEPPER=<64-hex-secret>      # server-side hashing secret
 ```
 
-Everything else can stay at its default (SQLite DB, local storage, Redis off).
+We run with the **built-in PostgreSQL + Redis** (to handle real traffic), so also set:
+
+```dotenv
+DATABASE_TYPE=postgres
+DATABASE_HOST=postgres              # the compose service name — do not change
+DATABASE_PORT=5432
+DATABASE_NAME=openwa
+DATABASE_USERNAME=openwa
+DATABASE_PASSWORD=<strong-random>    # required: the postgres image refuses an empty password
+REDIS_ENABLED=true
+CACHE_ENABLED=true
+REDIS_HOST=redis                    # the compose service name — do not change
+REDIS_PORT=6379
+```
+
+Generate `DATABASE_PASSWORD` the same way as the secrets below. Storage stays local (no MinIO).
 
 ### 2.3 Generate the two secrets
 Run this (Node is bundled with Docker Desktop's tooling, or use any machine with Node):
@@ -130,10 +145,18 @@ Run everything from the project folder:
 cd C:\PROJECTS\blue_coys\OpenWA
 ```
 
-### Start (production stack — needs the secrets from step 2)
+### Start (production stack — Postgres + Redis, needs the settings from step 2)
 ```powershell
-docker compose up -d --build
+docker compose --profile postgres --profile redis up -d --build
 ```
+This brings up **four** containers: `docker-proxy`, `api`, `postgres`, `redis`. Postgres and Redis
+only start when their profile is named — a plain `docker compose up` would start the API on SQLite
+with Redis off and it would then fail to reach the `postgres` host it is configured for.
+**Always include both `--profile` flags** for this stack (including `down`, `restart`, `logs`).
+
+> The webhook **queue** (BullMQ on Redis) is switched on from the dashboard, not `.env`:
+> **Dashboard → Infrastructure → Redis & Queue → enable Queue.** Cache + WebSocket fan-out are
+> already on via `REDIS_ENABLED` / `CACHE_ENABLED`.
 
 ### Start (dev stack — zero-config, SQLite, no secrets needed)
 Use this if you just want it running fast without setting secrets:
@@ -149,16 +172,16 @@ docker compose -f docker-compose.dev.yml up -d --build
 docker compose logs -f openwa-api
 ```
 
-### Optional services (production compose only)
+### Other profile combinations
 ```powershell
-docker compose --profile postgres up -d --build   # + PostgreSQL
-docker compose --profile full up -d --build        # + PostgreSQL, Redis, MinIO
+docker compose up -d --build                        # API only: SQLite, Redis off (needs DATABASE_TYPE unset)
+docker compose --profile full up -d --build         # + PostgreSQL, Redis AND MinIO (S3 storage)
 ```
 
 ### Stop
 ```powershell
-docker compose down        # stop & remove containers, KEEP data (sessions, DB)
-docker compose down -v     # ALSO wipe the data volume (fresh start — you lose paired sessions)
+docker compose --profile postgres --profile redis down      # stop & remove containers, KEEP data
+docker compose --profile postgres --profile redis down -v   # ALSO wipe volumes (DB, Redis, sessions — fresh start)
 ```
 
 ### Restart / rebuild after changes
@@ -341,12 +364,13 @@ Copy-Item .env.example .env            # then set NODE_ENV, ENGINE_TYPE, API_MAS
 node -e "const c=require('crypto');console.log('API_KEY_PEPPER='+c.randomBytes(32).toString('hex'));console.log('API_MASTER_KEY='+c.randomBytes(32).toString('hex'));"
 
 # --- run ---
-docker compose up -d --build           # start (production)
-docker compose logs -f openwa-api      # watch logs
-docker compose ps                      # status
-docker compose restart                 # restart
-docker compose down                    # stop (keep data)
-docker compose down -v                 # stop + wipe data
+$p = '--profile','postgres','--profile','redis'   # this stack always names both profiles
+docker compose @p up -d --build        # start (production: API + Postgres + Redis)
+docker compose logs -f openwa-api      # watch API logs
+docker compose @p ps                   # status (all four containers)
+docker compose @p restart              # restart
+docker compose @p down                 # stop (keep data)
+docker compose @p down -v              # stop + wipe data
 
 # --- ports ---
 Get-NetTCPConnection -State Listen -LocalPort 2785 | Select OwningProcess
@@ -390,23 +414,40 @@ through its own server-side proxy.
 Transient network drops do **not** trigger the reverse — only a terminal unlink does.
 
 ### Wiring blue_coys to this laptop with ngrok (HTTPS)
+
+**One-time ngrok setup**
+1. Install: `winget install ngrok.ngrok` (then reopen the terminal), or unzip the download from
+   https://ngrok.com/download onto your PATH.
+2. Authenticate with the team's authtoken (from the ngrok dashboard → *Your Authtoken*):
+   ```powershell
+   ngrok config add-authtoken <TOKEN>
+   ```
+3. Claim the account's **free static domain** so the URL never changes: ngrok dashboard →
+   **Domains** → **+ New Domain** → you get something like `your-name-abc123.ngrok-free.app`.
+
+**Every time you run it**
 1. Start OpenWA (section 4) and confirm http://localhost:2785/api/health/ready returns 200.
-2. Expose it: `ngrok http 2785` → copy the `https://xxxx.ngrok-free.app` URL it prints.
-3. In the **blue_coys** app `.env` set:
+2. Open the tunnel and **leave the window open** (closing it takes the gateway offline):
+   ```powershell
+   ngrok http --url=your-name-abc123.ngrok-free.app 2785
+   ```
+   (older ngrok: use `--domain=` instead of `--url=`; without a static domain, plain
+   `ngrok http 2785` works but the URL rotates on every restart.)
+3. Verify from any device: `https://your-name-abc123.ngrok-free.app/api/health/ready` → 200.
+4. In the **deployed** blue_coys environment (bluecoys.com's env vars, not a local file) set:
    ```dotenv
-   WHATSAPP_GATEWAY_URL=https://xxxx.ngrok-free.app/api/whatsapp
+   WHATSAPP_GATEWAY_URL=https://your-name-abc123.ngrok-free.app/api/whatsapp
    ```
    The Next.js proxy `/api/whatsapp-gateway/<path>` forwards to `${WHATSAPP_GATEWAY_URL}/<path>`,
-   so the frontend hits `/api/whatsapp-gateway/link-qr?...` / `link-code?...`.
-4. Smoke-test from anywhere:
+   so the frontend hits `/api/whatsapp-gateway/link-qr?...` / `link-code?...`. The proxy already
+   sends `ngrok-skip-browser-warning`, so ngrok's free-tier interstitial page never gets in the way.
+5. Smoke-test from anywhere:
    ```bash
-   curl "https://xxxx.ngrok-free.app/api/whatsapp/link-code?username=test&phone_number=919999999999"
+   curl "https://your-name-abc123.ngrok-free.app/api/whatsapp/link-code?username=test&phone_number=919999999999"
    ```
    You should get JSON with a `pairingCode` (or `linked: true`).
 
-> ⚠️ Free ngrok URLs **change every time ngrok restarts** — update `WHATSAPP_GATEWAY_URL` each time,
-> or use an ngrok reserved domain / a router port-forward for a stable address. Callbacks travel
-> OpenWA → `bluecoys.com`, which is public, so nothing extra is needed for them.
+> Callbacks travel OpenWA → `bluecoys.com`, which is public, so nothing extra is needed for them.
 
 ---
 
