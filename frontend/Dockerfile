@@ -16,8 +16,12 @@ WORKDIR /app
 
 # Install everything INCLUDING devDependencies — vite/nitro live there (frontend/.npmrc says the
 # same for Railway). --include=dev guards against a NODE_ENV=production leaking into the build env.
+#
+# `npm install`, not `npm ci`: this app's package-lock.json is not kept in sync with package.json
+# (npm ci aborts with "Missing: lru-cache@… from lock file"), and Railway builds it with
+# `npm install` too (see .npmrc). install resolves the lock in-image instead of refusing.
 COPY package*.json .npmrc ./
-RUN npm ci --include=dev
+RUN npm install --include=dev --no-audit --no-fund
 
 COPY . .
 
