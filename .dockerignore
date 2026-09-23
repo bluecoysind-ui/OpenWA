@@ -72,3 +72,6 @@ temp/
 # Helm chart — deployment artifact, not a build input
 charts/
 _reference/
+
+# WA Gateway UI — built by its own frontend/Dockerfile (compose `frontend` service), not this image
+frontend/
