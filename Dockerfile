@@ -49,9 +49,11 @@ COPY . .
 
 # Build the API (dist/) and the frontend SPA (copied to frontend/dist/). The root `npm ci` above
 # ran before the frontend source was copied, so its postinstall hook skipped the frontend
-# deps - install them explicitly here (npm ci, reproducible from frontend/package-lock.json).
-# `--include=dev` for the same reason as above: the frontend build needs vite/typescript
-# (devDependencies), which a NODE_ENV=production build env would otherwise omit.
+# deps — install them explicitly here. Use `npm install` (not `npm ci`): frontend/package-lock.json
+# is not kept in lockstep with package.json (`npm ci` fails with Missing: lru-cache), which is
+# the same reason frontend/Dockerfile and Railway use `npm install`. `--include=dev` is required:
+# the frontend build needs vite/typescript (devDependencies), which a NODE_ENV=production build
+# env would otherwise omit.
 # Drop the incremental-build cache afterwards: it is pinned inside dist/ (so nest's deleteOutDir
 # wipes it with the output), and the production stage copies dist/ wholesale — it would otherwise
 # ship dead compiler metadata in every image.
@@ -59,7 +61,7 @@ COPY . .
 # then copies it to frontend/dist for Nest to serve on the API port (same-origin /api).
 # Leave VITE_OPENWA_URL unset so the browser uses window.location.origin.
 RUN npm run build \
-    && npm run frontend:ci -- --include=dev \
+    && npm install --prefix frontend --include=dev --no-audit --no-fund \
     && NITRO_PRESET=vercel npm run frontend:build \
     && rm -f dist/*.tsbuildinfo
 
