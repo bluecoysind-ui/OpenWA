@@ -9,8 +9,9 @@ import { BluecoysLinkService } from './bluecoys-link.service';
 /**
  * Bluecoys partner-linking API.
  *
- * Purpose: let a Bluecoys app user link their WhatsApp account to OpenWA so Bluecoys can pay the
- * "WhatsApp login reward". Two login methods are offered, both producing the same outcome:
+ * Purpose: let a Bluecoys app user link their WhatsApp account(s) to OpenWA so Bluecoys can pay
+ * the "WhatsApp login reward". A user may link SEVERAL numbers — each gets its own OpenWA session
+ * (`bc-<username>-<number>`) and its own reward. Two login methods, both with the same outcome:
  *
  *   GET /api/whatsapp/link-qr    → QR image the user scans in WhatsApp
  *   GET /api/whatsapp/link-code  → 8-char pairing code the user types into WhatsApp

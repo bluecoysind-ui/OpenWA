@@ -6,7 +6,7 @@ describe('BluecoysLinkService', () => {
   /** A session already linked to jane's claimed number — the terminal "linked" case. */
   const linkedSession = {
     id: 's1',
-    name: 'bc-jane',
+    name: 'bc-jane-919608079512',
     status: SessionStatus.READY,
     phone: '919608079512@c.us',
     config: { bluecoysUsername: 'jane', bluecoysPhone: '919608079512' },
@@ -15,7 +15,7 @@ describe('BluecoysLinkService', () => {
   /** A freshly created, not-yet-linked session — the case where a credential must be issued. */
   const pendingSession = {
     id: 's2',
-    name: 'bc-jane',
+    name: 'bc-jane-919608079512',
     status: SessionStatus.INITIALIZING,
     phone: null,
     config: { bluecoysUsername: 'jane', bluecoysPhone: '919608079512' },
@@ -90,7 +90,7 @@ describe('BluecoysLinkService', () => {
     expect(res.pairingCode).toBe('ABCD1234');
     expect(typeof res.codeExpiresAt).toBe('number');
     expect(sessions.create).toHaveBeenCalledWith({
-      name: 'bc-jane',
+      name: 'bc-jane-919608079512', // one session per (user, number) → multiple numbers per user
       config: { bluecoysUsername: 'jane', bluecoysPhone: '919608079512' },
     });
     expect(sessions.start).toHaveBeenCalledWith('s2');
