@@ -67,15 +67,12 @@ API_MASTER_KEY=<64-hex-secret>      # your admin API key — must be >= 32 chars
 API_KEY_PEPPER=<64-hex-secret>      # server-side hashing secret
 ```
 
-We run with the **built-in PostgreSQL + Redis** (to handle real traffic), so also set:
+We run on the **embedded SQLite database + the built-in Redis** (cache, queue, WebSocket
+fan-out). Leave every `DATABASE_*` line **commented out** — SQLite is the default and needs no
+config (⚠️ a set `DATABASE_NAME` would be treated as the SQLite *file path* and crash-loop the
+container). Add only:
 
 ```dotenv
-DATABASE_TYPE=postgres
-DATABASE_HOST=postgres              # the compose service name — do not change
-DATABASE_PORT=5432
-DATABASE_NAME=openwa
-DATABASE_USERNAME=openwa
-DATABASE_PASSWORD=<strong-random>    # required: the postgres image refuses an empty password
 REDIS_ENABLED=true
 CACHE_ENABLED=true
 REDIS_HOST=redis                    # the compose service name — do not change
@@ -83,13 +80,19 @@ REDIS_PORT=6379
 AUTO_START_SESSIONS=true            # reconnect linked WhatsApp sessions by themselves after a restart
 ```
 
-Generate `DATABASE_PASSWORD` the same way as the secrets below. Storage stays local (no MinIO).
+Storage stays local (no MinIO).
 
-> **Persistence:** Postgres, Redis and the WhatsApp session data all live in named Docker volumes,
-> so they **survive container and laptop restarts**. The only thing that deletes them is
-> `down -v` (or Docker Desktop's "Clean/Purge data"). Enable *Settings → General → "Start Docker
-> Desktop when you sign in"* so the stack comes back up on its own after a reboot, and take an
-> occasional backup: `docker exec openwa-postgres pg_dump -U openwa openwa > backup.sql`.
+> **Why not Postgres?** OpenWA's Postgres support has upstream bugs (several entities hardcode
+> SQLite column types, e.g. `ScheduledMessage.sendAtUtc`), so the API fails to boot against it.
+> SQLite is fully supported and more than enough for this workload.
+
+> **Persistence:** the SQLite database (`/app/data`), Redis, and the WhatsApp session data all live
+> in named Docker volumes, so they **survive container and laptop restarts**. The only thing that
+> deletes them is `down -v` (or Docker Desktop's "Clean/Purge data"). Enable *Settings → General →
+> "Start Docker Desktop when you sign in"* so the stack comes back up on its own after a reboot,
+> and take an occasional backup of the SQLite file:
+> `docker exec openwa-api sqlite3 /app/data/openwa.sqlite ".backup /app/data/backup.sqlite"`
+> then `docker cp openwa-api:/app/data/backup.sqlite .`
 
 ### 2.3 Generate the two secrets
 Run this (Node is bundled with Docker Desktop's tooling, or use any machine with Node):
@@ -120,17 +123,16 @@ Paste the two lines into `.env`.
 
 | Port | Service | When it's published to the host |
 |---|---|---|
-| **2785** | OpenWA API + dashboard | **Always** |
-| **8080** | WA Gateway UI (`frontend/` — sessions, QR linking, chats, webhooks, API tester) | **Always** |
+| **2785** | OpenWA API + the WA Gateway UI (both served by one process) | **Always** |
 | 9000 / 9001 | MinIO S3 API / console | Only with `--profile minio` or `--profile full` |
 | 5432 | PostgreSQL | **Not** exposed to host (internal Docker network only) |
 | 6379 | Redis | **Not** exposed to host (internal Docker network only) |
 
-So for a normal run, **ports 2785 and 8080 must be free.**
+So for a normal run, **only port 2785 must be free.**
 
 ### Check if the ports are free (PowerShell)
 ```powershell
-2785, 8080, 9000, 9001 | ForEach-Object {
+2785, 9000, 9001 | ForEach-Object {
   $c = Get-NetTCPConnection -State Listen -LocalPort $_ -ErrorAction SilentlyContinue
   if ($c) {
     $procs = ($c.OwningProcess | Sort-Object -Unique | ForEach-Object {
@@ -153,14 +155,14 @@ Run everything from the project folder:
 cd C:\PROJECTS\blue_coys\OpenWA
 ```
 
-### Start (production stack — Postgres + Redis, needs the settings from step 2)
+### Start (production stack — SQLite + Redis, needs the settings from step 2)
 ```powershell
-docker compose --profile postgres --profile redis up -d --build
+docker compose --profile redis up -d --build
 ```
-This brings up **five** containers: `docker-proxy`, `api`, `frontend`, `postgres`, `redis`. Postgres and Redis
-only start when their profile is named — a plain `docker compose up` would start the API on SQLite
-with Redis off and it would then fail to reach the `postgres` host it is configured for.
-**Always include both `--profile` flags** for this stack (including `down`, `restart`, `logs`).
+This brings up **three** containers: `docker-proxy`, `api`, `redis`. Redis only starts
+when its profile is named — a plain `docker compose up` would leave it out and the API would fail
+to reach the `redis` host it is configured for. **Always include `--profile redis`** for this
+stack (including `down`, `restart`, `logs`).
 
 > The webhook **queue** (BullMQ on Redis) is switched on from the dashboard, not `.env`:
 > **Dashboard → Infrastructure → Redis & Queue → enable Queue.** Cache + WebSocket fan-out are
@@ -182,28 +184,24 @@ docker compose logs -f openwa-api
 
 ### Other profile combinations
 ```powershell
-docker compose up -d --build                        # API only: SQLite, Redis off (needs DATABASE_TYPE unset)
-docker compose --profile full up -d --build         # + PostgreSQL, Redis AND MinIO (S3 storage)
+docker compose up -d --build                        # API only: SQLite, Redis off (needs REDIS_ENABLED unset)
+docker compose --profile full up -d --build         # + PostgreSQL, Redis AND MinIO — NOT used (see Postgres note above)
 ```
 
 ### Stop
 ```powershell
-docker compose --profile postgres --profile redis down      # stop & remove containers, KEEP data
-docker compose --profile postgres --profile redis down -v   # ALSO wipe volumes (DB, Redis, sessions — fresh start)
+docker compose --profile redis down      # stop & remove containers, KEEP data
+docker compose --profile redis down -v   # ALSO wipe volumes (SQLite DB, Redis, sessions — fresh start)
 ```
 
 ### The WA Gateway UI (`frontend/`)
-Built by `frontend/Dockerfile` and started automatically with the stack (no profile). Open
-**http://localhost:8080**; in its settings enter the API URL (`http://localhost:2785`) and your
-`API_MASTER_KEY`. Two knobs, both optional, in `.env`:
+There is **no separate container and no extra port**: the root `Dockerfile` builds `frontend/` into
+the API image (`npm run frontend:build` → `frontend/dist`) and NestJS serves it on the API port.
+Open **http://localhost:2785** and sign in with your `API_MASTER_KEY`. Because the UI is
+same-origin with the API, no `CORS_ORIGINS` entry is needed.
 
-```dotenv
-FRONTEND_PORT=8080                              # host port for the UI
-FRONTEND_OPENWA_URL=http://localhost:2785       # API origin baked into the browser bundle at BUILD time
-```
-If the UI will be opened from another machine (e.g. through ngrok), set `FRONTEND_OPENWA_URL` to
-the API's public URL **and** add that UI origin to `CORS_ORIGINS` in `.env`, then rebuild. The UI's
-own server-side proxy always reaches the API over the internal Docker network regardless.
+> ⚠️ Never add `frontend/` to the root `.dockerignore` — the API build needs it in the context, and
+> excluding it fails the build with ``sh: 1: cd: can't cd to frontend``.
 
 ### Restart / rebuild after changes
 ```powershell
@@ -219,8 +217,7 @@ Once the container is healthy:
 
 | What | URL |
 |---|---|
-| Dashboard (bundled with the API) | http://localhost:2785 |
-| **WA Gateway UI** (`frontend/` — the full control centre) | **http://localhost:8080** |
+| **WA Gateway UI** (bundled with the API — sessions, QR linking, chats, webhooks) | **http://localhost:2785** |
 | REST API base | http://localhost:2785/api |
 | Swagger API docs | http://localhost:2785/api/docs |
 | Health check | http://localhost:2785/api/health/ready |
@@ -386,10 +383,10 @@ Copy-Item .env.example .env            # then set NODE_ENV, ENGINE_TYPE, API_MAS
 node -e "const c=require('crypto');console.log('API_KEY_PEPPER='+c.randomBytes(32).toString('hex'));console.log('API_MASTER_KEY='+c.randomBytes(32).toString('hex'));"
 
 # --- run ---
-$p = '--profile','postgres','--profile','redis'   # this stack always names both profiles
-docker compose @p up -d --build        # start (production: API + Postgres + Redis)
+$p = '--profile','redis'               # this stack always names the redis profile
+docker compose @p up -d --build        # start (production: API + UI + Redis, SQLite embedded)
 docker compose logs -f openwa-api      # watch API logs
-docker compose @p ps                   # status (all five containers)
+docker compose @p ps                   # status (all three containers)
 docker compose @p restart              # restart
 docker compose @p down                 # stop (keep data)
 docker compose @p down -v              # stop + wipe data
@@ -425,6 +422,10 @@ through its own server-side proxy.
 - `username` = the Bluecoys user id (their `InvCode`). `phone_number` = digits only, international
   (e.g. `919608079512`) — it must be the WhatsApp number being linked; linking a *different*
   number is rejected with **409** and not rewarded.
+- **A user may link several WhatsApp numbers.** Each (user, number) pair gets its own OpenWA
+  session named `bc-<username>-<number>` (visible in the dashboard) and earns the reward once per
+  distinct number. blue_coys stores them as a list and refuses a number already linked to another
+  account.
 - Swagger shows both under the **whatsapp** tag at http://localhost:2785/api/docs.
 
 ### Callbacks OpenWA fires (hardcoded to `https://bluecoys.com`)

@@ -296,6 +296,9 @@ services:
       - API_KEY_PEPPER=${API_KEY_PEPPER:-}
       - BOOTSTRAP_KEY_FILE=${BOOTSTRAP_KEY_FILE:-}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER:-}
+      # Hands the bundled UI the bootstrap API key so it skips the Connect screen. Off in
+      # production unless set; only enable while the API is NOT publicly reachable.
+      - UI_AUTO_CONNECT=${UI_AUTO_CONNECT:-}
       - VALIDATION_ERROR_DETAIL=${VALIDATION_ERROR_DETAIL:-}
       - MCP_READONLY=${MCP_READONLY:-}
       - MCP_RATE_LIMIT_MAX=${MCP_RATE_LIMIT_MAX:-}

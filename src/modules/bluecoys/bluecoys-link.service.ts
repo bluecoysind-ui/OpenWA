@@ -212,8 +212,10 @@ export class BluecoysLinkService {
   /**
    * Resolve the per-user OpenWA session and get it into a state where a credential can be issued.
    *
-   * One session per Bluecoys user (named `bc-<username>`), tagged in its `config` with the username
-   * and the phone the user CLAIMED. That binding is what makes the flow safe:
+   * One session per (Bluecoys user, WhatsApp number) — named `bc-<username>-<number>` — so a user
+   * can link SEVERAL WhatsApp accounts and each gets its own QR/pairing, credentials and reward
+   * callback. The session's `config` carries the username and the number the user CLAIMED; that
+   * binding is what makes the flow safe:
    *   - a link that authenticates a DIFFERENT number is rejected (409) rather than rewarded, and
    *   - the ready/disconnected hooks can map the session back to the Bluecoys user for callbacks.
    *
@@ -224,7 +226,7 @@ export class BluecoysLinkService {
     const expectedPhone = digitsOnlyPhone(phoneNumber);
     let name: string;
     try {
-      name = sessionNameForUsername(username);
+      name = sessionNameForUsername(username, expectedPhone);
     } catch {
       throw new BadRequestException('username is not usable for session naming');
     }
