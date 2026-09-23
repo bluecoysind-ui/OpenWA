@@ -25,7 +25,7 @@ From `frontend/package.json`:
 
 | Script | Command |
 | --- | --- |
-| `dev` | Vite on `0.0.0.0:8080` (strict port) |
+| `dev` | Vite on `0.0.0.0:2785` (strict port; proxies API on `2786`) |
 | `build` | Vite build + `db:migrate` (PGLite/app-builder, not OpenWA) |
 | `typecheck` | `tsc --noEmit` |
 | `lint` | `eslint .` |

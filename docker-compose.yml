@@ -303,7 +303,7 @@ services:
       - MCP_IP_RATE_LIMIT_MAX=${MCP_IP_RATE_LIMIT_MAX:-}
       - MCP_IP_RATE_LIMIT_WINDOW_MS=${MCP_IP_RATE_LIMIT_WINDOW_MS:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://127.0.0.1:2785,http://localhost:2785}
       - SSRF_ALLOWED_HOSTS=${SSRF_ALLOWED_HOSTS:-}
       - SSRF_DNS_TIMEOUT_MS=${SSRF_DNS_TIMEOUT_MS:-}
       - WEBHOOK_SSRF_REDIRECTS=${WEBHOOK_SSRF_REDIRECTS:-}
@@ -433,8 +433,8 @@ services:
       - 'com.openwa.service=api'
       - 'com.openwa.core=true'
 
-  # The dashboard SPA is now bundled into the openwa-api image and served by NestJS on the
-  # same port (2785) — there is no separate dashboard container. Reach it at the openwa-api
+  # The frontend SPA is bundled into the openwa-api image and served by NestJS on the
+  # same port (2785) — there is no separate UI container. Reach it at the openwa-api
   # port directly; put your own TLS reverse proxy (nginx/Caddy/cloud LB) in front if needed.
 
   # ===== OPTIONAL: Built-in PostgreSQL =====

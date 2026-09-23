@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { LoggerService } from '../../common/services/logger.service';
 import { wwjsAuthDir } from '../auth-dir-paths';
 
@@ -20,51 +21,130 @@ import { wwjsAuthDir } from '../auth-dir-paths';
 /** Just enough of the logger to report; the adapter passes its own so spies keep observing it. */
 type HygieneLogger = Pick<LoggerService, 'debug' | 'log'>;
 
-/**
- * SIGKILL any Chromium orphaned by a previous lifetime of this process. When OpenWA dies hard
- * (kill -9, crash, host reboot) Puppeteer's exit hook never runs, so the browser survives as an
- * orphan — leaking memory and pinning the session profile dir. Orphans are identified by the
- * `--openwa-session=<id>` marker arg appended to the puppeteer args at launch (Chromium ignores
- * the unknown flag; it is purely a `ps` label). Best-effort: never throws — a `ps` failure only
- * logs at debug, so the sweep can never block an engine start.
- */
-export async function killOrphanedChromiumProcesses(sessionId: string, logger: HygieneLogger): Promise<void> {
-  if (process.platform !== 'darwin' && process.platform !== 'linux') {
-    logger.debug(`Skipping orphaned Chromium sweep: unsupported platform ${process.platform}`);
+const EXEC_OPTS = { maxBuffer: 8 * 1024 * 1024, windowsHide: true, timeout: 15_000 } as const;
+
+function decodeExecOutput(stdout: string | Buffer): string {
+  if (typeof stdout === 'string') {
+    return stdout.includes('\u0000') ? Buffer.from(stdout, 'binary').toString('utf16le') : stdout;
+  }
+  if (stdout.includes(0)) return stdout.toString('utf16le').replace(/^\uFEFF/, '');
+  return stdout.toString('utf8');
+}
+
+function execFileUtf8(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { ...EXEC_OPTS, encoding: 'buffer' }, (error, stdout) => {
+      if (error) reject(error instanceof Error ? error : new Error(error.message));
+      else resolve(decodeExecOutput(stdout));
+    });
+  });
+}
+
+function sessionMarkerRe(sessionId: string): RegExp {
+  const marker = `--openwa-session=${sessionId}`;
+  return new RegExp('(?:^|\\s)' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s|$)');
+}
+
+function sessionProfileRe(sessionId: string): RegExp {
+  const id = sessionId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[\\\\/=\\s"])session-${id}(?:["'\\s]|$)`);
+}
+
+export function isOrphanChromiumCommand(args: string, sessionId: string): boolean {
+  if (!/chrome|chromium|headless/i.test(args)) return false;
+  return sessionMarkerRe(sessionId).test(args) || sessionProfileRe(sessionId).test(args);
+}
+
+function parseUnixPs(stdout: string): Array<{ pid: number; args: string }> {
+  const rows: Array<{ pid: number; args: string }> = [];
+  for (const line of stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (!match) continue;
+    rows.push({ pid: Number(match[1]), args: match[2] });
+  }
+  return rows;
+}
+
+function parseWmicList(stdout: string): Array<{ pid: number; args: string }> {
+  const rows: Array<{ pid: number; args: string }> = [];
+  let commandLine = '';
+  let processId = '';
+  const flush = (): void => {
+    const pid = Number(processId);
+    if (Number.isInteger(pid) && pid > 0) rows.push({ pid, args: commandLine });
+    commandLine = '';
+    processId = '';
+  };
+  for (const raw of stdout.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      continue;
+    }
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).replace(/^\uFEFF/, '');
+    const value = line.slice(eq + 1);
+    if (/^CommandLine$/i.test(key)) commandLine = value;
+    else if (/^ProcessId$/i.test(key)) processId = value;
+  }
+  flush();
+  return rows;
+}
+
+async function listWindowsCommandLines(): Promise<Array<{ pid: number; args: string }>> {
+  try {
+    const stdout = await execFileUtf8('wmic', ['process', 'get', 'ProcessId,CommandLine', '/FORMAT:list']);
+    const rows = parseWmicList(stdout);
+    if (rows.length > 0) return rows;
+  } catch {
+    /* WMIC is missing on some Windows 11 installs — fall through to PowerShell. */
+  }
+  const stdout = await execFileUtf8('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'chrome|chromium' } | ForEach-Object { '{0} {1}' -f $_.ProcessId, $_.CommandLine }",
+  ]);
+  return parseUnixPs(stdout);
+}
+
+async function listProcessCommandLines(): Promise<Array<{ pid: number; args: string }>> {
+  if (process.platform === 'win32') return listWindowsCommandLines();
+  const stdout = await execFileUtf8('ps', ['-eo', 'pid=,args=']);
+  return parseUnixPs(stdout);
+}
+
+async function killPid(pid: number): Promise<void> {
+  if (process.platform === 'win32') {
+    await execFileUtf8('taskkill', ['/PID', String(pid), '/T', '/F']).catch(() => undefined);
     return;
   }
+  process.kill(pid, 'SIGKILL');
+}
+
+/**
+ * SIGKILL any Chromium orphaned by a previous lifetime of this process. When OpenWA dies hard
+ * (kill -9, crash, host reboot, Windows `npm run dev` restart) Puppeteer's exit hook never runs, so
+ * the browser survives as an orphan — leaking memory and pinning the session profile dir. Orphans
+ * are identified by the `--openwa-session=<id>` marker arg appended to the puppeteer args at launch
+ * (Chromium ignores the unknown flag; it is purely a process-table label) and by the LocalAuth
+ * `session-<id>` user-data-dir. Best-effort: never throws — an enumeration failure only logs at
+ * debug, so the sweep can never block an engine start.
+ */
+export async function killOrphanedChromiumProcesses(sessionId: string, logger: HygieneLogger): Promise<void> {
   try {
-    // No shell: the args array is handed to ps verbatim, so nothing here is injectable.
-    // maxBuffer is raised because `ps -eo args` prints full command lines, which on a busy host
-    // (many Chromium renderers carrying dozens of flags each) can exceed the 1MB default.
-    const psOutput = await new Promise<string>((resolve, reject) => {
-      execFile('ps', ['-eo', 'pid=,args='], { maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
-        // The @types/node ExecFileException is an Omit<> of ErrnoException, which the type
-        // checker no longer recognises as an Error — narrow it explicitly for the reject.
-        if (error) reject(error instanceof Error ? error : new Error(error.message));
-        else resolve(stdout);
-      });
-    });
-    // Token-exact marker match: the marker is a single argv token, so it must appear delimited by
-    // whitespace or string boundaries. A plain substring test would let restarting session
-    // `sales` SIGKILL the LIVE browser of sibling `sales2` (their markers share a prefix).
-    const marker = `--openwa-session=${sessionId}`;
-    const markerRe = new RegExp('(?:^|\\s)' + marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s|$)');
+    const rows = await listProcessCommandLines();
     const killedPids: number[] = [];
-    for (const line of psOutput.split('\n')) {
-      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
-      if (!match) continue;
-      const pid = Number(match[1]);
-      const args = match[2];
-      if (pid === process.pid || !markerRe.test(args)) continue;
-      // Never kill a non-browser process that happens to carry the marker string
-      // (e.g. a `grep --openwa-session=…` probing the process table).
-      if (!/chrome|chromium|headless/i.test(args)) continue;
+    for (const { pid, args } of rows) {
+      if (pid === process.pid || !isOrphanChromiumCommand(args, sessionId)) continue;
       try {
-        process.kill(pid, 'SIGKILL');
+        await killPid(pid);
         killedPids.push(pid);
       } catch (error) {
-        // ESRCH: the process exited between `ps` and the kill — nothing left to do.
+        // ESRCH: the process exited between listing and the kill — nothing left to do.
         if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
           logger.debug(`Could not SIGKILL orphaned Chromium pid ${pid}`, { error: String(error) });
         }
@@ -75,6 +155,8 @@ export async function killOrphanedChromiumProcesses(sessionId: string, logger: H
         `Killed ${killedPids.length} orphaned Chromium process(es) left over from a previous process lifetime`,
         { sessionId, pids: killedPids },
       );
+      // Windows keeps the userDataDir locked until the process tree actually exits.
+      if (process.platform === 'win32') await delay(400);
     }
   } catch (error) {
     logger.debug('Could not enumerate processes for the orphaned Chromium sweep', { error: String(error) });

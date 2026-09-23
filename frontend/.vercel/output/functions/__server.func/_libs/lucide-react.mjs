@@ -1,5 +1,5 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { o as require_react } from "./react+tanstack__react-query.mjs";
+import { s as require_react } from "./react+tanstack__react-query.mjs";
 //#region node_modules/lucide-react/dist/esm/shared/src/utils.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 /**
@@ -393,6 +393,19 @@ var FolderOpen = createLucideIcon("folder-open", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Gauge = createLucideIcon("gauge", [["path", {
+	d: "m12 14 4-4",
+	key: "9kzdfg"
+}], ["path", {
+	d: "M3.34 19a10 10 0 1 1 17.32 0",
+	key: "19p75a"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Globe = createLucideIcon("globe", [
 	["circle", {
 		cx: "12",
@@ -407,6 +420,39 @@ var Globe = createLucideIcon("globe", [
 	["path", {
 		d: "M2 12h20",
 		key: "9i4pu4"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var HardDrive = createLucideIcon("hard-drive", [
+	["line", {
+		x1: "22",
+		x2: "2",
+		y1: "12",
+		y2: "12",
+		key: "1y58io"
+	}],
+	["path", {
+		d: "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
+		key: "oot6mr"
+	}],
+	["line", {
+		x1: "6",
+		x2: "6.01",
+		y1: "16",
+		y2: "16",
+		key: "sgf278"
+	}],
+	["line", {
+		x1: "10",
+		x2: "10.01",
+		y1: "16",
+		y2: "16",
+		key: "1l4acy"
 	}]
 ]);
 /**
@@ -444,6 +490,16 @@ var LoaderCircle = createLucideIcon("loader-circle", [["path", {
 var MessageSquare = createLucideIcon("message-square", [["path", {
 	d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
 	key: "1lielz"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Phone = createLucideIcon("phone", [["path", {
+	d: "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384",
+	key: "9njp5v"
 }]]);
 /**
 * @license lucide-react v0.510.0 - ISC
@@ -711,6 +767,26 @@ var Shield = createLucideIcon("shield", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ShoppingBag = createLucideIcon("shopping-bag", [
+	["path", {
+		d: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z",
+		key: "hou9p0"
+	}],
+	["path", {
+		d: "M3 6h18",
+		key: "d0wm0j"
+	}],
+	["path", {
+		d: "M16 10a4 4 0 0 1-8 0",
+		key: "1ltviw"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Skull = createLucideIcon("skull", [
 	["path", {
 		d: "m12.5 17-.5-1-.5 1h1z",
@@ -930,4 +1006,4 @@ var Zap = createLucideIcon("zap", [["path", {
 	key: "1xq2db"
 }]]);
 //#endregion
-export { Download as A, MessageSquare as C, FolderOpen as D, Globe as E, CircleCheckBig as F, CalendarClock as I, Bot as L, Cpu as M, Copy as N, FileText as O, CircleUser as P, Activity as R, Play as S, KeyRound as T, RefreshCw as _, Unlink as a, Power as b, Square as c, Shield as d, Server as f, Save as g, ScrollText as h, Upload as i, Database as j, ExternalLink as k, Smartphone as l, Search as m, X as n, TriangleAlert as o, Send as p, Webhook as r, Trash2 as s, Zap as t, Skull as u, QrCode as v, LoaderCircle as w, Plus as x, Puzzle as y };
+export { Gauge as A, CalendarClock as B, Play as C, KeyRound as D, LoaderCircle as E, Database as F, Activity as H, Cpu as I, Copy as L, FileText as M, ExternalLink as N, HardDrive as O, Download as P, CircleUser as R, Plus as S, MessageSquare as T, Bot as V, Save as _, Unlink as a, Puzzle as b, Square as c, ShoppingBag as d, Shield as f, ScrollText as g, Search as h, Upload as i, FolderOpen as j, Globe as k, Smartphone as l, Send as m, X as n, TriangleAlert as o, Server as p, Webhook as r, Trash2 as s, Zap as t, Skull as u, RefreshCw as v, Phone as w, Power as x, QrCode as y, CircleCheckBig as z };

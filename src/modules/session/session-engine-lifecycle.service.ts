@@ -17,7 +17,7 @@ import { AuditAction } from '../audit/entities/audit-log.entity';
 import { resolveEngineInitTimeoutMs } from '../../engine/engine-init-timeout';
 import { isKnownTerminalEngineFailure } from '../../engine/terminal-engine-failure';
 import { StatusStoreService } from '../status-store/status-store.service';
-import { IWhatsAppEngine, AccountRestriction } from '../../engine/interfaces/whatsapp-engine.interface';
+import { IWhatsAppEngine, AccountRestriction, EngineStatus } from '../../engine/interfaces/whatsapp-engine.interface';
 import { createLogger } from '../../common/services/logger.service';
 import { ShutdownService } from '../../common/services/shutdown.service';
 import {
@@ -31,6 +31,7 @@ import { SessionLifecycleFences } from './session-lifecycle-fences';
 import { TERMINAL_UNLINK_REASONS } from './session-terminal-unlink-reasons';
 import { SessionStatusBroadcaster } from './session-status-broadcaster';
 import { SessionEngineLeafEvents } from './session-engine-leaf-events';
+import { SessionQrStateService } from './session-qr-state.service';
 import {
   RECONNECT_LOOP_REASON,
   SessionEngineEventWiring,
@@ -286,6 +287,8 @@ export class SessionEngineLifecycle {
     private readonly ownership?: SessionOwnershipService,
     @Optional()
     private readonly moduleRef?: ModuleRef,
+    @Optional()
+    private readonly qrState?: SessionQrStateService,
   ) {
     // The fence Maps are handed over BY REFERENCE: they stay lifecycle fields (specs poke them
     // through the lifecycle), while the fence logic operates on the same instances.
@@ -319,7 +322,7 @@ export class SessionEngineLifecycle {
         }
       },
     });
-    this.eventWiring = new SessionEngineEventWiring({ logger: this.logger });
+    this.eventWiring = new SessionEngineEventWiring({ logger: this.logger, qrState: this.qrState });
     // The wiring host is built ONCE here: arrow closures bind the live methods/state (never a
     // stale copy — specs replace some deps at runtime), and the leaf deps are handed over by
     // reference. Every closure is a deliberately NON-async passthrough returning the callee's own
@@ -572,6 +575,46 @@ export class SessionEngineLifecycle {
     return nodeOwnsSession(this.ownership, id);
   }
 
+  /**
+   * Resolve as soon as the session can show a QR (or is already linked). whatsapp-web.js
+   * `initialize()` keeps waiting for the phone to pair, so awaiting it would hide the QR until the
+   * user has already linked — or kill the engine on the outer init deadline while pairing is still valid.
+   */
+  private async waitUntilLinkSurface(id: string, engine: IWhatsAppEngine, signal: AbortSignal): Promise<void> {
+    while (!signal.aborted) {
+      if (!this.isLiveEngine(id, engine)) return;
+      try {
+        if (engine.getQRCode()) return;
+        const status = typeof engine.getStatus === 'function' ? engine.getStatus() : undefined;
+        if (
+          status === EngineStatus.QR_READY ||
+          status === EngineStatus.READY ||
+          status === EngineStatus.FAILED ||
+          status === EngineStatus.DISCONNECTED
+        ) {
+          return;
+        }
+      } catch {
+        // Mock engines in unit tests may omit getStatus/getQRCode.
+      }
+      await new Promise<void>(resolve => {
+        if (signal.aborted) {
+          resolve();
+          return;
+        }
+        const timer = setTimeout(() => {
+          signal.removeEventListener('abort', onAbort);
+          resolve();
+        }, 50);
+        const onAbort = (): void => {
+          clearTimeout(timer);
+          resolve();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+  }
+
   private async initializeEngine(id: string, session: Session): Promise<void> {
     this.logger.log(`Initializing engine for session: ${session.name}`, {
       sessionId: id,
@@ -656,6 +699,8 @@ export class SessionEngineLifecycle {
     // wedged in INITIALIZING with no error logged and GET /sessions/:id/qr 400ing forever), or if
     // WhatsApp Web is simply unreachable so the navigation never completes, this await never settles.
     // Race it against a deadline so a wedged init fails fast instead.
+    // Also resolve as soon as a QR (or READY) is available: initialize() keeps waiting for the
+    // phone to pair, and the outer deadline would otherwise SIGKILL a valid pairing in progress.
     //
     // ONLY the timeout case mutates state here. A REAL rejection (e.g. Chromium can't launch) must
     // propagate untouched so start()'s catch keeps owning FAILED+reason (the diagnosability #600/#631
@@ -667,10 +712,12 @@ export class SessionEngineLifecycle {
     // Promise.race can't cancel the losing promise, so swallow a late rejection from initPromise.
     initPromise.catch(() => undefined);
 
+    const abortLinkWait = new AbortController();
     let initTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([
         initPromise,
+        this.waitUntilLinkSurface(id, engine, abortLinkWait.signal).catch(() => undefined),
         new Promise<never>((_, reject) => {
           initTimer = setTimeout(() => reject(new EngineInitTimeoutError(engineInitTimeoutMs)), engineInitTimeoutMs);
         }),
@@ -725,6 +772,7 @@ export class SessionEngineLifecycle {
       }
       throw err;
     } finally {
+      abortLinkWait.abort();
       if (initTimer) clearTimeout(initTimer);
     }
   }
@@ -831,12 +879,15 @@ export class SessionEngineLifecycle {
     // one-shot recovery budget is re-armed for a future episode.
     this.stuckAuthRecoveryUsed.delete(id);
 
-    void this.sessionRepository.update(id, readyRowUpdate(phone, pushName, new Date())).catch(err =>
-      this.logger.warn('Failed to persist session ready state', {
-        sessionId: id,
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    );
+    void this.sessionRepository
+      .update(id, readyRowUpdate(phone, pushName, new Date()))
+      .then(() => this.broadcaster.announce(id, SessionStatus.READY))
+      .catch(err =>
+        this.logger.warn('Failed to persist session ready state', {
+          sessionId: id,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
 
     // Best-effort snapshot of the account's own contacts' currently-active statuses. Live status
     // posts arrive through onMessage below; this just backfills what was already up before we

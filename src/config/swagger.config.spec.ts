@@ -103,6 +103,8 @@ describe('PUBLIC_PATHS drift guard', () => {
     'src/modules/infra/infra-status.controller.ts',
     'src/modules/integration/ingress.controller.ts',
     'src/modules/metrics/metrics.controller.ts',
+    'src/modules/auth/auth-validate.controller.ts',
+    'src/modules/bluecoys/bluecoys.controller.ts',
   ];
 
   function listTsFiles(dir: string, out: string[] = []): string[] {
@@ -141,6 +143,8 @@ describe('PUBLIC_PATHS drift guard', () => {
         '/api/health/ready',
         '/api/infra/health',
         '/api/ingress/{pluginId}/{instanceId}/{path}',
+        '/api/auth/ui-connect',
+        '/api/whatsapp/link-qr',
       ].sort(),
     );
   });

@@ -11,7 +11,7 @@ import {
   ParticipantOperationResult,
 } from '../interfaces/whatsapp-engine.interface';
 import { GroupChat, GroupMetadataRaw, SerializedWid, readWid } from '../types/whatsapp-web-js.types';
-import { toParticipantWid } from '../identity/wa-id';
+import { msisdnOf, toParticipantWid } from '../identity/wa-id';
 import { EngineRefusedError } from '../../common/errors/engine-refused.error';
 import { EngineTransportError } from '../../common/errors/engine-transport.error';
 import { EngineNotSupportedError } from '../../common/errors/engine-not-supported.error';
@@ -120,13 +120,18 @@ export class WwebjsGroups {
       // unreadable rather than emitting the literal string "undefined" as an addressable id.
       const participants: GroupParticipant[] = (groupChat.participants || [])
         .filter(p => readWid(p.id) !== undefined)
-        .map(p => ({
-          id: readWid(p.id)!,
-          number: String(p.id.user),
-          name: p.name ? String(p.name) : undefined,
-          isAdmin: Boolean(p.isAdmin),
-          isSuperAdmin: Boolean(p.isSuperAdmin),
-        }));
+        .map(p => {
+          const id = readWid(p.id)!;
+          return {
+            id,
+            // `p.id.user` is the Wid local-part: a phone for @c.us, LID digits for @lid.
+            // GroupParticipant.number is an MSISDN — never dress a privacy id up as one.
+            number: msisdnOf(id),
+            name: p.name ? String(p.name) : undefined,
+            isAdmin: Boolean(p.isAdmin),
+            isSuperAdmin: Boolean(p.isSuperAdmin),
+          };
+        });
 
       return {
         id: chat.id._serialized,

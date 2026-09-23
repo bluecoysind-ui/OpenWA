@@ -12,18 +12,23 @@ import { OpenWALogin } from "./OpenWALogin";
 import { ComposerExtras } from "./akg/ComposerExtras";
 import { MessageActions } from "./akg/MessageActions";
 import { ChatHeaderActions } from "./akg/ChatHeaderActions";
+import { ChannelsPane, ChatFeedTabBar, StatusPane } from "./ChatFeedTabs";
+import { formatPhoneForDisplay } from "@/lib/openwa/formatPhone";
+import { sessionDisplayName, sessionInitials, sessionShownInAccounts, contactDisplayName } from "@/lib/openwa/sessionLabel";
+import { useHealthQuery, useOwnProfiles, useResolvedPhone, useProfilePicture, useProfilePictures, useContactQuery } from "@/lib/openwa-query";
+import { MediaLightbox } from "./MediaLightbox";
+import { decideScroll, shouldFetchOlderMessages } from "@/lib/openwa/scrollDecision";
+import { GlobalSearch } from "./GlobalSearch";
+import { sendChatTyping, subscribePresence } from "@/lib/openwa-api";
 import { DirectoryActions } from "./akg/DirectoryActions";
 import Aurora from "./Aurora";
-import { useProfilePicture, useProfilePictures } from "@/lib/openwa-query";
 import {
-  IconBell,
   IconChat,
   IconDots,
   IconGear,
   IconPhone,
   IconSearch,
   IconSend,
-  IconSun,
   IconTools,
   IconUsers,
   IconVideo,
@@ -53,9 +58,9 @@ export function GatewayApp() {
   return (
     <div className="relative h-dvh overflow-hidden text-ink">
       <div className="app-bg">
-        <Aurora colorStops={["#f8a66d", "#B497CF", "#5227FF"]} blend={0.5} amplitude={1} speed={0.5} />
+        <Aurora />
       </div>
-      <div className="relative z-10 flex h-full flex-col p-3 sm:p-4">
+      <div className="relative z-10 flex h-full flex-col p-3 sm:p-4 pointer-events-none [&_*]:pointer-events-auto">
         <Header />
         <div className="mt-3 flex min-h-0 flex-1 gap-3">
           <AccountsRail />
@@ -92,48 +97,42 @@ function Header() {
   const user = useGateway((s) => s.user);
   const live = useGateway((s) => s.live);
   const wsConnected = useGateway((s) => s.wsConnected);
+  const activeAccountId = useGateway((s) => s.activeAccountId);
+  const selectChat = useGateway((s) => s.selectChat);
   const openOverlay = useGateway((s) => s.openOverlay);
+  const healthQ = useHealthQuery(live);
+  const version = healthQ.data?.version ?? "—";
   return (
     <header className="glass flex h-16 shrink-0 items-center gap-3 overflow-hidden rounded-2xl px-3 sm:px-4">
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
-        <div className="size-9 overflow-hidden rounded-[10px] bg-white shadow-[0_4px_12px_rgba(37,211,102,0.35)]">
+        <div className="size-9 overflow-hidden rounded-[10px] bg-white ring-1 ring-white/15">
           <img src="/__grok/logo.png" alt="WA Gateway" className="size-full object-cover" />
         </div>
-        <div className="leading-tight">
+        <div className="min-w-0 leading-tight">
           <div className="text-[15px] font-semibold tracking-tight">WA Gateway</div>
-          <div className="hidden text-[11px] text-muted sm:block">Multi-account Control Center</div>
+          <div className="truncate text-[11px] text-muted">
+            Multi-account · <span className="text-dim">v{version}</span>
+          </div>
         </div>
       </div>
-      <button
-        onClick={() => openOverlay("search")}
-        className="mx-2 hidden h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-line bg-white/5 px-3 text-sm text-dim lg:flex"
-      >
-        <IconSearch />
-        <span className="min-w-0 flex-1 truncate text-left">Search messages, contacts, groups...</span>
-        <kbd className="shrink-0 rounded-md border border-line bg-white/5 px-1.5 py-0.5 text-[10px] text-muted">Ctrl K</kbd>
-      </button>
+      <div className="mx-2 hidden min-w-0 flex-1 lg:block">
+        <GlobalSearch
+          currentSessionId={activeAccountId || undefined}
+          onHit={(h) => selectChat(h.chatId)}
+          compact
+        />
+      </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <span className="hidden items-center gap-2 rounded-full border border-line bg-night/40 px-3 py-1.5 text-[11px] text-muted xl:flex">
-          <span className={cn("size-2 rounded-full", wsConnected || live ? "bg-wa shadow-[0_0_8px_#25d366]" : "bg-danger")} />
-          {live ? "Live API" : "Offline"}
+          <span className={cn("size-2 rounded-full", wsConnected || live ? "bg-wa" : "bg-danger")} />
+          {live ? "Live" : "Offline"}
         </span>
         <IconBtn className="lg:hidden" onClick={() => openOverlay("search")}>
           <IconSearch />
         </IconBtn>
-        <IconBtn>
-          <IconBell />
-          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-danger" />
-        </IconBtn>
-        <IconBtn className="hidden sm:grid">
-          <IconSun />
-        </IconBtn>
-        <div className="flex items-center gap-2 rounded-full border border-line bg-white/5 py-1 pr-2 pl-1 sm:pr-3">
-          <div className="grid size-7 place-items-center rounded-full bg-gradient-to-br from-indigo to-violet text-[11px] font-semibold">
+        <div className="flex size-9 items-center justify-center rounded-full border border-line bg-white/5 p-[3px]">
+          <div className="grid size-full place-items-center rounded-full bg-gradient-to-br from-indigo to-violet text-[11px] font-semibold">
             {(user || "?").slice(0, 1).toUpperCase()}
-          </div>
-          <div className="hidden leading-tight md:block">
-            <div className="text-[12px] font-medium">{user || "Not signed in"}</div>
-            <div className="text-[10px] text-muted">{user ? "Dashboard user" : "Sign in to manage"}</div>
           </div>
         </div>
       </div>
@@ -179,6 +178,36 @@ function proxyHostPort(url?: string | null): string | null {
   }
 }
 
+function AccountAvatar({
+  label,
+  pictureUrl,
+  connected,
+}: {
+  label: string;
+  pictureUrl?: string | null;
+  connected: boolean;
+}) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => {
+    setBroken(false);
+  }, [pictureUrl]);
+  const showPhoto = Boolean(pictureUrl) && !broken;
+  return (
+    <>
+      {showPhoto ? (
+        <img src={pictureUrl!} alt="" className="size-full object-cover" onError={() => setBroken(true)} />
+      ) : (
+        <span className="grid size-full place-items-center bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold">
+          {sessionInitials(label)}
+        </span>
+      )}
+      {connected ? (
+        <span className="absolute right-0.5 bottom-0.5 size-2.5 rounded-full border-2 border-night bg-wa" />
+      ) : null}
+    </>
+  );
+}
+
 function AccountsRail() {
   const nav = useGateway((s) => s.nav);
   const setNav = useGateway((s) => s.setNav);
@@ -186,7 +215,20 @@ function AccountsRail() {
   const activeAccountId = useGateway((s) => s.activeAccountId);
   const selectAccount = useGateway((s) => s.selectAccount);
   const openOverlay = useGateway((s) => s.openOverlay);
-  const online = sessions.filter((s) => s.status === "connected").length;
+  const accounts = useMemo(() => sessions.filter((s) => sessionShownInAccounts(s.status)), [sessions]);
+  const online = accounts.filter((s) => s.status === "connected").length;
+  const connectedIds = useMemo(
+    () => accounts.filter((s) => s.status === "connected").map((s) => s.sessionId),
+    [accounts],
+  );
+  const profiles = useOwnProfiles(connectedIds);
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    if (!accounts.some((s) => s.sessionId === activeAccountId)) {
+      const next = accounts.find((s) => s.status === "connected") ?? accounts[0];
+      if (next) selectAccount(next.sessionId);
+    }
+  }, [accounts, activeAccountId, selectAccount]);
   const [peek, setPeek] = useState<{
     label: string;
     phone?: string;
@@ -199,8 +241,9 @@ function AccountsRail() {
   } | null>(null);
   const showPeek = (target: HTMLElement, a: GatewaySession) => {
     const r = target.getBoundingClientRect();
+    const livePush = profiles[a.sessionId]?.pushName;
     setPeek({
-      label: a.name || a.sessionId,
+      label: sessionDisplayName({ ...a, pushName: livePush || a.pushName }),
       phone: a.phoneNumber,
       proxy: a.proxyInfo?.active ?? a.proxy,
       proxyInfo: a.proxyInfo,
@@ -218,12 +261,13 @@ function AccountsRail() {
   return (
     <aside className="glass relative z-40 hidden min-h-0 w-[76px] shrink-0 flex-col items-center overflow-hidden rounded-2xl py-4 md:flex">
       <div className="text-[9px] font-semibold tracking-[0.12em] text-muted">ACCOUNTS</div>
-      <div className="text-lg font-bold leading-none">{sessions.length}</div>
+      <div className="text-lg font-bold leading-none">{accounts.length}</div>
       <div className="mb-3 text-[10px] text-wa">{online} online</div>
       <div className="scroll-thin flex min-h-0 w-full flex-1 flex-col items-center gap-2 overflow-y-auto overscroll-contain pr-0.5">
-        {sessions.map((a) => {
-          const label = a.name || a.sessionId;
+        {accounts.map((a) => {
+          const label = sessionDisplayName({ ...a, pushName: profiles[a.sessionId]?.pushName || a.pushName });
           const connected = a.status === "connected";
+          const pictureUrl = profiles[a.sessionId]?.pictureUrl;
           return (
             <div key={a.sessionId} className="group relative">
               <button
@@ -243,12 +287,7 @@ function AccountsRail() {
                     : "border-transparent",
                 )}
               >
-                <span className="grid size-full place-items-center bg-gradient-to-br from-indigo-500 to-violet-500 text-sm font-semibold">
-                  {label.slice(0, 2).toUpperCase()}
-                </span>
-                {connected ? (
-                  <span className="absolute right-0.5 bottom-0.5 size-2.5 rounded-full border-2 border-night bg-wa" />
-                ) : null}
+                <AccountAvatar label={label} pictureUrl={pictureUrl} connected={connected} />
                 {a.proxyInfo?.active ? (
                   <span
                     title={`Proxy: ${a.proxyInfo.active}`}
@@ -373,7 +412,7 @@ function Directory({ title, kind }: { title: string; kind: "dm" | "group" }) {
   const rows = useMemo(() => chats.filter((c) => c.kind === kind), [chats, kind]);
   const ids = useMemo(() => rows.map((c) => c.id), [rows]);
   const pics = useProfilePictures(sessionId || undefined, ids);
-  const busy = chatsLoading || pics.isFetching;
+  const busy = chatsLoading && rows.length === 0;
   return (
     <div className="glass scroll-thin min-w-0 flex-1 overflow-auto rounded-2xl p-4">
       <h2 className="mb-4 text-base font-semibold">{title}</h2>
@@ -407,7 +446,9 @@ function Directory({ title, kind }: { title: string; kind: "dm" | "group" }) {
               <ChatAvatar chat={c} pictureUrl={pics.data?.[c.id]} />
               <div>
                 <div className="text-sm font-medium">{c.name}</div>
-                <div className="text-xs text-muted">{c.phone || c.preview}</div>
+                <div className="text-xs text-muted">
+                  {kind === "group" ? (c.preview || "Group") : (c.phone || "Number hidden")}
+                </div>
               </div>
             </button>
           ))}
@@ -469,6 +510,8 @@ function SyncBanner({ sync }: { sync: SyncState }) {
 }
 
 function ChatList() {
+  const chatFeedTab = useGateway((s) => s.chatFeedTab);
+  const setChatFeedTab = useGateway((s) => s.setChatFeedTab);
   const chats = useGateway((s) => s.chats);
   const chatsHasMore = useGateway((s) => s.chatsHasMore);
   const chatsLoading = useGateway((s) => s.chatsLoading);
@@ -482,7 +525,7 @@ function ChatList() {
   const sessionId = useGateway((s) => s.activeAccountId);
   const chatIds = useMemo(() => chats.map((c) => c.id), [chats]);
   const pics = useProfilePictures(account?.status === "connected" ? sessionId : undefined, chatIds);
-  const busy = chatsLoading || pics.isFetching;
+  const busy = chatsLoading && chats.length === 0;
   const filtered = useMemo(() => {
     return chats.filter((c) => {
       if (filter === "unread" && c.unread === 0) return false;
@@ -498,7 +541,7 @@ function ChatList() {
           <div className="flex items-center gap-1 text-[16px] font-semibold">All Chats</div>
           {account ? (
             <div className="truncate text-[11px] text-muted">
-              {account.name || account.sessionId}
+              {sessionDisplayName(account)}
               {account.phoneNumber ? ` · ${account.phoneNumber}` : ""}
               {account.status !== "connected" ? ` · ${account.status}` : ""}
             </div>
@@ -512,6 +555,20 @@ function ChatList() {
         </IconBtn>
       </div>
       {account?.sync?.active ? <SyncBanner sync={account.sync} /> : null}
+      <ChatFeedTabBar tab={chatFeedTab} onTab={setChatFeedTab} />
+      {chatFeedTab !== "chats" ? (
+        sessionId ? (
+          chatFeedTab === "channels" ? (
+            <ChannelsPane sessionId={sessionId} />
+          ) : (
+            <StatusPane sessionId={sessionId} />
+          )
+        ) : (
+          <EmptyState>Connect a session first.</EmptyState>
+        )
+      ) : null}
+      {chatFeedTab !== "chats" ? null : (
+        <>
       {busy ? (
         <div className="px-4 pb-1">
           <LoadBar />
@@ -590,6 +647,8 @@ function ChatList() {
           </button>
         ) : null}
       </div>
+        </>
+      )}
     </section>
   );
 }
@@ -677,25 +736,58 @@ function Conversation() {
   const setComposer = useGateway((s) => s.setComposer);
   const send = useGateway((s) => s.sendComposer);
   const sendAttachment = useGateway((s) => s.sendAttachment);
+  const replyingTo = useGateway((s) => s.replyingTo);
+  const setReplyingTo = useGateway((s) => s.setReplyingTo);
   const setMobilePane = useGateway((s) => s.setMobilePane);
   const openOverlay = useGateway((s) => s.openOverlay);
   const chat = chats.find((c) => c.id === id);
   const pp = useProfilePicture(sessionId || undefined, chat?.id);
+  const contactQ = useContactQuery(sessionId || undefined, chat?.kind === "dm" ? chat.id : undefined);
+  const realName = contactDisplayName(contactQ.data);
+  const resolvedPhone = useResolvedPhone(sessionId || undefined, chat?.kind === "dm" ? chat.id : undefined);
+  const statusLine =
+    chat?.kind === "dm"
+      ? realName || formatPhoneForDisplay(resolvedPhone.data || chat.phone || "") || chat.lastSeen || "offline"
+      : chat?.online
+        ? "online"
+        : chat?.lastSeen || "offline";
   const messages = threads[id] ?? [];
   const [attachment, setAttachment] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const lastId = messages.length ? messages[messages.length - 1].id : "";
-  const busy = Boolean(meta?.loading || pp.isFetching);
+  const busy = Boolean(meta?.loading && messages.length === 0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const lightboxItems = useMemo(
+    () =>
+      messages
+        .filter((b): b is Extract<Bubble, { kind: "text" }> => b.kind === "text" && Boolean(b.media?.url) && (b.media?.type === "image" || b.media?.type === "sticker"))
+        .map((b) => ({ id: b.id, url: b.media!.url!, alt: b.media?.filename ?? undefined })),
+    [messages],
+  );
 
-  // Stick to the bottom when a new message lands; leave the scroll alone when
-  // older pages are prepended.
   useEffect(() => {
     const el = scroller.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [id, lastId]);
+    if (!el || !messages.length) return;
+    const last = messages[messages.length - 1];
+    const direction = last.kind === "text" && last.from === "me" ? "outgoing" : "incoming";
+    const geometry = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+    if (decideScroll(direction, geometry) === "bottom") el.scrollTop = el.scrollHeight;
+  }, [id, lastId, messages.length]);
+
+  useEffect(() => {
+    if (!sessionId || !id) return;
+    void subscribePresence(sessionId, [id]).catch(() => undefined);
+  }, [sessionId, id]);
+
+  useEffect(() => {
+    if (!sessionId || !id || !composer.trim()) return;
+    const t = setTimeout(() => {
+      void sendChatTyping(sessionId, id, true).catch(() => undefined);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [sessionId, id, composer]);
 
   const submit = async () => {
     if (attachment) {
@@ -723,8 +815,8 @@ function Conversation() {
         <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setMobilePane("profile")}>
           <ChatAvatar chat={chat} pictureUrl={pp.data} />
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold">{chat.name}</div>
-            <div className="text-xs text-wa">{chat.online ? "online" : chat.lastSeen || "offline"}</div>
+            <div className="truncate text-[15px] font-semibold">{realName || chat.name}</div>
+            <div className="text-xs text-wa">{statusLine}</div>
           </div>
         </button>
         <IconBtn onClick={() => openOverlay("search")} aria-label="Search messages">
@@ -743,7 +835,24 @@ function Conversation() {
           <LoadBar />
         </div>
       ) : null}
-      <div ref={scroller} className="chat-wallpaper scroll-thin flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-6 py-5">
+      <div
+        ref={scroller}
+        className="chat-wallpaper scroll-thin flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-6 py-5"
+        onScroll={() => {
+          const el = scroller.current;
+          if (!el || !meta) return;
+          if (
+            shouldFetchOlderMessages({
+              isUserScroll: true,
+              geometry: { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight },
+              hasMore: meta.hasMore,
+              loading: meta.loading,
+            })
+          ) {
+            void loadOlder(id);
+          }
+        }}
+      >
         {meta?.hasMore ? (
           <button
             type="button"
@@ -773,8 +882,29 @@ function Conversation() {
         ) : (
           <EmptyState>No messages in this chat yet.</EmptyState>
         )}
-        {messages.map((m) => (m.kind === "promo" ? <PromoCard key={m.id} time={m.time} /> : <MessageBubble key={m.id} chatId={id} sessionId={sessionId} m={m} />))}
+        {messages.map((m) =>
+          m.kind === "promo" ? (
+            <PromoCard key={m.id} time={m.time} />
+          ) : (
+            <MessageBubble
+              key={m.id}
+              chatId={id}
+              sessionId={sessionId}
+              m={m}
+              onOpenMedia={(messageId) => {
+                const i = lightboxItems.findIndex((item) => item.id === messageId);
+                if (i >= 0) setLightboxIndex(i);
+              }}
+            />
+          ),
+        )}
       </div>
+      <MediaLightbox
+        items={lightboxItems}
+        index={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={setLightboxIndex}
+      />
       <form
         className="border-t border-line px-4 py-3"
         onSubmit={(e) => {
@@ -783,6 +913,12 @@ function Conversation() {
         }}
       >
         {sessionId ? <ComposerExtras sessionId={sessionId} chatId={id} /> : null}
+        {replyingTo ? (
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-line bg-white/5 px-3 py-2 text-[12px]">
+            <span className="truncate text-muted">Replying: {replyingTo.preview}</span>
+            <button type="button" className="text-danger" onClick={() => setReplyingTo(null)}>Cancel</button>
+          </div>
+        ) : null}
         {attachment ? (
           <div className="mb-2 flex items-center gap-3 rounded-xl border border-line bg-white/5 px-3 py-2 text-[12.5px]">
             <span className="text-lg">{attachment.type.startsWith("image/") ? "🖼️" : attachment.type.startsWith("video/") ? "🎬" : attachment.type.startsWith("audio/") ? "🎵" : "📄"}</span>
@@ -846,8 +982,28 @@ function MessageSkeleton({ mine }: { mine: boolean }) {
   );
 }
 
-function MessageBubble({ chatId, sessionId, m }: { chatId: string; sessionId: string; m: Extract<Bubble, { kind: "text" }> }) {
+function deliveryTicks(m: Extract<Bubble, { kind: "text" }>): string {
+  if (m.from !== "me") return "";
+  if (m.pending) return " ◌";
+  if (m.deliveryStatus === "read") return " ✓✓";
+  if (m.deliveryStatus === "delivered") return " ✓✓";
+  if (m.deliveryStatus === "failed") return " !";
+  return " ✓";
+}
+
+function MessageBubble({
+  chatId,
+  sessionId,
+  m,
+  onOpenMedia,
+}: {
+  chatId: string;
+  sessionId: string;
+  m: Extract<Bubble, { kind: "text" }>;
+  onOpenMedia?: (messageId: string) => void;
+}) {
   const mine = m.from === "me";
+  const setReplyingTo = useGateway((s) => s.setReplyingTo);
   return (
     <div className={cn("flex max-w-[68%] flex-col", mine ? "self-end" : "self-start")}>
       <div
@@ -858,20 +1014,48 @@ function MessageBubble({ chatId, sessionId, m }: { chatId: string; sessionId: st
         )}
       >
         {m.sender ? <div className="px-3.5 pt-2 text-[11px] font-semibold text-indigo-200">{m.sender}</div> : null}
-        {m.media ? <MediaView chatId={chatId} messageId={m.id} media={m.media} mine={mine} /> : null}
-        {m.text ? <div className="px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.text}</div> : null}
+        {m.media ? (
+          <MediaView chatId={chatId} messageId={m.id} media={m.media} mine={mine} onOpenPreview={onOpenMedia} />
+        ) : null}
+        {m.text ? <div className="px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.revoked ? <em>{m.text}</em> : m.text}</div> : null}
+        {m.reactions && Object.keys(m.reactions).length ? (
+          <div className="px-3.5 pb-2 text-[11px] text-muted">{Object.values(m.reactions).join(" ")}</div>
+        ) : null}
       </div>
       <div className={cn("mt-0.5 px-1 text-[10.5px] text-dim", mine && "text-right")}>
         {m.time}
-        {mine ? (m.pending ? " ◌" : " ✓✓") : ""}
+        {deliveryTicks(m)}
       </div>
-      {sessionId ? <MessageActions sessionId={sessionId} chatId={chatId} messageId={m.id} /> : null}
+      <div className="flex flex-wrap gap-1">
+        {!mine && sessionId ? (
+          <button
+            type="button"
+            className="text-[10px] text-indigo"
+            onClick={() => setReplyingTo({ messageId: m.id, preview: m.text.slice(0, 80) || "[media]" })}
+          >
+            Reply
+          </button>
+        ) : null}
+        {sessionId ? <MessageActions sessionId={sessionId} chatId={chatId} messageId={m.id} body={m.text} /> : null}
+      </div>
     </div>
   );
 }
 
 /** Render an attachment inline, or offer to fetch it from WhatsApp when it is not on the server yet. */
-function MediaView({ chatId, messageId, media, mine }: { chatId: string; messageId: string; media: BubbleMedia; mine: boolean }) {
+function MediaView({
+  chatId,
+  messageId,
+  media,
+  mine,
+  onOpenPreview,
+}: {
+  chatId: string;
+  messageId: string;
+  media: BubbleMedia;
+  mine: boolean;
+  onOpenPreview?: (messageId: string) => void;
+}) {
   const loadMedia = useGateway((s) => s.loadMedia);
   const name = media.filename || `${media.type}-${messageId}`;
   const download = media.url ? (
@@ -909,9 +1093,9 @@ function MediaView({ chatId, messageId, media, mine }: { chatId: string; message
   if (media.type === "image" || media.type === "sticker") {
     return (
       <div>
-        <a href={media.url} target="_blank" rel="noreferrer">
+        <button type="button" className="block w-full text-left" onClick={() => onOpenPreview?.(messageId)}>
           <img src={media.url} alt={media.filename ?? ""} className={cn("block max-h-72 w-auto max-w-full object-contain", media.type === "sticker" ? "max-h-32 p-2" : "")} />
-        </a>
+        </button>
         <div className="px-3.5 pt-1.5 pb-1">{download}</div>
       </div>
     );
@@ -982,6 +1166,13 @@ function ContactPanel() {
   const setTab = useGateway((s) => s.setContactTab);
   const openOverlay = useGateway((s) => s.openOverlay);
   const chat = chats.find((c) => c.id === id);
+  const contactQ = useContactQuery(sessionId || undefined, chat?.kind === "dm" ? chat.id : undefined);
+  const realName = contactDisplayName(contactQ.data);
+  const resolvedPhone = useResolvedPhone(sessionId || undefined, chat?.kind === "dm" ? chat.id : undefined);
+  const displayPhone =
+    chat?.kind === "dm"
+      ? formatPhoneForDisplay(resolvedPhone.data || chat.phone || chat.id)
+      : null;
   const pp = useProfilePicture(sessionId || undefined, chat?.id);
   const attachments = useMemo(
     () =>
@@ -995,7 +1186,7 @@ function ContactPanel() {
   const files = attachments.filter((b) => b.media && ["document", "audio", "ptt"].includes(b.media.type));
   return (
     <aside className="glass scroll-thin flex h-full flex-col overflow-auto rounded-2xl p-5">
-      {threadLoading || pp.isFetching ? (
+      {threadLoading && !thread?.length ? (
         <div className="mb-3">
           <LoadBar />
         </div>
@@ -1004,8 +1195,10 @@ function ContactPanel() {
         <div className="relative mx-auto size-[72px] overflow-hidden rounded-full border-[3px] border-indigo/30">
           <ChatAvatar chat={chat} size={72} pictureUrl={pp.data} />
         </div>
-        <div className="mt-2 text-[16px] font-semibold">{chat.name}</div>
-        <div className="text-[12.5px] text-muted">{chat.phone || "Group conversation"}</div>
+        <div className="mt-2 text-[16px] font-semibold">{realName || chat.name}</div>
+        <div className="text-[12.5px] text-muted">
+          {chat.kind === "group" ? "Group conversation" : displayPhone || "Number hidden"}
+        </div>
         <div className="text-[11.5px] text-dim">{chat.lastSeen || (chat.kind === "group" ? "8 participants" : "")}</div>
       </div>
       <div className="mt-4 flex justify-center gap-3">

@@ -179,6 +179,19 @@ export function configureApp(app: INestApplication, options: ConfigureAppOptions
       res.setHeader('Cache-Control', 'no-store');
       res.type('html').send(injectDashboardCspNonce(dashboardIndex, res.locals.cspNonce as string));
     });
+  } else if (!dashboard.enabled) {
+    // `npm run dev` serves the live UI on :2785 and the API on :2786. Send `/` to the Vite UI
+    // instead of a stale bundled login page (or a 404).
+    const ui = (process.env.DASHBOARD_URL || '').replace(/\/+$/, '');
+    if (ui) {
+      app.use((req: Request, res: Response, next: NextFunction) => {
+        if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) {
+          res.redirect(302, ui);
+          return;
+        }
+        next();
+      });
+    }
   }
 
   // CORS Configuration (#221 hardening)

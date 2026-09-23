@@ -121,6 +121,10 @@ export class AuthService implements OnModuleInit, OnModuleDestroy {
    * is removed here too, so a backup restore that lost the key self-heals on the next boot.
    * Returns null when the file is absent, unreadable, empty, or stale.
    */
+  async getLiveBootstrapKey(): Promise<string | null> {
+    return this.readLiveBootstrapKey();
+  }
+
   private async readLiveBootstrapKey(): Promise<string | null> {
     const rawKey = readBootstrapKey(this.logger);
     if (!rawKey) return null;

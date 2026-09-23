@@ -1,5 +1,5 @@
 import { o as __toESM, t as __commonJSMin } from "../_runtime.mjs";
-import { a as noop, i as notifyManager, n as MutationObserver, o as shouldThrowError, r as QueryObserver } from "./tanstack__query-core.mjs";
+import { a as notifyManager, c as shouldThrowError, i as QueryObserver, n as QueriesObserver, r as MutationObserver, s as noop } from "./tanstack__query-core.mjs";
 //#region node_modules/react/cjs/react.production.js
 /**
 * @license React
@@ -498,6 +498,59 @@ var fetchOptimistic = (defaultedOptions, observer, errorResetBoundary) => observ
 	errorResetBoundary.clearReset();
 });
 //#endregion
+//#region node_modules/@tanstack/react-query/build/modern/useQueries.js
+function useQueries({ queries, ...options }, queryClient) {
+	const client = useQueryClient(queryClient);
+	const isRestoring = useIsRestoring();
+	const errorResetBoundary = useQueryErrorResetBoundary();
+	const subscribed = options.subscribed !== false;
+	const defaultedQueries = import_react.useMemo(() => queries.map((opts) => {
+		const defaultedOptions = client.defaultQueryOptions(opts);
+		defaultedOptions._optimisticResults = isRestoring ? "isRestoring" : subscribed ? "optimistic" : void 0;
+		return defaultedOptions;
+	}), [
+		queries,
+		client,
+		isRestoring,
+		subscribed
+	]);
+	defaultedQueries.forEach((queryOptions) => {
+		ensureSuspenseTimers(queryOptions);
+		const query = client.getQueryCache().get(queryOptions.queryHash);
+		ensurePreventErrorBoundaryRetry(queryOptions, errorResetBoundary, query);
+	});
+	useClearResetErrorBoundary(errorResetBoundary);
+	const [observer] = import_react.useState(() => new QueriesObserver(client, defaultedQueries, options));
+	const [optimisticResult, getCombinedResult, trackResult] = observer.getOptimisticResult(defaultedQueries, options.combine);
+	const shouldSubscribe = !isRestoring && subscribed;
+	import_react.useSyncExternalStore(import_react.useCallback((onStoreChange) => shouldSubscribe ? observer.subscribe(notifyManager.batchCalls(onStoreChange)) : noop, [observer, shouldSubscribe]), () => observer.getCurrentResult(), () => observer.getCurrentResult());
+	import_react.useEffect(() => {
+		observer.setQueries(defaultedQueries, options);
+	}, [
+		defaultedQueries,
+		options,
+		observer
+	]);
+	const suspensePromises = optimisticResult.some((result, index) => shouldSuspend(defaultedQueries[index], result)) ? optimisticResult.flatMap((result, index) => {
+		const opts = defaultedQueries[index];
+		if (opts && shouldSuspend(opts, result)) return fetchOptimistic(opts, new QueryObserver(client, opts), errorResetBoundary);
+		return [];
+	}) : [];
+	if (suspensePromises.length > 0) throw Promise.all(suspensePromises);
+	const firstSingleResultWhichShouldThrow = optimisticResult.find((result, index) => {
+		const query = defaultedQueries[index];
+		return query && getHasError({
+			result,
+			errorResetBoundary,
+			throwOnError: query.throwOnError,
+			query: client.getQueryCache().get(query.queryHash),
+			suspense: query.suspense
+		});
+	});
+	if (firstSingleResultWhichShouldThrow) throw firstSingleResultWhichShouldThrow.error;
+	return getCombinedResult(trackResult());
+}
+//#endregion
 //#region node_modules/@tanstack/react-query/build/modern/useBaseQuery.js
 function useBaseQuery(options, Observer, queryClient) {
 	const isRestoring = useIsRestoring();
@@ -556,4 +609,4 @@ function useMutation(options, queryClient) {
 	};
 }
 //#endregion
-export { require_jsx_runtime as a, useQueryClient as i, useQuery as n, require_react as o, QueryClientProvider as r, useMutation as t };
+export { useQueryClient as a, QueryClientProvider as i, useQuery as n, require_jsx_runtime as o, useQueries as r, require_react as s, useMutation as t };

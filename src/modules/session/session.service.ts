@@ -30,6 +30,7 @@ import { SessionErrorStore } from './session-error-store.service';
 import { SessionRestrictionStore } from './session-restriction-store.service';
 import { PresenceStore, type ChatPresence } from './presence-store.service';
 import { SessionEngineLifecycle, resolveReconnectConfig } from './session-engine-lifecycle.service';
+import { SessionQrStateService } from './session-qr-state.service';
 import { SessionOwnershipService } from './session-ownership.service';
 import { paginate, ListOptions, resolveListWindow } from '../../common/utils/paginate';
 import { isUniqueViolation } from '../../common/utils/db-errors';
@@ -139,6 +140,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     private readonly presence: PresenceStore,
     private readonly hookManager: HookManager,
     private readonly engineLifecycle: SessionEngineLifecycle,
+    private readonly qrState: SessionQrStateService,
     @Optional()
     private readonly configService?: ConfigService,
     // Trailing @Optional, like configService: the running app always provides it, while the
@@ -223,7 +225,11 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     // duplicated work.
     const claimable = this.ownership?.claimableWhere() ?? [{}];
     const sessions = await this.sessionRepository.find({
-      where: claimable.map(clause => ({ ...clause, phone: Not(IsNull()), status: SessionStatus.DISCONNECTED })),
+      where: claimable.map(clause => ({
+        ...clause,
+        phone: Not(IsNull()),
+        status: In([SessionStatus.DISCONNECTED, SessionStatus.FAILED]),
+      })),
     });
 
     if (sessions.length === 0) return;
@@ -662,7 +668,16 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     await this.ownership.release(id);
   }
 
-  async getQRCode(id: string): Promise<{ qrCode: string; status: SessionStatus; qrExpiresAt: number }> {
+  async getQRCode(
+    id: string,
+  ): Promise<{
+    qrCode: string;
+    status: SessionStatus;
+    qrExpiresAt: number;
+    pairingCode?: string;
+    pairingPhone?: string;
+    pairingExpiresAt?: number;
+  }> {
     const session = await this.findOne(id);
     const engine = this.engines.require(
       id,
@@ -678,12 +693,13 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
       throw new BadRequestException('QR code is not ready yet. Please wait...');
     }
 
-    // WhatsApp rotates pairing QRs on a ~20s cadence; the dashboard uses this hint for the countdown.
-    const qrExpiresAt = Date.now() + 20_000;
+    const qrExpiresAt = this.qrState.touchQr(id, qrCode);
+    const pairing = this.qrState.getPairing(id);
     return {
       qrCode,
       status: session.status,
       qrExpiresAt,
+      ...(pairing ?? {}),
     };
   }
 
@@ -691,7 +707,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
    * Request an 8-char pairing code (link via phone number) as an alternative to scanning the QR.
    * The session must be started but not yet authenticated.
    */
-  async requestPairingCode(id: string, phoneNumber: string): Promise<{ pairingCode: string; status: SessionStatus }> {
+  async requestPairingCode(
+    id: string,
+    phoneNumber: string,
+  ): Promise<{ pairingCode: string; status: SessionStatus; pairingExpiresAt: number }> {
     const session = await this.findOne(id);
     const engine = this.engines.require(
       id,
@@ -702,7 +721,8 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     }
 
     const pairingCode = await engine.requestPairingCode(phoneNumber);
-    return { pairingCode, status: session.status };
+    const pairingExpiresAt = this.qrState.setPairing(id, pairingCode, phoneNumber);
+    return { pairingCode, status: session.status, pairingExpiresAt };
   }
 
   getEngine(id: string): IWhatsAppEngine | undefined {

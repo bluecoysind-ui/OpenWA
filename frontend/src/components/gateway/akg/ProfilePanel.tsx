@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { fileToBase64 } from '@/lib/openwa-api';
+import { deleteProfilePicture, setProfilePicture } from '@/lib/openwa/extended-api';
 import { getOwnProfile, setProfileName, setProfileStatus } from '@/lib/openwa/akg-api';
 import { useAppToast } from '@/lib/openwa/useToast';
-import { AkgBanner, Card, SessionSelect, btn, field, useAkgSession, useCanWrite } from './akg-ui';
+import { AkgBanner, Card, SessionSelect, btn, field, ghost, useAkgSession, useCanWrite } from './akg-ui';
 
 export function ProfilePanel() {
   const toast = useAppToast();
@@ -19,9 +21,9 @@ export function ProfilePanel() {
     void getOwnProfile(sessionId)
       .then(p => {
         setName(p.pushName ?? '');
-        setStatus(p.status ?? '');
+        setStatus(p.about ?? '');
         setPhone(p.phone ?? '');
-        setPicture(p.pictureUrl ?? null);
+        setPicture(p.profilePictureUrl ?? null);
       })
       .catch(setError);
   }, [sessionId]);
@@ -69,9 +71,38 @@ export function ProfilePanel() {
         >
           Save about
         </button>
-        <p className="mt-2 text-[11px] text-dim">
-          Picture changes use PUT /profile/picture with the existing base64 path and size cap.
-        </p>
+        <input
+          type="file"
+          accept="image/*"
+          className="mt-2 block w-full text-[11px]"
+          disabled={!canWrite}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file || !sessionId) return;
+            void fileToBase64(file)
+              .then((media) =>
+                setProfilePicture(sessionId, { base64: media.base64, mimetype: media.mimetype }),
+              )
+              .then(() => toast.success('Picture updated'))
+              .catch(setError);
+          }}
+        />
+        <button
+          type="button"
+          className={`${ghost} mt-2`}
+          disabled={!canWrite}
+          onClick={() =>
+            void deleteProfilePicture(sessionId)
+              .then(() => {
+                setPicture(null);
+                toast.success('Picture removed');
+              })
+              .catch(setError)
+          }
+        >
+          Remove picture
+        </button>
       </Card>
     </div>
   );

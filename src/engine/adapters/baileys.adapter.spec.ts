@@ -3986,7 +3986,7 @@ describe('BaileysAdapter group management', () => {
     // Owner + the known admin fold to <phone>@c.us, so they share the dialect of canonicalized authors.
     expect(info?.owner).toBe('628111@c.us');
     expect(info?.participants[0]).toMatchObject({ id: '628111@c.us', number: '628111', isSuperAdmin: true });
-    expect(info?.participants[1]).toMatchObject({ id: '222@lid', number: '222' }); // unresolved kept raw
+    expect(info?.participants[1]).toMatchObject({ id: '222@lid', number: '' });
   });
 
   it('createGroup returns the mapped new group', async () => {

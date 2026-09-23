@@ -1,7 +1,11 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { I18nextProvider } from "react-i18next";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import i18n, { i18nReady } from "@/i18n";
 import appCss from "../styles.css?url";
+
+void i18nReady;
 
 const APP_NAME = "WA Gateway";
 
@@ -13,6 +17,7 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       { name: "theme-color", content: "#0B0618" },
       { name: "description", content: "Multi-account WhatsApp control center" },
+      { name: "openwa-csp-nonce", content: "__OPENWA_CSP_NONCE__" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -34,9 +39,11 @@ export const Route = createRootRoute({
       </head>
       <body>
         <PreviewHostBridge />
-        <AuthProvider>
-          <Outlet />
-        </AuthProvider>
+        <I18nextProvider i18n={i18n}>
+          <AuthProvider>
+            <Outlet />
+          </AuthProvider>
+        </I18nextProvider>
         <Scripts />
       </body>
     </html>

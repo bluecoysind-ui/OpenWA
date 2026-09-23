@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Loader2, Play, Plus, Trash2 } from "lucide-react";
-import { testWebhook, type OpenWAWebhook, type WebhookFilters } from "@/lib/openwa-api";
+import { listWebhookDeliveryFailures, testWebhook, type OpenWAWebhook, type WebhookFilters } from "@/lib/openwa-api";
 import { AKG_WEBHOOK_EVENTS } from "@/lib/openwa/akg-api";
 import { WebhookDeliveries } from "../akg/WebhookDeliveries";
 import { useAppToast } from "@/lib/openwa/useToast";
@@ -48,6 +48,7 @@ const supportsFilters = (events: string[]) => events.some((e) => e === "*" || e.
 export function WebhooksPanel() {
   const toast = useAppToast();
   const sessions = useSessionsQuery();
+  const [failures, setFailures] = useState<Awaited<ReturnType<typeof listWebhookDeliveryFailures>>>([]);
   const webhooks = useWebhooksQuery();
   const create = useCreateWebhookMutation();
   const update = useUpdateWebhookMutation();
@@ -176,6 +177,30 @@ export function WebhooksPanel() {
           </div>
         ) : null}
       </Modal>
+
+      <Card title="Delivery failures" sub="Recent webhook delivery errors (GET /webhooks/delivery-failures).">
+        <button
+          type="button"
+          className={ghost}
+          onClick={() =>
+            void listWebhookDeliveryFailures({ limit: 50 })
+              .then(setFailures)
+              .catch((err: unknown) => toast.error("Load failed", err instanceof Error ? err.message : ""))
+          }
+        >
+          Refresh failures
+        </button>
+        <div className="mt-2 max-h-48 space-y-2 overflow-auto text-[11px]">
+          {failures.length === 0 ? <p className="text-muted">No rows loaded.</p> : null}
+          {failures.map((f) => (
+            <div key={f.id} className="rounded-xl border border-line px-3 py-2">
+              <div className="font-medium">{f.url}</div>
+              <div className="text-muted">{f.sessionId} · {f.failedAt}</div>
+              {f.lastError ? <div className="text-danger">{f.lastError}</div> : null}
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

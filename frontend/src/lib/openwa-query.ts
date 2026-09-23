@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "./openwa-api";
+import { getOwnProfile } from "./openwa/akg-api";
 
 export const queryKeys = {
   sessions: ["openwa", "sessions"] as const,
@@ -28,6 +29,7 @@ export const queryKeys = {
   batch: (sessionId: string, batchId: string) => ["openwa", "batch", sessionId, batchId] as const,
   profilePicture: (sessionId: string, contactId: string) => ["openwa", "profile-picture", sessionId, contactId] as const,
   profilePictures: (sessionId: string, idsKey: string) => ["openwa", "profile-pictures", sessionId, idsKey] as const,
+  contact: (sessionId: string, contactId: string) => ["openwa", "contact", sessionId, contactId] as const,
 };
 
 export function useSessionsQuery(enabled = true) {
@@ -54,6 +56,17 @@ export function useSessionProxyQuery(sessionId: string, enabled = true) {
   });
 }
 
+export function useContactQuery(sessionId: string | undefined, contactId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.contact(sessionId ?? "", contactId ?? ""),
+    queryFn: () => api.getContact(sessionId!, contactId!),
+    enabled: Boolean(sessionId && contactId),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useProfilePicture(sessionId: string | undefined, contactId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.profilePicture(sessionId ?? "", contactId ?? ""),
@@ -62,7 +75,38 @@ export function useProfilePicture(sessionId: string | undefined, contactId: stri
     staleTime: 60 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: false,
+    placeholderData: keepPreviousData,
   });
+}
+
+export function useResolvedPhone(sessionId: string | undefined, contactId: string | undefined) {
+  return useQuery({
+    queryKey: ["openwa", "resolved-phone", sessionId ?? "", contactId ?? ""],
+    queryFn: () => api.resolveContactPhone(sessionId!, contactId!).then((r) => r.phone),
+    enabled: Boolean(sessionId && contactId),
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useOwnProfiles(sessionIds: string[]) {
+  const ids = sessionIds.filter(Boolean);
+  const results = useQueries({
+    queries: ids.map((sessionId) => ({
+      queryKey: ["openwa", "own-profile", sessionId] as const,
+      queryFn: () => getOwnProfile(sessionId),
+      enabled: Boolean(sessionId),
+      staleTime: 30 * 60 * 1000,
+      gcTime: 60 * 60 * 1000,
+      retry: false,
+    })),
+  });
+  const byId: Record<string, { pushName?: string; pictureUrl?: string | null }> = {};
+  ids.forEach((id, i) => {
+    const data = results[i]?.data;
+    if (data) byId[id] = { pushName: data.pushName ?? undefined, pictureUrl: data.profilePictureUrl };
+  });
+  return byId;
 }
 
 export function useProfilePictures(sessionId: string | undefined, contactIds: string[]) {
@@ -75,6 +119,7 @@ export function useProfilePictures(sessionId: string | undefined, contactIds: st
     staleTime: 60 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: false,
+    placeholderData: keepPreviousData,
   });
 }
 

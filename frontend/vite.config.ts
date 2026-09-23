@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
@@ -52,6 +52,49 @@ function pgliteBootstrapPlugin(): Plugin {
 }
 
 /**
+ * Hand the local `data/.api-key` to the Vite UI so Connect is skipped in `npm run dev`.
+ * Must run before the `/api` proxy, otherwise Nest (or a 401) answers this path.
+ */
+function openwaUiConnectPlugin(): Plugin {
+  return {
+    name: "openwa-ui-connect",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly !== "/api/auth/ui-connect") {
+          next();
+          return;
+        }
+        if ((req.method ?? "GET").toUpperCase() !== "GET") {
+          res.statusCode = 405;
+          res.setHeader("content-type", "text/plain; charset=utf-8");
+          res.end("Method Not Allowed");
+          return;
+        }
+        const file = join(server.config.root, "..", "data", ".api-key");
+        let key = "";
+        try {
+          key = readFileSync(file, "utf8").trim();
+        } catch {
+          /* Nest has not written the first-boot key yet */
+        }
+        if (!key) {
+          res.statusCode = 404;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ message: "No local OpenWA key yet" }));
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.setHeader("cache-control", "no-store");
+        res.end(JSON.stringify({ apiKey: key }));
+      });
+    },
+  };
+}
+
+/**
  * Live-preview OAuth popup — handled HERE so the agent never has to create a
  * `/auth/popup` route (and cannot break it by scaffolding a React page that
  * paints the full app shell in the popup).
@@ -85,7 +128,7 @@ function authPopupPlugin(): Plugin {
           }
 
           const host = String(
-            req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080",
+            req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:2785",
           );
           const proto = String(
             req.headers["x-forwarded-proto"] ??
@@ -142,31 +185,41 @@ function authPopupPlugin(): Plugin {
   };
 }
 
-// `0.0.0.0:8080` is the live-preview contract — don't change host/port.
-// The dev server starts once `src/router.tsx` and `src/routes/` exist — see
-// AGENTS.md § "First scaffold".
+// Public dev URL :2785 (UI + proxied /api). Nest listens on :2786 during root `npm run dev`.
+// The dev server starts once `src/router.tsx` and `src/routes/` exist — see AGENTS.md § "First scaffold".
+const DEV_UI_PORT = 2785;
+const DEV_API_PORT = 2786;
+const devApiTarget = `http://localhost:${DEV_API_PORT}`;
+
 export default defineConfig(({ command, isPreview }) => ({
   server: {
     host: "0.0.0.0",
-    port: 8080,
+    port: DEV_UI_PORT,
     strictPort: true,
     proxy: {
-      "/socket.io": { target: "http://localhost:2785", ws: true, changeOrigin: true },
+      "/socket.io": { target: devApiTarget, ws: true, changeOrigin: true },
       "/api": {
-        target: "http://localhost:2785",
+        target: devApiTarget,
         changeOrigin: true,
         bypass(req) {
           const url = req.url ?? "";
           if (
             url.startsWith("/api/whatsapp") ||
             url.startsWith("/api/dashboard") ||
-            url.startsWith("/api/websocket")
+            url.startsWith("/api/websocket") ||
+            url.startsWith("/api/auth/ui-connect")
           ) {
             return url;
           }
         },
       },
     },
+  },
+  // Without this, Vite 6 can 504 `/node_modules/.vite/deps/react.js` while SSR crawls,
+  // so the client never hydrates and the UI stays a blank white page.
+  optimizeDeps: {
+    holdUntilCrawlEnd: false,
+    include: ["react", "react-dom", "react-dom/client", "react/jsx-dev-runtime", "react/jsx-runtime"],
   },
   preview: {
     host: "127.0.0.1",
@@ -176,6 +229,7 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    openwaUiConnectPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
@@ -184,8 +238,8 @@ export default defineConfig(({ command, isPreview }) => ({
     grokPwaPlugin(),
     tailwindcss(),
     tanstackStart({
-      // SPA + prerendered shell so the whole app can be served as static files
-      // from the Express backend at /dashboard (no second Node process).
+      // SPA + prerendered shell so Nest can serve the UI as static files
+      // from frontend/dist on the API port (no second Node process).
       spa: {
         enabled: true,
         prerender: { enabled: true, outputPath: "/index.html", crawlLinks: false },

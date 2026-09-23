@@ -6,12 +6,12 @@ welcome — bug fixes, features, docs, and tests.
 
 ## Project layout
 
-OpenWA is a NestJS (backend) + React/Vite (dashboard) project:
+OpenWA is a NestJS (backend) + React (frontend) project:
 
 - `src/` — the NestJS API. Feature modules under `src/modules/` (session, message,
   webhook, queue, audit, settings, infra, …), the WhatsApp engine abstraction under
   `src/engine/`, and shared utilities under `src/common/`.
-- `dashboard/` — the React dashboard.
+- `frontend/` — the React UI (TanStack Start).
 - `docs/` — architecture, API specification, and operational docs.
 
 See `docs/03-system-architecture.md` for the bigger picture.
@@ -21,13 +21,10 @@ See `docs/03-system-architecture.md` for the bigger picture.
 OpenWA targets **Node.js 22+**.
 
 ```bash
-# backend
-npm install
+# API + frontend from the repo root (one command)
+npm ci
 cp .env.example .env        # adjust as needed
-npm run start:dev           # hot-reload, default port 2785
-
-# dashboard (separate terminal)
-cd dashboard && npm install && npm run dev
+npm run dev                 # UI :2785 (API process :2786, proxied)
 ```
 
 Default storage is SQLite, so no external services are required to run locally.
@@ -47,12 +44,11 @@ npm run lint                # ESLint
 npm run format              # Prettier (CI runs `format:check`)
 ```
 
-Dashboard, where CI runs each of these as its own step:
+Frontend, where CI runs each of these as its own step:
 
 ```bash
-cd dashboard
-npm run lint && npm run format:check && npm run typecheck
-npm run i18n:check && npm run build && npm run test:unit
+cd frontend
+npm run typecheck && npm run i18n:check && npm run build && npm test
 ```
 
 If you changed a DTO, a route, or an `@ApiResponse`, also run `npm run openapi:export` and
@@ -60,8 +56,8 @@ commit the snapshot, then `npm run openapi:check` and `npm run check:contract-sh
 hand-written SDK types are compared against the schemas and will fail CI by field name.
 
 - Add or update tests for behavior changes. Backend specs are colocated as `*.spec.ts`
-  and run under Jest; dashboard tests are colocated as `*.test.ts` and run under
-  `node --test`, so a dashboard file named `*.spec.ts` is never executed.
+  and run under Jest; frontend tests are colocated as `*.test.ts` and run under
+  `node --test`.
 - Keep each PR focused on one logical change; it makes review (and credit) much easier.
 - Update `docs/` and the `CHANGELOG.md` `[Unreleased]` section when your change is
   user-visible. (Maintainers own version stamping and release cutting.)

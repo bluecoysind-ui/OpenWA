@@ -1,6 +1,8 @@
 import {
   resolveCorsPolicy,
   isSwaggerEnabled,
+  isUiAutoConnectEnabled,
+  isUiConnectFetchAllowed,
   isValidationErrorDetailEnabled,
   isUpgradeInsecureRequestsEnabled,
   isDashboardCspUpgradeTrapLikely,
@@ -99,6 +101,34 @@ describe('isSwaggerEnabled', () => {
     expect(isSwaggerEnabled('false', 'production')).toBe(false);
     // non-production is unchanged (default on)
     expect(isSwaggerEnabled(undefined, 'development')).toBe(true);
+  });
+});
+
+describe('isUiAutoConnectEnabled', () => {
+  it('is on by default outside production', () => {
+    expect(isUiAutoConnectEnabled(undefined)).toBe(true);
+    expect(isUiAutoConnectEnabled(undefined, 'development')).toBe(true);
+  });
+  it('defaults OFF in production unless explicitly enabled', () => {
+    expect(isUiAutoConnectEnabled(undefined, 'production')).toBe(false);
+    expect(isUiAutoConnectEnabled('true', 'production')).toBe(true);
+    expect(isUiAutoConnectEnabled('false', 'development')).toBe(false);
+  });
+});
+
+describe('isUiConnectFetchAllowed', () => {
+  it('allows same-origin browser fetches', () => {
+    expect(isUiConnectFetchAllowed('same-origin', '8.8.8.8')).toBe(true);
+  });
+  it('refuses cross-site fetches', () => {
+    expect(isUiConnectFetchAllowed('cross-site', '127.0.0.1')).toBe(false);
+    expect(isUiConnectFetchAllowed('same-site', '127.0.0.1')).toBe(false);
+  });
+  it('allows non-browser callers only from loopback', () => {
+    expect(isUiConnectFetchAllowed('', '127.0.0.1')).toBe(true);
+    expect(isUiConnectFetchAllowed(undefined, '::1')).toBe(true);
+    expect(isUiConnectFetchAllowed('', '::ffff:127.0.0.1')).toBe(true);
+    expect(isUiConnectFetchAllowed('', '10.0.0.2')).toBe(false);
   });
 });
 

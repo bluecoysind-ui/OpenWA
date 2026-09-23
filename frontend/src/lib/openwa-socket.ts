@@ -6,6 +6,37 @@ export type QRCodeEvent = { sessionId: string; qrCode: string; timestamp: string
 export type MessageUpsertEvent = { sessionId: string; message: Record<string, unknown>; timestamp: string };
 export type ChatUpsertEvent = { sessionId: string; chat: Record<string, unknown> };
 export type ContactUpsertEvent = { sessionId: string; contact: Record<string, unknown> };
+export type MessageAckEvent = {
+  sessionId: string;
+  id: string;
+  messageId: string;
+  status: "pending" | "sent" | "delivered" | "read" | "failed";
+  ack?: number;
+  timestamp: string;
+};
+export type MessageReactionEvent = {
+  sessionId: string;
+  messageId: string;
+  chatId: string;
+  reaction: string;
+  senderId: string;
+  reactions?: Record<string, string>;
+  timestamp: string;
+};
+export type MessageRevokedEvent = {
+  sessionId: string;
+  id: string;
+  revokedId?: string;
+  chatId: string;
+  timestamp: number;
+};
+export type MessageEditedEvent = {
+  sessionId: string;
+  messageId: string;
+  chatId: string;
+  body: string;
+  timestamp: number;
+};
 
 export type OpenWASocketHandlers = {
   onConnect?: () => void;
@@ -15,6 +46,11 @@ export type OpenWASocketHandlers = {
   onMessageUpsert?: (event: MessageUpsertEvent) => void;
   onChatUpsert?: (event: ChatUpsertEvent) => void;
   onContactUpsert?: (event: ContactUpsertEvent) => void;
+  onMessageAck?: (event: MessageAckEvent) => void;
+  onMessageReaction?: (event: MessageReactionEvent) => void;
+  onMessageRevoked?: (event: MessageRevokedEvent) => void;
+  onMessageEdited?: (event: MessageEditedEvent) => void;
+  onSessionRestriction?: (event: { sessionId: string; timestamp: string }) => void;
   onServerError?: (event: { code: string; message: string }) => void;
 };
 
@@ -34,6 +70,9 @@ const DEFAULT_EVENTS = [
   "message.received",
   "message.sent",
   "message.ack",
+  "message.reaction",
+  "message.revoked",
+  "message.edited",
   "message.upsert",
   "chat.upsert",
   "contact.upsert",
@@ -67,6 +106,50 @@ function fanOut(msg: EventEnvelope | AckFrame | ErrorFrame) {
       break;
     case "contact.upsert":
       handlers.onContactUpsert?.({ sessionId, contact: data });
+      break;
+    case "message.ack":
+      handlers.onMessageAck?.({
+        sessionId,
+        id: String(data.id),
+        messageId: String(data.messageId ?? data.id),
+        status: String(data.status ?? "sent") as MessageAckEvent["status"],
+        ack: typeof data.ack === "number" ? data.ack : undefined,
+        timestamp: msg.timestamp,
+      });
+      break;
+    case "message.reaction":
+      handlers.onMessageReaction?.({
+        sessionId,
+        messageId: String(data.messageId),
+        chatId: String(data.chatId),
+        reaction: String(data.reaction ?? ""),
+        senderId: String(data.senderId ?? ""),
+        reactions: data.reactions as Record<string, string> | undefined,
+        timestamp: msg.timestamp,
+      });
+      break;
+    case "message.revoked":
+      handlers.onMessageRevoked?.({
+        sessionId,
+        id: String(data.id),
+        revokedId: typeof data.revokedId === "string" ? data.revokedId : undefined,
+        chatId: String(data.chatId),
+        timestamp: Number(data.timestamp ?? 0),
+      });
+      break;
+    case "message.edited":
+      if (typeof data.messageId === "string" && typeof data.chatId === "string" && typeof data.body === "string") {
+        handlers.onMessageEdited?.({
+          sessionId,
+          messageId: data.messageId,
+          chatId: data.chatId,
+          body: data.body,
+          timestamp: Number(data.timestamp ?? 0),
+        });
+      }
+      break;
+    case "session.restriction":
+      handlers.onSessionRestriction?.({ sessionId, timestamp: msg.timestamp });
       break;
     default:
       break;

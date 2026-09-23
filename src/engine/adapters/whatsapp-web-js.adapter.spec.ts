@@ -5450,6 +5450,7 @@ describe('WhatsAppWebJsAdapter orphaned Chromium sweep (pre-launch)', () => {
   let rmSpy: jest.SpyInstance;
   let clientInitSpy: jest.SpyInstance;
   let savedWebVersion: string | undefined;
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
 
   // execFile is overloaded, so spy through a structural shape like the Client.prototype spies above.
   // The adapter invokes it as execFile('ps', args, opts, callback); the callback is always last.
@@ -5467,6 +5468,7 @@ describe('WhatsAppWebJsAdapter orphaned Chromium sweep (pre-launch)', () => {
   };
 
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
     // Keep initialize() offline: 'off' skips the wa-version registry fetch in resolveWebVersionPin.
     savedWebVersion = process.env.WWEBJS_WEB_VERSION;
     process.env.WWEBJS_WEB_VERSION = 'off';
@@ -5490,6 +5492,7 @@ describe('WhatsAppWebJsAdapter orphaned Chromium sweep (pre-launch)', () => {
     killSpy.mockRestore();
     rmSpy.mockRestore();
     clientInitSpy.mockRestore();
+    Object.defineProperty(process, 'platform', originalPlatform);
     if (savedWebVersion === undefined) {
       delete process.env.WWEBJS_WEB_VERSION;
     } else {
@@ -5612,16 +5615,40 @@ describe('WhatsAppWebJsAdapter orphaned Chromium sweep (pre-launch)', () => {
     expect(killSpy).toHaveBeenCalledWith(1803, 'SIGKILL');
   });
 
-  it('skips the sweep on platforms other than darwin/linux (no ps, no kill)', async () => {
+  it('enumerates Windows orphans via wmic and taskkill (does not skip the sweep)', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform') as PropertyDescriptor;
     Object.defineProperty(process, 'platform', { value: 'win32' });
+    execFileSpy.mockImplementation((...args: unknown[]) => {
+      const cb = args[args.length - 1] as ExecFileCallback;
+      const cmd = args[0];
+      if (cmd === 'wmic') {
+        cb(
+          null,
+          `CommandLine=C:\\chrome.exe --headless --openwa-session=${SESSION_ID}\r\nProcessId=1501\r\n`,
+          '',
+        );
+        return;
+      }
+      cb(null, '', '');
+    });
     try {
       await newAdapter().initialize({});
     } finally {
       Object.defineProperty(process, 'platform', platform);
     }
 
-    expect(execFileSpy).not.toHaveBeenCalled();
+    expect(execFileSpy).toHaveBeenCalledWith(
+      'wmic',
+      ['process', 'get', 'ProcessId,CommandLine', '/FORMAT:list'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(execFileSpy).toHaveBeenCalledWith(
+      'taskkill',
+      ['/PID', '1501', '/T', '/F'],
+      expect.any(Object),
+      expect.any(Function),
+    );
     expect(killSpy).not.toHaveBeenCalled();
   });
 

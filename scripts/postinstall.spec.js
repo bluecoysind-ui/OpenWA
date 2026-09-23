@@ -3,7 +3,7 @@
  * Run: `npm run test:scripts`.
  *
  * The spawn is injected, so every branch (success, non-zero exit, spawn error, signal, fail-fast
- * ordering) is exercised without a real `npm run dashboard:ci`.
+ * ordering) is exercised without a real `npm run frontend:ci`.
  */
 'use strict';
 
@@ -36,9 +36,9 @@ const EXPECTED_PATCHER_ORDER = [
   'patch-baileys-newsletter-create.js',
 ];
 
-/** Bare temp dir optionally holding a dashboard/ and/or the patch scripts. */
+/** Bare temp dir optionally holding a frontend/ and/or the patch scripts. */
 function makeRoot({
-  dashboard = false,
+  frontend = false,
   patchers = [],
   patcher = false,
   previewPatcher = false,
@@ -49,7 +49,7 @@ function makeRoot({
   baileysNewsletterPatcher = false,
 } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openwa-postinstall-'));
-  if (dashboard) fs.mkdirSync(path.join(root, 'dashboard'));
+  if (frontend) fs.mkdirSync(path.join(root, 'frontend'));
   if (
     patchers.length ||
     patcher ||
@@ -104,14 +104,14 @@ test('planSteps: empty root plans nothing', () => {
   assert.deepEqual(planSteps(makeRoot()), []);
 });
 
-test('planSteps: dashboard only plans the dashboard install (shell, inherited stdio)', () => {
-  const root = makeRoot({ dashboard: true });
+test('planSteps: frontend only plans the frontend install (shell, inherited stdio)', () => {
+  const root = makeRoot({ frontend: true });
   const steps = planSteps(root);
   assert.equal(steps.length, 1);
   assert.equal(steps[0].command, 'npm ci');
   assert.equal(steps[0].options.shell, true);
   assert.equal(steps[0].options.stdio, 'inherit');
-  assert.equal(steps[0].options.cwd, path.join(root, 'dashboard'));
+  assert.equal(steps[0].options.cwd, path.join(root, 'frontend'));
 });
 
 test('planSteps: patcher only plans the best-effort backport via the current node', () => {
@@ -130,8 +130,8 @@ test('planSteps: newsletter preview patcher plans its own best-effort backport',
   assert.deepEqual(steps[0].args.slice(1), ['--best-effort']);
 });
 
-test('planSteps: both present plans dashboard first, patcher second', () => {
-  const steps = planSteps(makeRoot({ dashboard: true, patcher: true }));
+test('planSteps: both present plans frontend first, patcher second', () => {
+  const steps = planSteps(makeRoot({ frontend: true, patcher: true }));
   assert.equal(steps.length, 2);
   assert.equal(steps[0].command, 'npm ci');
   assert.equal(steps[1].command, process.execPath);
@@ -161,7 +161,7 @@ test('planSteps: participant-arity patcher plans its own best-effort repair', ()
   assert.deepEqual(steps[0].args.slice(1), ['--best-effort']);
 });
 
-test('planSteps: dashboard and all patchers run in stable order', () => {
+test('planSteps: frontend and all patchers run in stable order', () => {
   // The fixture is derived rather than hand-listed. A hand-listed one never creates the file for a
   // patcher added later, so planSteps never plans it, the count assertion stays green, and the test
   // quietly stops covering what it is named for. The block and group-description patchers both
@@ -172,7 +172,7 @@ test('planSteps: dashboard and all patchers run in stable order', () => {
     'a patcher was added or removed: update EXPECTED_PATCHER_ORDER at the position planSteps runs it',
   );
 
-  const steps = planSteps(makeRoot({ dashboard: true, patchers: PATCHERS_ON_DISK }));
+  const steps = planSteps(makeRoot({ frontend: true, patchers: PATCHERS_ON_DISK }));
 
   assert.equal(steps.length, EXPECTED_PATCHER_ORDER.length + 1);
   assert.equal(steps[0].command, 'npm ci');
@@ -194,25 +194,25 @@ test('run: nothing to do exits 0 and never spawns', () => {
 
 test('run: all steps succeed exits 0', () => {
   const { calls, spawn } = fakeSpawn([OK, OK]);
-  assert.equal(run(makeRoot({ dashboard: true, patcher: true }), spawn), 0);
+  assert.equal(run(makeRoot({ frontend: true, patcher: true }), spawn), 0);
   assert.equal(calls.length, 2);
 });
 
-test('run: non-zero dashboard install exits 1 and never reaches the patcher (fail-fast)', () => {
+test('run: non-zero frontend install exits 1 and never reaches the patcher (fail-fast)', () => {
   const { calls, spawn } = fakeSpawn([{ status: 1, signal: null, error: null }]);
-  assert.equal(run(makeRoot({ dashboard: true, patcher: true }), spawn), 1);
+  assert.equal(run(makeRoot({ frontend: true, patcher: true }), spawn), 1);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].command, 'npm ci');
 });
 
 test('run: spawn error (npm not found) exits 1', () => {
   const { spawn } = fakeSpawn([{ status: null, signal: null, error: new Error('spawn npm ENOENT') }]);
-  assert.equal(run(makeRoot({ dashboard: true }), spawn), 1);
+  assert.equal(run(makeRoot({ frontend: true }), spawn), 1);
 });
 
 test('run: step killed by a signal exits 1', () => {
   const { spawn } = fakeSpawn([{ status: null, signal: 'SIGTERM', error: null }]);
-  assert.equal(run(makeRoot({ dashboard: true }), spawn), 1);
+  assert.equal(run(makeRoot({ frontend: true }), spawn), 1);
 });
 
 test('run: non-zero patcher exit propagates (half-patched tree must stay fatal)', () => {
@@ -253,7 +253,7 @@ test('planSteps: strips npm_config_allow_scripts from step options.env to avoid 
   };
   const steps = planSteps(
     makeRoot({
-      dashboard: true,
+      frontend: true,
       patcher: true,
       previewPatcher: true,
       statusPatcher: true,
@@ -273,7 +273,7 @@ test('planSteps: strips npm_config_allow_scripts from step options.env to avoid 
 test('run: passes sanitized environment to spawn calls', () => {
   const { calls, spawn } = fakeSpawn([OK]);
   const env = { PATH: '/usr/bin', npm_config_allow_scripts: 'true' };
-  run(makeRoot({ dashboard: true }), spawn, env);
+  run(makeRoot({ frontend: true }), spawn, env);
   assert.equal(calls.length, 1);
   assert.equal('npm_config_allow_scripts' in calls[0].options.env, false);
   assert.equal(calls[0].options.env.PATH, '/usr/bin');

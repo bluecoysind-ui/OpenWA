@@ -15,11 +15,12 @@ import {
   type BatchStatusResponse,
   type SendMediaPayload,
 } from "@/lib/openwa-api";
+import { sendTemplateMessage } from "@/lib/openwa/extended-api";
 import { useAppToast } from "@/lib/openwa/useToast";
 import { useBatchStatusQuery, useGroupsQuery, useSessionsQuery } from "@/lib/openwa-query";
 import { btn, Card, ErrorLine, field, ghost } from "./ui";
 
-const messageTypes = ["text", "image", "video", "audio", "document", "location", "contact", "sticker", "poll", "forward", "bulk"] as const;
+const messageTypes = ["text", "image", "video", "audio", "document", "location", "contact", "sticker", "poll", "template", "forward", "bulk"] as const;
 type MessageType = (typeof messageTypes)[number];
 const mediaTypes: readonly string[] = ["image", "video", "audio", "document", "sticker"];
 const MEDIA_UPLOAD_MAX_BYTES = 18 * 1024 * 1024;
@@ -51,6 +52,8 @@ export function MessageTesterPanel() {
   const [forwardMessageId, setForwardMessageId] = useState("");
   const [bulkRecipients, setBulkRecipients] = useState("");
   const [bulkDelay, setBulkDelay] = useState("1500");
+  const [templateId, setTemplateId] = useState("");
+  const [templateVars, setTemplateVars] = useState("{}");
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [batchId, setBatchId] = useState("");
@@ -95,6 +98,19 @@ export function MessageTesterPanel() {
         setResult(JSON.stringify(await sendContact(sid, { chatId, contactName, contactNumber }), null, 2));
       } else if (messageType === "poll") {
         setResult(JSON.stringify(await sendPoll(sid, { chatId, name: pollQuestion, options: pollOptions.map((o) => o.trim()).filter(Boolean), allowMultipleAnswers }), null, 2));
+      } else if (messageType === "template") {
+        let variables: Record<string, string> = {};
+        if (templateVars.trim()) {
+          const parsed = JSON.parse(templateVars) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            variables = Object.fromEntries(
+              Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
+            );
+          } else throw new Error("Template variables must be a JSON object");
+        }
+        setResult(
+          JSON.stringify(await sendTemplateMessage(sid, { chatId, templateId: templateId.trim(), variables }), null, 2),
+        );
       } else if (messageType === "forward") {
         setResult(JSON.stringify(await forwardMessage(sid, { fromChatId: forwardFrom, toChatId: forwardTo, messageId: forwardMessageId }), null, 2));
       } else if (messageType === "bulk") {
@@ -214,6 +230,17 @@ export function MessageTesterPanel() {
               <input type="checkbox" checked={allowMultipleAnswers} onChange={(e) => setAllowMultipleAnswers(e.target.checked)} />
               Allow multiple answers
             </label>
+          </div>
+        ) : null}
+        {messageType === "template" ? (
+          <div className="mt-2 space-y-2">
+            <input className={field} value={templateId} onChange={(e) => setTemplateId(e.target.value)} placeholder="Template id / name" />
+            <textarea
+              className={`${field} min-h-20 font-mono text-[12px]`}
+              value={templateVars}
+              onChange={(e) => setTemplateVars(e.target.value)}
+              placeholder='Variables JSON e.g. {"1":"Alice"}'
+            />
           </div>
         ) : null}
         {messageType === "forward" ? (

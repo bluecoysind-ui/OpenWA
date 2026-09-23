@@ -1,5 +1,7 @@
 # 17 - Dashboard Design
 
+> **Current UI source is `frontend/`.** Nest still serves a bundled SPA on port 2785 (`SERVE_DASHBOARD`). The previous `dashboard/` Vite app was removed; treat path references below as historical.
+
 ## 17.1 Overview
 
 The dashboard is a web-based management interface for OpenWA that lets users manage sessions, webhooks, and monitor activity without using the API directly.

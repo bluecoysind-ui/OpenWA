@@ -1,6 +1,6 @@
 import type { GroupMetadata } from '@whiskeysockets/baileys';
 import { Group, GroupInfo, GroupParticipant } from '../interfaces/whatsapp-engine.interface';
-import { userPart } from '../identity/wa-id';
+import { msisdnOf, userPart } from '../identity/wa-id';
 
 /**
  * Canonicalizes participant/owner JIDs to the neutral dialect (see wa-id.ts). Defaults to identity so
@@ -59,7 +59,7 @@ export function mapBaileysGroupInfo(
     const id = preferPhoneDialect(p.id, p.phoneNumber, normalizeJid);
     return {
       id,
-      number: userPart(id),
+      number: msisdnOf(id),
       name: p.name,
       isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
       isSuperAdmin: p.admin === 'superadmin',

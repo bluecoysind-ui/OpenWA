@@ -109,7 +109,7 @@ describe('mapBaileysGroupInfo', () => {
     expect(info.owner).toBe('628111@c.us');
     expect(info.participants).toEqual([
       { id: '628111@c.us', number: '628111', name: undefined, isAdmin: true, isSuperAdmin: true },
-      { id: '222@lid', number: '222', name: undefined, isAdmin: false, isSuperAdmin: false }, // unresolved: kept raw
+      { id: '222@lid', number: '', name: undefined, isAdmin: false, isSuperAdmin: false },
     ]);
   });
 

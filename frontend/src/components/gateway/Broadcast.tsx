@@ -6,6 +6,7 @@ import {
   type BulkJob,
   type BulkJobSummary,
   type BulkJobType,
+  type BulkUploadedMedia,
   type GatewayChat,
 } from "@/lib/gateway-client";
 import { TEMPLATES } from "@/lib/templates";
@@ -126,9 +127,10 @@ export function BulkComposer() {
   const [mimetype, setMimetype] = useState("application/pdf");
   const [caption, setCaption] = useState("");
 
-  // Attach-from-computer: the file is uploaded once and its /media/ URL is what the job sends.
+  // Attach-from-computer: bytes are kept with the campaign payload (not only an in-memory URL token).
   const [uploading, setUploading] = useState(false);
   const [uploadedName, setUploadedName] = useState<{ image?: string; document?: string }>({});
+  const [uploadedMedia, setUploadedMedia] = useState<{ image?: BulkUploadedMedia; document?: BulkUploadedMedia }>({});
   const uploadInput = useRef<HTMLInputElement>(null);
   const pushToast = useGateway((s) => s.pushToast);
   const pickFile = async (file: File) => {
@@ -143,11 +145,13 @@ export function BulkComposer() {
       if (type === "image") {
         setImageUrl(r.data.url);
         setUploadedName((u) => ({ ...u, image: r.data!.filename }));
+        setUploadedMedia((u) => ({ ...u, image: r.data!.uploaded }));
       } else {
         setDocumentUrl(r.data.url);
         setFilename(r.data.filename);
         setMimetype(r.data.mimetype || "application/octet-stream");
         setUploadedName((u) => ({ ...u, document: r.data!.filename }));
+        setUploadedMedia((u) => ({ ...u, document: r.data!.uploaded }));
       }
       pushToast("success", `Uploaded ${r.data.filename}`);
     } catch {
@@ -250,8 +254,18 @@ export function BulkComposer() {
       type === "text"
         ? { message: message.trim() }
         : type === "image"
-          ? { imageUrl: imageUrl.trim(), caption: caption.trim() }
-          : { documentUrl: documentUrl.trim(), filename: filename.trim(), mimetype: mimetype.trim() || undefined, caption: caption.trim() };
+          ? {
+              imageUrl: imageUrl.trim(),
+              caption: caption.trim(),
+              uploaded: uploadedMedia.image,
+            }
+          : {
+              documentUrl: documentUrl.trim(),
+              filename: filename.trim(),
+              mimetype: mimetype.trim() || undefined,
+              caption: caption.trim(),
+              uploaded: uploadedMedia.document,
+            };
     await startBulk({
       sessionIds: activeLanes,
       type,
@@ -460,8 +474,17 @@ export function BulkComposer() {
                   Image
                   <UploadButton uploading={uploading} disabled={!session || session.status !== "connected"} onPick={pickFile} inputRef={uploadInput} accept="image/*" />
                 </span>
-                <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://example.com/image.jpg — or upload a file" className={cn(field, "mt-1")} />
-                {uploadedName.image && imageUrl.startsWith("/media/") ? (
+                <input
+                  value={imageUrl}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    setUploadedMedia((u) => ({ ...u, image: undefined }));
+                    setUploadedName((u) => ({ ...u, image: undefined }));
+                  }}
+                  placeholder="https://example.com/image.jpg — or upload a file"
+                  className={cn(field, "mt-1")}
+                />
+                {uploadedName.image && imageUrl.startsWith("openwa-media:") ? (
                   <span className="mt-1 block text-[11px] normal-case tracking-normal text-wa">Attached: {uploadedName.image}</span>
                 ) : null}
               </label>
@@ -479,8 +502,17 @@ export function BulkComposer() {
                   Document
                   <UploadButton uploading={uploading} disabled={!session || session.status !== "connected"} onPick={pickFile} inputRef={uploadInput} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,image/*,video/*,audio/*" />
                 </span>
-                <input value={documentUrl} onChange={(e) => setDocumentUrl(e.target.value)} placeholder="https://example.com/brochure.pdf — or upload a file" className={cn(field, "mt-1")} />
-                {uploadedName.document && documentUrl.startsWith("/media/") ? (
+                <input
+                  value={documentUrl}
+                  onChange={(e) => {
+                    setDocumentUrl(e.target.value);
+                    setUploadedMedia((u) => ({ ...u, document: undefined }));
+                    setUploadedName((u) => ({ ...u, document: undefined }));
+                  }}
+                  placeholder="https://example.com/brochure.pdf — or upload a file"
+                  className={cn(field, "mt-1")}
+                />
+                {uploadedName.document && documentUrl.startsWith("openwa-media:") ? (
                   <span className="mt-1 block text-[11px] normal-case tracking-normal text-wa">Attached: {uploadedName.document}</span>
                 ) : null}
               </label>

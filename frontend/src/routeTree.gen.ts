@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as MediaSplatRouteImport } from './routes/media/$'
+import { Route as ApiAuthValidateRouteImport } from './routes/api/auth/validate'
 import { Route as ApiDashboardLoginRouteImport } from './routes/api/dashboard/login'
 import { Route as ApiWebsocketStatsRouteImport } from './routes/api/websocket/stats'
 import { Route as ApiWhatsappSplatRouteImport } from './routes/api/whatsapp/$'
@@ -37,6 +38,11 @@ const MediaSplatRoute = MediaSplatRouteImport.update({
   path: '/media/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthValidateRoute = ApiAuthValidateRouteImport.update({
+  id: '/api/auth/validate',
+  path: '/api/auth/validate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDashboardLoginRoute = ApiDashboardLoginRouteImport.update({
   id: '/api/dashboard/login',
   path: '/api/dashboard/login',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/api/health': typeof ApiHealthRoute
   '/media/$': typeof MediaSplatRoute
+  '/api/auth/validate': typeof ApiAuthValidateRoute
   '/api/dashboard/login': typeof ApiDashboardLoginRoute
   '/api/websocket/stats': typeof ApiWebsocketStatsRoute
   '/api/whatsapp/$': typeof ApiWhatsappSplatRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/api/health': typeof ApiHealthRoute
   '/media/$': typeof MediaSplatRoute
+  '/api/auth/validate': typeof ApiAuthValidateRoute
   '/api/dashboard/login': typeof ApiDashboardLoginRoute
   '/api/websocket/stats': typeof ApiWebsocketStatsRoute
   '/api/whatsapp/$': typeof ApiWhatsappSplatRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/api/health': typeof ApiHealthRoute
   '/media/$': typeof MediaSplatRoute
+  '/api/auth/validate': typeof ApiAuthValidateRoute
   '/api/dashboard/login': typeof ApiDashboardLoginRoute
   '/api/websocket/stats': typeof ApiWebsocketStatsRoute
   '/api/whatsapp/$': typeof ApiWhatsappSplatRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/health'
     | '/media/$'
+    | '/api/auth/validate'
     | '/api/dashboard/login'
     | '/api/websocket/stats'
     | '/api/whatsapp/$'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/health'
     | '/media/$'
+    | '/api/auth/validate'
     | '/api/dashboard/login'
     | '/api/websocket/stats'
     | '/api/whatsapp/$'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/health'
     | '/media/$'
+    | '/api/auth/validate'
     | '/api/dashboard/login'
     | '/api/websocket/stats'
     | '/api/whatsapp/$'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   ApiHealthRoute: typeof ApiHealthRoute
   MediaSplatRoute: typeof MediaSplatRoute
+  ApiAuthValidateRoute: typeof ApiAuthValidateRoute
   ApiDashboardLoginRoute: typeof ApiDashboardLoginRoute
   ApiWebsocketStatsRoute: typeof ApiWebsocketStatsRoute
   ApiWhatsappSplatRoute: typeof ApiWhatsappSplatRoute
@@ -151,6 +164,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MediaSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/validate': {
+      id: '/api/auth/validate'
+      path: '/api/auth/validate'
+      fullPath: '/api/auth/validate'
+      preLoaderRoute: typeof ApiAuthValidateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/dashboard/login': {
       id: '/api/dashboard/login'
       path: '/api/dashboard/login'
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   ApiHealthRoute: ApiHealthRoute,
   MediaSplatRoute: MediaSplatRoute,
+  ApiAuthValidateRoute: ApiAuthValidateRoute,
   ApiDashboardLoginRoute: ApiDashboardLoginRoute,
   ApiWebsocketStatsRoute: ApiWebsocketStatsRoute,
   ApiWhatsappSplatRoute: ApiWhatsappSplatRoute,

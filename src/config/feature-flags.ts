@@ -7,7 +7,7 @@ import { ConfigService } from '@nestjs/config';
  * validated at boot (see `env.validation.ts`).
  */
 export interface FeatureFlags {
-  /** Auto-start previously-authenticated sessions on boot. Opt-in — default OFF. */
+  /** Auto-start previously-authenticated sessions on boot. Opt-out — default ON (`AUTO_START_SESSIONS=false` to disable). */
   autoStartSessions: boolean;
   /** Persist + dispatch incoming disappearing-message-timer messages. Default ON. */
   storeEphemeralMessages: boolean;
@@ -36,14 +36,15 @@ export interface FeatureFlags {
  * Derive the feature-flag set from an environment map. Pure and parameterised for testability. The
  * comparisons intentionally mirror the exact semantics of the original inline reads so behaviour is
  * unchanged:
- *   - `=== 'true'`  → opt-in flag (default false)
+ *   - `!== 'false'` → autoStartSessions (default true)
+ *   - `=== 'true'`  → other opt-in flags (default false)
  *   - `!== 'false'` → opt-out flag (default true)
  * and the max-ms parse mirrors the original `Number(x) || 5000` — 0, negative, empty and non-numeric
  * values all fall back to 5000 (note this differs from `parseInt`, which would keep a literal 0).
  */
 export function computeFeatureFlags(env: NodeJS.ProcessEnv = process.env): FeatureFlags {
   return {
-    autoStartSessions: env.AUTO_START_SESSIONS === 'true',
+    autoStartSessions: env.AUTO_START_SESSIONS !== 'false',
     storeEphemeralMessages: env.STORE_EPHEMERAL_MESSAGES !== 'false',
     resolveLidToPhone: env.RESOLVE_LID_TO_PHONE === 'true',
     simulateTyping: env.SIMULATE_TYPING !== 'false',

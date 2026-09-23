@@ -21,4 +21,10 @@ export class PairingCodeResponseDto {
 
   @ApiProperty({ description: 'Current session status.', example: 'qr_ready' })
   status!: string;
+
+  @ApiProperty({
+    description: 'When this pairing code expires (epoch ms). WhatsApp allows about three minutes.',
+    example: 1700000180000,
+  })
+  pairingExpiresAt!: number;
 }

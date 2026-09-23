@@ -1,5 +1,5 @@
 import { o as __toESM } from "../_runtime.mjs";
-import { o as require_react } from "./react+tanstack__react-query.mjs";
+import { s as require_react } from "./react+tanstack__react-query.mjs";
 //#region node_modules/zustand/esm/vanilla.mjs
 var import_react = /* @__PURE__ */ __toESM(require_react(), 1);
 var createStoreImpl = (createState) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { markChatRead } from '@/lib/openwa-api';
+import { clearChatMessages, deleteChat, markChatRead, markChatUnread } from '@/lib/openwa-api';
 import { archiveChat, muteChat, pinChat } from '@/lib/openwa/akg-api';
+import { useGateway } from '@/store/gateway-store';
 import { useAppToast } from '@/lib/openwa/useToast';
 import { IconDots } from '../icons';
 import { AkgBanner, useCanWrite } from './akg-ui';
@@ -10,6 +11,7 @@ const menuItem =
 
 export function ChatHeaderActions({ sessionId, chatId }: { sessionId: string; chatId: string }) {
   const toast = useAppToast();
+  const loadChats = useGateway((s) => s.loadChats);
   const canWrite = useCanWrite();
   const [error, setError] = useState<unknown>(null);
   const [open, setOpen] = useState(false);
@@ -109,6 +111,52 @@ export function ChatHeaderActions({ sessionId, chatId }: { sessionId: string; ch
             onClick={() => run(markChatRead(sessionId, chatId), 'Read')}
           >
             Mark read
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItem}
+            disabled={!canWrite}
+            onClick={() => run(markChatUnread(sessionId, chatId), 'Marked unread')}
+          >
+            Mark unread
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItem}
+            disabled={!canWrite}
+            onClick={() => run(pinChat(sessionId, chatId, false), 'Unpinned')}
+          >
+            Unpin
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItem}
+            disabled={!canWrite}
+            onClick={() =>
+              run(clearChatMessages(sessionId, chatId).then(() => undefined), 'Messages cleared')
+            }
+          >
+            Clear messages
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItem}
+            disabled={!canWrite}
+            onClick={() =>
+              run(
+                deleteChat(sessionId, chatId).then(() => {
+                  void loadChats();
+                  useGateway.setState({ activeChatId: "", mobilePane: "list" });
+                }),
+                'Chat deleted',
+              )
+            }
+          >
+            Delete chat
           </button>
         </div>
       ) : null}

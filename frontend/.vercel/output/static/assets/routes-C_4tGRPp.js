@@ -1,1 +1,0 @@
-import{t as e}from"./GatewayApp-BSCVoeit.js";import{y as t}from"./index-nxN1eES0.js";var n=t();function r(){return(0,n.jsx)(e,{})}export{r as component};

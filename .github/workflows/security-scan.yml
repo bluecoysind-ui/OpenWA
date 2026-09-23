@@ -45,7 +45,7 @@ jobs:
           # Both trees are installed below, so both lockfiles belong in the cache key.
           cache-dependency-path: |
             package-lock.json
-            dashboard/package-lock.json
+            frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -56,13 +56,13 @@ jobs:
         # condition) does not fire a false weekly alarm.
         run: npm run check:audit
 
-      # The dashboard is a second dependency tree and the one that reaches a browser; same
+      # The frontend is a second dependency tree and the one that reaches a browser; same
       # rationale as the ci.yml audit job.
-      - name: Install dashboard dependencies
-        run: cd dashboard && npm ci
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
 
-      - name: Security audit (dashboard)
-        run: cd dashboard && npm audit --audit-level=high
+      - name: Security audit (frontend)
+        run: cd frontend && npm audit --audit-level=high
 
   # Mirrors the release.yml `image-scan` job, minus the staging ref: this scans the image the
   # release pipeline actually promoted, on both architectures.

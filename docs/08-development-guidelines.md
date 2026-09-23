@@ -78,10 +78,10 @@ npm run lint
 npm run lint:fix
 ```
 
-The dashboard has its own package scripts:
+The frontend has its own package scripts:
 
 ```bash
-cd dashboard
+cd frontend
 npm run lint
 ```
 

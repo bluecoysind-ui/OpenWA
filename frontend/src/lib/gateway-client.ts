@@ -12,6 +12,8 @@ import {
   type OpenWASession,
 } from "./openwa-api";
 import { getOpenWAApiKey } from "./openwa-config";
+import { extractScrapePhone, isDialablePhone, isScrapableMemberJid } from "./wa-phone";
+import { formatScraperContactsCsv } from "./openwa/scraperCsv";
 
 export const API_BASE = "/api";
 
@@ -21,7 +23,8 @@ export type SessionStatus =
   | "connecting"
   | "qr_ready"
   | "qr_expired"
-  | "logged_out";
+  | "logged_out"
+  | "failed";
 
 export type SyncState = {
   active: boolean;
@@ -37,6 +40,8 @@ export type SyncState = {
 export type GatewaySession = {
   sessionId: string;
   name?: string;
+  /** WhatsApp profile name (pushName) once the session has authenticated. */
+  pushName?: string;
   phoneNumber?: string;
   status: SessionStatus;
   webhooks?: Array<{ url: string; events?: string[] }>;
@@ -103,13 +108,23 @@ export function mapSessionStatus(status: string): SessionStatus {
   if (status === "qr_ready") return "qr_ready";
   if (status === "initializing" || status === "authenticating" || status === "created") return "connecting";
   if (status === "logged_out") return "logged_out";
+  if (status === "failed") return "failed";
   return "disconnected";
+}
+
+/** Linked session that should be brought back without showing QR (phone on file, not logged out). */
+export function sessionNeedsAutoReconnect(session: GatewaySession): boolean {
+  if (!session.phoneNumber) return false;
+  if (session.status === "logged_out") return false;
+  if (session.status === "connected" || session.status === "connecting" || session.status === "qr_ready") return false;
+  return session.status === "disconnected" || session.status === "failed";
 }
 
 export function toGatewaySession(s: OpenWASession): GatewaySession {
   return {
     sessionId: s.id,
     name: s.name,
+    pushName: s.pushName ?? undefined,
     phoneNumber: s.phone ?? undefined,
     status: mapSessionStatus(s.status),
   };
@@ -164,6 +179,35 @@ export async function disconnectSession(sessionId: string) {
   }
 }
 
+export async function createSessionRecord(sessionId: string, body: unknown = {}) {
+  try {
+    const payload = (body ?? {}) as { name?: string; proxy?: string };
+    const name = payload.name || sessionId;
+    try {
+      const created = await openwa.createSession(name, { proxyUrl: payload.proxy });
+      return ok(toGatewaySession(created), "Session created");
+    } catch (err) {
+      if (err instanceof OpenWAError && err.status === 409) {
+        const existing = await openwa.listSessions().catch(() => [] as OpenWASession[]);
+        const found = existing.find((s) => s.name === name || s.id === sessionId);
+        if (found) return ok(toGatewaySession(found), "Session exists");
+      }
+      throw err;
+    }
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : "Could not create session");
+  }
+}
+
+export async function startExistingSession(sessionId: string) {
+  try {
+    const started = await openwa.connectSession(sessionId);
+    return ok(toGatewaySession(started), "Session starting");
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : "Could not start session");
+  }
+}
+
 export async function connectSession(sessionId: string, body: unknown = {}) {
   try {
     const payload = (body ?? {}) as { name?: string; proxy?: string; webhooks?: Array<{ url: string }> };
@@ -205,9 +249,9 @@ export async function getQr(sessionId: string) {
     return ok({
       qrCode: asDataUrl(data.qrCode),
       qrExpiresAt: data.qrExpiresAt ?? null,
-      pairingCode: null as string | null,
-      pairingPhone: null as string | null,
-      pairingExpiresAt: null as number | null,
+      pairingCode: data.pairingCode ?? null,
+      pairingPhone: data.pairingPhone ?? null,
+      pairingExpiresAt: data.pairingExpiresAt ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "QR unavailable";
@@ -218,7 +262,11 @@ export async function getQr(sessionId: string) {
 export async function requestPairingCode(sessionId: string, phoneNumber: string) {
   try {
     const data = await openwa.requestPairingCode(sessionId, phoneNumber);
-    return ok({ pairingCode: data.pairingCode, pairingPhone: phoneNumber, pairingExpiresAt: null as number | null });
+    return ok({
+      pairingCode: data.pairingCode,
+      pairingPhone: phoneNumber,
+      pairingExpiresAt: data.pairingExpiresAt ?? null,
+    });
   } catch (err) {
     return fail(err instanceof Error ? err.message : "Could not get pairing code");
   }
@@ -239,10 +287,12 @@ export async function sendText(payload: { sessionId: string; chatId: string; mes
 
 export type BulkJobType = "text" | "image" | "document";
 export type BulkJobStatus = "processing" | "completed" | "cancelled" | "interrupted";
+/** Inline bytes from a local file upload (kept with the campaign so bulk send does not rely on a fragile in-memory URL). */
+export type BulkUploadedMedia = { base64: string; mimetype: string; filename: string };
 export type BulkPayload =
   | { message: string }
-  | { imageUrl: string; caption?: string }
-  | { documentUrl: string; filename: string; mimetype?: string; caption?: string };
+  | { imageUrl: string; caption?: string; uploaded?: BulkUploadedMedia }
+  | { documentUrl: string; filename: string; mimetype?: string; caption?: string; uploaded?: BulkUploadedMedia };
 export type BulkOptions = { delayBetweenMessages: number; delayJitter: number; typingTime: number };
 export type BulkJobDetail = {
   recipient: string;
@@ -288,6 +338,41 @@ export type StartBulkInput = {
 const mediaCache = new Map<string, { base64: string; mimetype: string; filename: string }>();
 const bulkIndex = new Map<string, string[]>();
 const bulkMeta = new Map<string, { type: BulkJobType; payload: BulkPayload; options: BulkOptions; name: string | null }>();
+
+function isWhatsAppCdnUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host.endsWith("whatsapp.net") || host.endsWith("whatsapp.com");
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve a bulk image/document reference to base64 or a public http(s) URL. */
+function resolveBulkMediaRef(
+  ref: string,
+  inline?: BulkUploadedMedia,
+  fallbackFilename?: string,
+  fallbackMimetype?: string,
+): { base64: string; mimetype: string; filename: string } | { url: string; mimetype?: string; filename?: string } {
+  const fromInline = inline?.base64 ? inline : undefined;
+  const fromCache = ref.startsWith("openwa-media:") ? mediaCache.get(ref) : undefined;
+  const bytes = fromInline ?? fromCache;
+  if (bytes) {
+    return {
+      base64: bytes.base64,
+      mimetype: bytes.mimetype || fallbackMimetype || "application/octet-stream",
+      filename: bytes.filename || fallbackFilename || "file",
+    };
+  }
+  if (ref.startsWith("openwa-media:")) {
+    throw new Error("Uploaded file is no longer available — attach the image again before sending.");
+  }
+  if (isWhatsAppCdnUrl(ref)) {
+    throw new Error("WhatsApp chat media links cannot be used here — upload the image file instead.");
+  }
+  return { url: ref, mimetype: fallbackMimetype, filename: fallbackFilename };
+}
 
 function rememberBatch(sessionId: string, batchId: string) {
   const list = bulkIndex.get(sessionId) ?? [];
@@ -339,39 +424,52 @@ export async function startBulkJob(input: StartBulkInput) {
   const sessionId = input.sessionIds[0];
   if (!sessionId) return fail("No session selected");
   const delay = input.options?.delayBetweenMessages ?? 3000;
-  const messages = input.recipients.map((recipient) => {
-    const chatId = recipientJid(recipient);
-    if (input.type === "image") {
-      const p = input.payload as { imageUrl: string; caption?: string };
-      const cached = p.imageUrl.startsWith("openwa-media:") ? mediaCache.get(p.imageUrl) : undefined;
-      return {
-        chatId,
-        type: "image" as const,
-        content: {
-          caption: p.caption,
-          image: cached
-            ? { base64: cached.base64, mimetype: cached.mimetype, filename: cached.filename }
-            : { url: p.imageUrl },
-        },
-      };
-    }
-    if (input.type === "document") {
-      const p = input.payload as { documentUrl: string; filename: string; mimetype?: string; caption?: string };
-      const cached = p.documentUrl.startsWith("openwa-media:") ? mediaCache.get(p.documentUrl) : undefined;
-      return {
-        chatId,
-        type: "document" as const,
-        content: {
-          caption: p.caption,
-          document: cached
-            ? { base64: cached.base64, mimetype: cached.mimetype, filename: cached.filename }
-            : { url: p.documentUrl, filename: p.filename, mimetype: p.mimetype },
-        },
-      };
-    }
-    const p = input.payload as { message: string };
-    return { chatId, type: "text" as const, content: { text: p.message } };
-  });
+  let messages: openwa.BulkMessageItem[];
+  try {
+    messages = input.recipients.map((recipient) => {
+      const chatId = recipientJid(recipient);
+      if (input.type === "image") {
+        const p = input.payload as { imageUrl: string; caption?: string; uploaded?: BulkUploadedMedia };
+        const media = resolveBulkMediaRef(p.imageUrl.trim(), p.uploaded);
+        return {
+          chatId,
+          type: "image" as const,
+          content: {
+            caption: p.caption,
+            image:
+              "base64" in media
+                ? { base64: media.base64, mimetype: media.mimetype, filename: media.filename }
+                : { url: media.url, mimetype: media.mimetype, filename: media.filename },
+          },
+        };
+      }
+      if (input.type === "document") {
+        const p = input.payload as {
+          documentUrl: string;
+          filename: string;
+          mimetype?: string;
+          caption?: string;
+          uploaded?: BulkUploadedMedia;
+        };
+        const media = resolveBulkMediaRef(p.documentUrl.trim(), p.uploaded, p.filename, p.mimetype);
+        return {
+          chatId,
+          type: "document" as const,
+          content: {
+            caption: p.caption,
+            document:
+              "base64" in media
+                ? { base64: media.base64, mimetype: media.mimetype, filename: media.filename }
+                : { url: media.url, filename: media.filename ?? p.filename, mimetype: media.mimetype ?? p.mimetype },
+          },
+        };
+      }
+      const p = input.payload as { message: string };
+      return { chatId, type: "text" as const, content: { text: p.message } };
+    });
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : "Invalid media for campaign");
+  }
   try {
     const result = await openwa.sendBulk(sessionId, {
       messages,
@@ -535,13 +633,18 @@ export type GatewayMessage = {
   mediaUrl?: string | null;
   senderName: string | null;
   isGroup?: boolean;
+  status?: "pending" | "sent" | "delivered" | "read" | "failed";
+  waMessageId?: string;
 };
 
 function toGatewayChat(c: OpenWAChat): GatewayChat {
   return {
     id: c.id,
     name: c.name,
-    phone: c.isGroup ? null : c.id.split("@")[0] ?? null,
+    phone: c.isGroup ? null : (() => {
+      const phone = extractScrapePhone(c.id, null);
+      return isDialablePhone(phone) ? phone : null;
+    })(),
     isGroup: c.isGroup,
     profilePicture: null,
     lastMessage: c.lastMessage ?? null,
@@ -557,7 +660,10 @@ function toGatewayMessage(m: OpenWAMessage): GatewayMessage {
     chatId: m.chatId,
     fromMe: m.direction === "outgoing",
     sender: m.from,
-    senderPhone: m.from?.includes("@") ? m.from.split("@")[0] : m.from,
+    senderPhone: m.from ? (() => {
+      const phone = extractScrapePhone(m.from, null);
+      return isDialablePhone(phone) ? phone : undefined;
+    })() : undefined,
     timestamp: m.timestamp ?? Date.parse(m.createdAt) / 1000,
     type: m.type === "voice" ? "ptt" : m.type,
     content: m.body || null,
@@ -567,6 +673,8 @@ function toGatewayMessage(m: OpenWAMessage): GatewayMessage {
     mediaUrl: media?.data ? `data:${media.mimetype};base64,${media.data}` : null,
     senderName: m.chatName ?? m.author ?? null,
     isGroup: m.kind === "group" || m.chatId.includes("@g.us"),
+    status: m.status,
+    waMessageId: m.waMessageId ?? m.id,
   };
 }
 
@@ -634,7 +742,7 @@ export async function listMessages(sessionId: string, chatId: string, limit = 40
     const wantsHistory = offset === 0;
     const [dbRes, historyRes] = await Promise.allSettled([
       openwa.getChatMessages(sessionId, chatId, limit, offset),
-      wantsHistory ? openwa.getChatHistory(sessionId, chatId, 100, false) : Promise.resolve([] as EngineHistoryMessage[]),
+      wantsHistory ? openwa.getChatHistory(sessionId, chatId, 100, true) : Promise.resolve([] as EngineHistoryMessage[]),
     ]);
     if (dbRes.status === "rejected" && (!wantsHistory || historyRes.status === "rejected")) {
       throw dbRes.reason;
@@ -674,35 +782,117 @@ export type ScrapedContact = {
 export type ScrapeAccountStat = { sessionId: string; accountName?: string; total?: number; groups?: number; members?: number; error?: string };
 export type GroupRow = { id: string; name: string; participantsCount?: number; sessionId?: string; desc?: string | null };
 
+function scrapeDedupeKey(c: Pick<ScrapedContact, "phone" | "jid">): string {
+  if (c.phone && isDialablePhone(c.phone)) return `p:${c.phone}`;
+  return `j:${c.jid}`;
+}
+
+function mergeScrapedContact(into: ScrapedContact, row: ScrapedContact): void {
+  if (!into.name && row.name) into.name = row.name;
+  if (isDialablePhone(row.phone) && !isDialablePhone(into.phone)) {
+    into.phone = row.phone;
+    into.jid = row.jid;
+  }
+  const incomingGroups = [...(row.groups ?? []), ...(row.groupName ? [row.groupName] : [])];
+  if (incomingGroups.length) {
+    const groups = new Set(into.groups ?? (into.groupName ? [into.groupName] : []));
+    for (const name of incomingGroups) groups.add(name);
+    into.groups = [...groups];
+    into.groupName = into.groups[0];
+  }
+  if (row.sessionId) {
+    const sources = new Set(into.sources ?? (into.sessionId ? [into.sessionId] : []));
+    sources.add(row.sessionId);
+    into.sources = [...sources];
+  }
+  if (row.admin && !into.admin) into.admin = row.admin;
+}
+
+type ContactIndex = {
+  byId: Map<string, openwa.OpenWAContact>;
+};
+
+function indexContacts(rows: openwa.OpenWAContact[]): ContactIndex {
+  const byId = new Map<string, openwa.OpenWAContact>();
+  for (const c of rows) {
+    byId.set(c.id, c);
+    if (c.lid) byId.set(`${c.lid}@lid`, c);
+  }
+  return { byId };
+}
+
+function resolveMember(
+  participant: openwa.OpenWAGroupParticipant,
+  sessionId: string,
+  groupName: string,
+  contacts: ContactIndex,
+): ScrapedContact | null {
+  if (!isScrapableMemberJid(participant.id)) return null;
+  const lidKey = participant.id.toLowerCase().endsWith("@lid") ? participant.id.toLowerCase() : "";
+  const contact = contacts.byId.get(participant.id) ?? (lidKey ? contacts.byId.get(lidKey) : undefined);
+
+  let phone = extractScrapePhone(participant.id, participant.number);
+  if (!isDialablePhone(phone) && contact) {
+    const fromBook = extractScrapePhone(contact.id, contact.number);
+    if (isDialablePhone(fromBook)) phone = fromBook;
+  }
+  if (!phone) return null;
+
+  return {
+    phone,
+    jid: participant.id,
+    name: participant.name || contact?.name || contact?.pushName || null,
+    admin: participant.isAdmin || participant.isSuperAdmin ? "admin" : null,
+    groupName,
+    groups: [groupName],
+    sessionId,
+    sources: [sessionId],
+  };
+}
+
+async function loadContactIndex(sessionId: string): Promise<ContactIndex> {
+  try {
+    return indexContacts(await openwa.listContacts(sessionId));
+  } catch {
+    return indexContacts([]);
+  }
+}
+
 export async function scrapeContacts(sessionIds: string[], opts: { dedupe?: boolean } = {}) {
   const contacts: ScrapedContact[] = [];
   const accounts: ScrapeAccountStat[] = [];
+  const merged = new Map<string, ScrapedContact>();
+
   for (const sessionId of sessionIds) {
     try {
       const rows = await openwa.listContacts(sessionId);
       accounts.push({ sessionId, total: rows.length });
       for (const c of rows) {
-        contacts.push({
-          phone: c.number,
+        if (!isScrapableMemberJid(c.id)) continue;
+        const phone = extractScrapePhone(c.id, c.number);
+        if (!phone) continue;
+        const row: ScrapedContact = {
+          phone,
           jid: c.id,
           name: c.name || c.pushName || null,
           sessionId,
           sources: [sessionId],
-        });
+        };
+        if (opts.dedupe ?? true) {
+          const key = scrapeDedupeKey(row);
+          const prev = merged.get(key);
+          if (prev) mergeScrapedContact(prev, row);
+          else merged.set(key, row);
+        } else {
+          contacts.push(row);
+        }
       }
     } catch (err) {
       accounts.push({ sessionId, error: err instanceof Error ? err.message : "failed" });
     }
   }
-  let out = contacts;
-  if (opts.dedupe ?? true) {
-    const seen = new Set<string>();
-    out = contacts.filter((c) => {
-      if (seen.has(c.phone)) return false;
-      seen.add(c.phone);
-      return true;
-    });
-  }
+
+  const out = opts.dedupe ?? true ? [...merged.values()] : contacts;
   return ok({ total: out.length, contacts: out, accounts, deduped: opts.dedupe ?? true });
 }
 
@@ -712,6 +902,7 @@ export async function listGroups(sessionId: string) {
       id: g.id,
       name: g.name,
       sessionId,
+      participantsCount: g.participantsCount,
     }));
     return ok({ groups, totalGroups: groups.length });
   } catch (err) {
@@ -719,20 +910,66 @@ export async function listGroups(sessionId: string) {
   }
 }
 
-export async function scrapeGroups(sessionIds: string[], _groupIds: string[] | null, opts: { dedupe?: boolean } = {}) {
-  const contacts: ScrapedContact[] = [];
+export async function scrapeGroups(sessionIds: string[], groupIds: string[] | null, opts: { dedupe?: boolean } = {}) {
   const groups: GroupRow[] = [];
   const accounts: ScrapeAccountStat[] = [];
+  const merged = new Map<string, ScrapedContact>();
+  const flat: ScrapedContact[] = [];
+  const dedupe = opts.dedupe ?? true;
+
   for (const sessionId of sessionIds) {
+    let membersScraped = 0;
+    const groupErrors: string[] = [];
     try {
       const rows = await openwa.listGroups(sessionId);
-      accounts.push({ sessionId, groups: rows.length });
-      for (const g of rows) groups.push({ id: g.id, name: g.name, sessionId });
+      const pick = new Set(groupIds?.length ? groupIds : rows.map((g) => g.id));
+      const selected = rows.filter((g) => pick.has(g.id));
+      const contacts = await loadContactIndex(sessionId);
+
+      for (const g of selected) {
+        groups.push({
+          id: g.id,
+          name: g.name,
+          sessionId,
+          participantsCount: g.participantsCount,
+        });
+      }
+
+      for (const g of selected) {
+        try {
+          const info = await openwa.getGroup(sessionId, g.id);
+          const groupName = info.name || g.name || g.id;
+          for (const p of info.participants ?? []) {
+            const row = resolveMember(p, sessionId, groupName, contacts);
+            if (!row) continue;
+            membersScraped++;
+            if (dedupe) {
+              const key = scrapeDedupeKey(row);
+              const prev = merged.get(key);
+              if (prev) mergeScrapedContact(prev, row);
+              else merged.set(key, row);
+            } else {
+              flat.push(row);
+            }
+          }
+        } catch (err) {
+          groupErrors.push(`Group ${g.name || g.id}: ${err instanceof Error ? err.message : "failed"}`);
+        }
+      }
+
+      accounts.push({
+        sessionId,
+        groups: selected.length,
+        members: membersScraped,
+        error: groupErrors.length ? groupErrors.join("; ") : undefined,
+      });
     } catch (err) {
       accounts.push({ sessionId, error: err instanceof Error ? err.message : "failed" });
     }
   }
-  return ok({ total: contacts.length, contacts, groups, accounts, deduped: opts.dedupe ?? true });
+
+  const contacts = dedupe ? [...merged.values()] : flat;
+  return ok({ total: contacts.length, contacts, groups, accounts, deduped: dedupe });
 }
 
 export async function saveContact(_sessionId: string, phone: string, name?: string) {
@@ -762,23 +999,16 @@ export async function addContactsToGroup(input: { sessionId: string; groupId: st
 }
 
 export function downloadContactsCsv(rows: ScrapedContact[], filename: string) {
-  const header = ["phone", "name", "jid", "groups", "sources"];
-  const escape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.phone ?? "",
-        r.name ?? "",
-        r.jid ?? "",
-        (r.groups ?? (r.groupName ? [r.groupName] : [])).join(" | "),
-        (r.sources ?? (r.sessionId ? [r.sessionId] : [])).join(" | "),
-      ]
-        .map((v) => escape(String(v)))
-        .join(","),
-    );
-  }
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const csv = formatScraperContactsCsv(
+    rows.map((r) => ({
+      phone: isDialablePhone(r.phone) ? r.phone : "",
+      name: r.name,
+      jid: r.jid,
+      groups: r.groups ?? (r.groupName ? [r.groupName] : []),
+      sources: r.sources ?? (r.sessionId ? [r.sessionId] : []),
+    })),
+  );
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -789,13 +1019,25 @@ export function downloadContactsCsv(rows: ScrapedContact[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export type UploadedFile = { url: string; filename: string; mimetype: string; size: number };
+export type UploadedFile = {
+  url: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+  uploaded: BulkUploadedMedia;
+};
 
 export async function uploadMedia(_sessionId: string, file: File) {
   const media = await openwa.fileToBase64(file);
   const url = `openwa-media:${crypto.randomUUID()}`;
   mediaCache.set(url, media);
-  return ok({ url, filename: file.name, mimetype: file.type, size: file.size });
+  return ok({
+    url,
+    filename: file.name,
+    mimetype: file.type,
+    size: file.size,
+    uploaded: media,
+  });
 }
 
 export async function sendMediaFile(input: {

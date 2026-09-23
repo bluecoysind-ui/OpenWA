@@ -65,6 +65,15 @@ export function userPart(jid: string): string {
   return jid.split('@')[0].split(':')[0];
 }
 
+/**
+ * MSISDN digits when `jid` names a person by phone (`@c.us` / `@s.whatsapp.net` / `@hosted`).
+ * Empty for a privacy id (`@lid`), a group, or anything else — those digits are not a phone number.
+ */
+export function msisdnOf(jid: string): string {
+  const parsed = parseWaId(jid);
+  return parsed.kind === 'user' && /^\d+$/.test(parsed.userPart) ? parsed.userPart : '';
+}
+
 /** Classify any WhatsApp JID into its neutral kind + parts, without resolving anything. */
 export function parseWaId(jid: string): ParsedWaId {
   const raw = jid;

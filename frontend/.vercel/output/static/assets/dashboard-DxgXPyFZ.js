@@ -1,0 +1,1 @@
+import{t as e}from"./GatewayApp-CcEpAYQh.js";var t=e;export{t as component};

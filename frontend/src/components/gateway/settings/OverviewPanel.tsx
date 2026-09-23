@@ -18,6 +18,7 @@ import {
 import { useSessionsQuery, useSessionStatsQuery, useStatsMessagesQuery, useStatsOverviewQuery, useStopSessionMutation, useWebhooksQuery } from "@/lib/openwa-query";
 import type { StatsPeriod } from "@/lib/openwa-api";
 import { useGateway } from "@/store/gateway-store";
+import { sessionDisplayName } from "@/lib/openwa/sessionLabel";
 import { btn, Card, ErrorLine, ghost } from "./ui";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -152,7 +153,7 @@ export function OverviewPanel() {
           {(sessions.data ?? []).map((session) => (
             <div key={session.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2 last:border-0">
               <div>
-                <div className="text-sm font-medium">{session.name}</div>
+                <div className="text-sm font-medium">{sessionDisplayName(session)}</div>
                 <div className="text-[11px] text-muted">
                   {session.phone || "—"} · {session.status} · {formatLastActive(session.lastActive)}
                 </div>

@@ -4,6 +4,8 @@ import {
   addWebhook as apiAddWebhook,
   cancelBulkJob,
   connectSession,
+  createSessionRecord,
+  startExistingSession,
   disconnectSession,
   deleteSession as apiDeleteSession,
   fetchMessageMedia,
@@ -16,6 +18,7 @@ import {
   loadWsStats,
   markChatRead,
   mapSessionStatus,
+  sessionNeedsAutoReconnect,
   removeWebhook as apiRemoveWebhook,
   retryBulkJob,
   sendMediaFile,
@@ -31,13 +34,28 @@ import {
   type GatewaySession,
   type StartBulkInput,
 } from "@/lib/gateway-client";
-import { OpenWAError, validateApiKey } from "@/lib/openwa-api";
+import { OpenWAError, probeApiKeyValidation, replyToMessage, validateApiKey } from "@/lib/openwa-api";
+import { clearAppQueryCache } from "@/lib/auth/provider";
+import { resolveStartupValidation } from "@/lib/openwa/authLifecycle";
+import { nextReconnectState } from "@/lib/openwa/reconnectState";
+import { applyIncomingToChatList, promoteChatWithSnippet } from "@/lib/openwa/chatList";
+import {
+  applyMessageAck,
+  applyMessageEdit,
+  applyMessageReaction,
+  applyMessageRevoked,
+  mergeIncomingBubble,
+  type DeliveryStatus,
+} from "@/lib/openwa/bubbleThread";
+import { createTrailingCoalescer } from "@/lib/openwa/trailingCoalescer";
+export type ChatFeedTab = "chats" | "channels" | "status";
 import { clearOpenWACredentials, getOpenWAApiKey, getOpenWAUrl, setOpenWACredentials } from "@/lib/openwa-config";
 import {
   connectSocket,
   disconnectSocket,
   setSocketHandlers,
   subscribeAllSessions,
+  subscribeSession,
   type MessageUpsertEvent,
 } from "@/lib/openwa-socket";
 
@@ -47,7 +65,12 @@ const MESSAGES_PAGE = 40;
 /** How often the dashboard re-reads session status (there is no push channel). */
 const SESSION_REFRESH_MS = 10_000;
 /** Min gap between silent auto-starts for the same linked session (avoids start storms). */
-const AUTO_RESTART_COOLDOWN_MS = 15_000;
+const AUTO_RESTART_COOLDOWN_MS = 5_000;
+
+const markReadCoalescer = createTrailingCoalescer<{ sessionId: string; chatId: string }>(
+  ({ sessionId, chatId }) => void markChatRead(sessionId, chatId),
+  600,
+);
 
 const autoRestartInFlight = new Set<string>();
 const autoRestartLastAttempt = new Map<string, number>();
@@ -144,14 +167,18 @@ function toBubble(m: GatewayMessage): Bubble {
       }
     : undefined;
 
+  const omitted = Boolean(media && !media.url && isMedia);
   return {
     id: m.id,
     kind: "text",
     from: m.fromMe ? "me" : "them",
-    text,
+    text: omitted ? "📎 Media" : text,
     time: clockFrom(m.timestamp),
     sender: m.isGroup && !m.fromMe ? m.senderName || m.senderPhone || null : null,
-    media,
+    media: omitted ? { ...media!, url: null } : media,
+    waMessageId: m.waMessageId ?? m.id,
+    deliveryStatus: m.status,
+    mediaOmitted: omitted,
   };
 }
 
@@ -182,7 +209,10 @@ export type SettingsPanel =
   | "scheduler"
   | "automation"
   | "media-files"
-  | "profile";
+  | "profile"
+  | "catalog"
+  | "calls"
+  | "system";
 
 /** Paging state of one loaded conversation. */
 type ThreadMeta = { cursor: string | null; hasMore: boolean; loading: boolean };
@@ -231,11 +261,13 @@ type State = {
   contactTab: "info" | "media" | "files" | "links";
   mobilePane: "list" | "chat" | "profile";
   settingsPanel: SettingsPanel;
+  chatFeedTab: ChatFeedTab;
+  replyingTo: { messageId: string; preview: string } | null;
   init: () => Promise<void>;
   refreshSessions: () => Promise<void>;
-  loadChats: () => Promise<void>;
+  loadChats: (opts?: { silent?: boolean }) => Promise<void>;
   loadMoreChats: () => Promise<void>;
-  loadMessages: (chatId: string, opts?: { force?: boolean }) => Promise<void>;
+  loadMessages: (chatId: string, opts?: { force?: boolean; silent?: boolean }) => Promise<void>;
   loadOlderMessages: (chatId: string) => Promise<void>;
   /** Ask the gateway for a message's attachment (downloads from WhatsApp if needed). */
   loadMedia: (chatId: string, messageId: string) => Promise<string | null>;
@@ -273,11 +305,19 @@ type State = {
   pushEvent: (type: GatewayEvent["type"], content: string) => void;
   clearEvents: () => void;
   runApi: (method: string, path: string, body: string) => Promise<unknown>;
-  login: (user: string, pass: string, key?: string, url?: string) => Promise<boolean>;
+  login: (
+    user: string,
+    pass: string,
+    key?: string,
+    url?: string,
+    opts?: { quiet?: boolean },
+  ) => Promise<{ ok: boolean; message?: string }>;
   logout: () => void;
   setApiKey: (k: string) => void;
   setContactTab: (t: State["contactTab"]) => void;
   setMobilePane: (p: State["mobilePane"]) => void;
+  setChatFeedTab: (tab: ChatFeedTab) => void;
+  setReplyingTo: (reply: State["replyingTo"]) => void;
 };
 
 function nid() {
@@ -286,6 +326,9 @@ function nid() {
 
 /** Poll interval that watches a pairing session while the QR modal is open. */
 let qrWatchTimer: ReturnType<typeof setInterval> | null = null;
+let qrWatchInFlight = false;
+let lastCompletedLink: { id: string; at: number } | null = null;
+let createInFlight = false;
 
 /** Poll interval that refreshes campaign progress while any job is still sending. */
 let bulkWatchTimer: ReturnType<typeof setInterval> | null = null;
@@ -293,6 +336,12 @@ let bulkWatchTimer: ReturnType<typeof setInterval> | null = null;
 /** Background timers: session status, and the open inbox. Started once by init(). */
 let sessionRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let inboxRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let bootRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let bootInFlight = false;
+let chatsLoadInFlight = false;
+const messageLoadInFlight = new Set<string>();
+
+let wsReconnectState = { isConnected: false, hadConnected: false, wasDisconnected: false, connectionFailed: false };
 
 /**
  * Which session a campaign should go out from: the account picked in the rail
@@ -326,17 +375,19 @@ function patchBubble(threads: Record<string, Bubble[]>, chatId: string, id: stri
 
 /** Human line for the explicit lifecycle events the gateway emits. */
 /** Linked before (phone on file) but the engine is down — start it without opening the QR modal. */
-async function autoRestartLinkedSession(sessionId: string, reason: string): Promise<void> {
+async function autoRestartLinkedSession(
+  sessionId: string,
+  reason: string,
+  options?: { skipCooldown?: boolean },
+): Promise<void> {
   const st = useGateway.getState();
   if (!st.live) return;
   if (autoRestartInFlight.has(sessionId)) return;
   const session = st.sessions.find((s) => s.sessionId === sessionId);
-  if (!session?.phoneNumber) return;
-  if (session.status === "connected" || session.status === "connecting" || session.status === "qr_ready") return;
-  if (session.status === "logged_out") return;
+  if (!session || !sessionNeedsAutoReconnect(session)) return;
 
   const last = autoRestartLastAttempt.get(sessionId) ?? 0;
-  if (Date.now() - last < AUTO_RESTART_COOLDOWN_MS) return;
+  if (!options?.skipCooldown && Date.now() - last < AUTO_RESTART_COOLDOWN_MS) return;
 
   autoRestartInFlight.add(sessionId);
   autoRestartLastAttempt.set(sessionId, Date.now());
@@ -366,6 +417,29 @@ function openQrIfRelinkNeeded(sessionId: string): void {
   void st.refreshQr(sessionId, { maxAttempts: 90 });
 }
 
+function pairingStillValid(st: { pairingCode: string; pairingExpiresAt: number | null; pairingLoading: boolean }): boolean {
+  if (st.pairingLoading) return true;
+  if (!st.pairingCode) return false;
+  if (st.pairingExpiresAt === null) return false;
+  return Date.now() < st.pairingExpiresAt;
+}
+
+function completeQrLink(sessionId: string, toast = "WhatsApp linked successfully"): void {
+  const now = Date.now();
+  if (lastCompletedLink && lastCompletedLink.id === sessionId && now - lastCompletedLink.at < 4_000) return;
+  lastCompletedLink = { id: sessionId, at: now };
+  const st = useGateway.getState();
+  if (st.overlay === "qr" && st.qrSession === sessionId) {
+    st.closeOverlay();
+  }
+  st.pushToast("success", toast);
+  st.pushEvent("connection", `Session ${sessionId} connected`);
+  useGateway.setState({ nav: "chats" });
+  const next = useGateway.getState();
+  if (next.activeAccountId !== sessionId) next.selectAccount(sessionId);
+  else void next.loadChats();
+}
+
 function describeStatusChange(before: GatewaySession | undefined, after: GatewaySession): string | null {
   if (!before || before.status === after.status) return null;
   const who = after.name || after.phoneNumber || after.sessionId;
@@ -393,48 +467,78 @@ function ingestSocketMessage(sessionId: string, raw: Record<string, unknown>) {
     content: body,
     caption: type !== "text" ? body : null,
     senderName: typeof raw.chatName === "string" ? raw.chatName : null,
-    isGroup: raw.kind === "group",
+    isGroup: raw.kind === "group" || chatId.includes("@g.us"),
+    status: typeof raw.status === "string" ? (raw.status as DeliveryStatus) : undefined,
+    waMessageId: id,
   };
   const bubble = toBubble(gw);
+  const preview = previewOf(gw);
+  const time = clockFrom(ts);
+  let needsSidebarRefetch = false;
   useGateway.setState((s) => {
     if (s.activeAccountId && s.activeAccountId !== sessionId) return s;
-    const thread = s.threads[chatId] ?? [];
-    if (thread.some((b) => b.id === bubble.id)) return s;
-    const preview = previewOf(gw);
-    const time = clockFrom(ts);
-    return {
-      threads: { ...s.threads, [chatId]: [...thread, bubble] },
-      chats: s.chats.some((c) => c.id === chatId)
-        ? s.chats.map((c) =>
-            c.id === chatId
-              ? { ...c, preview, time, lastAt: ts, unread: s.activeChatId === chatId ? 0 : c.unread + (fromMe ? 0 : 1) }
-              : c,
-          )
-        : [
-            {
-              id: chatId,
-              name: gw.senderName || chatId.split("@")[0],
-              preview,
-              time,
-              lastAt: ts,
-              unread: fromMe ? 0 : 1,
-              kind: gw.isGroup ? "group" : "dm",
-              avatar: "initials" as const,
-              initials: initialsFrom(gw.senderName || chatId),
-            },
-            ...s.chats,
-          ],
-    };
+    const thread = mergeIncomingBubble(s.threads[chatId] ?? [], bubble);
+    const list = applyIncomingToChatList(
+      s.chats.map((c) => ({
+        id: c.id,
+        lastMessage: c.preview,
+        timestamp: c.lastAt,
+        unreadCount: c.unread,
+      })),
+      { chatId, body: preview, type, timestamp: ts, fromMe },
+      { activeChatId: s.activeChatId, locationLabel: "📍 Location" },
+    );
+    needsSidebarRefetch = list.needsSidebarRefetch;
+    if (list.needsSidebarRefetch) {
+      return { threads: { ...s.threads, [chatId]: thread } };
+    }
+    const chats: ChatPreview[] = list.chats.map((c) => {
+      const prev = s.chats.find((x) => x.id === c.id)!;
+      const snippet = c.lastMessage ?? prev.preview;
+      const lastAt = c.timestamp ?? prev.lastAt;
+      return {
+        ...prev,
+        preview: snippet,
+        time: lastAt ? clockFrom(lastAt) : prev.time,
+        lastAt,
+        unread: c.unreadCount ?? prev.unread,
+      };
+    });
+    if (!chats.some((c) => c.id === chatId)) {
+      chats.unshift({
+        id: chatId,
+        name: gw.senderName || chatId.split("@")[0],
+        preview,
+        time,
+        lastAt: ts,
+        unread: fromMe ? 0 : 1,
+        kind: gw.isGroup ? "group" : "dm",
+        avatar: "initials",
+        initials: initialsFrom(gw.senderName || chatId),
+      });
+    }
+    return { threads: { ...s.threads, [chatId]: thread }, chats };
   });
+  if (needsSidebarRefetch) void useGateway.getState().loadChats({ silent: true });
 }
 
 function wireRealtime() {
   setSocketHandlers({
     onConnect: () => {
+      const decision = nextReconnectState({ ...wsReconnectState, isConnected: true });
+      wsReconnectState = { ...wsReconnectState, isConnected: true, hadConnected: decision.hadConnected, wasDisconnected: decision.wasDisconnected };
       useGateway.setState({ wsConnected: true });
       subscribeAllSessions(useGateway.getState().sessions.map((s) => s.sessionId));
+      if (decision.invalidate) {
+        const { activeChatId } = useGateway.getState();
+        if (activeChatId) void useGateway.getState().loadMessages(activeChatId, { force: true, silent: true });
+      }
     },
-    onDisconnect: () => useGateway.setState({ wsConnected: false }),
+    onDisconnect: () => {
+      const decision = nextReconnectState({ ...wsReconnectState, isConnected: false });
+      wsReconnectState = { ...wsReconnectState, isConnected: false, hadConnected: decision.hadConnected, wasDisconnected: decision.wasDisconnected };
+      useGateway.setState({ wsConnected: false });
+    },
     onSessionStatus: ({ sessionId, status }) => {
       const mapped = mapSessionStatus(status);
       const before = useGateway.getState().sessions.find((s) => s.sessionId === sessionId);
@@ -444,13 +548,10 @@ function wireRealtime() {
       if (mapped === "connected") {
         const st = useGateway.getState();
         if (st.overlay === "qr" && st.qrSession === sessionId) {
-          st.closeOverlay();
-          st.pushToast("success", "WhatsApp linked successfully");
-          if (st.activeAccountId !== sessionId) st.selectAccount(sessionId);
-          else void st.loadChats();
+          completeQrLink(sessionId);
         }
       } else if (
-        mapped === "disconnected" &&
+        (mapped === "disconnected" || mapped === "failed") &&
         before?.status === "connected" &&
         before.phoneNumber
       ) {
@@ -463,8 +564,19 @@ function wireRealtime() {
       if (!qrCode) return;
       const src = qrCode.startsWith("data:") || qrCode.startsWith("http") ? qrCode : `data:image/png;base64,${qrCode}`;
       const st = useGateway.getState();
+      const refreshPairing =
+        st.overlay === "qr" &&
+        st.qrSession === sessionId &&
+        Boolean(st.pairingPhone.replace(/\D/g, "")) &&
+        !pairingStillValid(st);
       if (st.overlay === "qr" && st.qrSession === sessionId) {
-        useGateway.setState({ qrSrc: src, qrExpiresAt: Date.now() + 20_000 });
+        useGateway.setState({
+          qrSrc: src,
+          qrExpiresAt: Date.now() + 20_000,
+          pairingCode: refreshPairing ? "" : st.pairingCode,
+          pairingExpiresAt: refreshPairing ? null : st.pairingExpiresAt,
+        });
+        if (refreshPairing) void useGateway.getState().requestPairingCode(st.pairingPhone);
         return;
       }
       const linked = st.sessions.find((s) => s.sessionId === sessionId)?.phoneNumber;
@@ -474,9 +586,60 @@ function wireRealtime() {
       }
     },
     onMessageUpsert: (event: MessageUpsertEvent) => ingestSocketMessage(event.sessionId, event.message),
+    onMessageAck: (event) => {
+      useGateway.setState((s) => {
+        if (s.activeAccountId !== event.sessionId) return s;
+        let changed = false;
+        const threads = { ...s.threads };
+        for (const [chatId, list] of Object.entries(s.threads)) {
+          const next = applyMessageAck(list, { id: event.id, messageId: event.messageId }, event.status);
+          if (next !== list) {
+            threads[chatId] = next;
+            changed = true;
+          }
+        }
+        return changed ? { threads } : s;
+      });
+    },
+    onMessageReaction: (event) => {
+      useGateway.setState((s) => {
+        if (s.activeAccountId !== event.sessionId) return s;
+        const thread = applyMessageReaction(s.threads[event.chatId] ?? [], event.messageId, event.reactions);
+        return { threads: { ...s.threads, [event.chatId]: thread } };
+      });
+    },
+    onMessageRevoked: (event) => {
+      useGateway.setState((s) => {
+        if (s.activeAccountId !== event.sessionId) return s;
+        const thread = applyMessageRevoked(s.threads[event.chatId] ?? [], { id: event.id, revokedId: event.revokedId });
+        return { threads: { ...s.threads, [event.chatId]: thread } };
+      });
+    },
+    onMessageEdited: (event) => {
+      useGateway.setState((s) => {
+        if (s.activeAccountId !== event.sessionId) return s;
+        const current = s.threads[event.chatId];
+        if (!current) return s;
+        const thread = applyMessageEdit(current, event);
+        if (thread === current) return s;
+        const last = thread[thread.length - 1];
+        const editedLast =
+          last?.kind === "text" && (last.id === event.messageId || last.waMessageId === event.messageId);
+        return {
+          threads: { ...s.threads, [event.chatId]: thread },
+          chats: editedLast
+            ? s.chats.map((c) => (c.id === event.chatId ? { ...c, preview: event.body } : c))
+            : s.chats,
+        };
+      });
+    },
+    onSessionRestriction: ({ sessionId }) => {
+      void useGateway.getState().refreshSessions();
+      useGateway.getState().pushToast("info", `Session restriction (${sessionId})`);
+    },
     onChatUpsert: ({ sessionId }) => {
       const st = useGateway.getState();
-      if (st.activeAccountId === sessionId) void st.loadChats();
+      if (st.activeAccountId === sessionId) void st.loadChats({ silent: true });
     },
     onServerError: ({ code }) => {
       if (code === "FORBIDDEN_SESSION") {
@@ -485,6 +648,14 @@ function wireRealtime() {
     },
   });
   connectSocket();
+}
+
+function scheduleGatewayBootRetry(): void {
+  if (bootRetryTimer) return;
+  bootRetryTimer = setTimeout(() => {
+    bootRetryTimer = null;
+    void useGateway.getState().init();
+  }, 750);
 }
 
 export const useGateway = create<State>((set, get) => ({
@@ -528,13 +699,33 @@ export const useGateway = create<State>((set, get) => ({
   contactTab: "info",
   mobilePane: "list",
   settingsPanel: "home",
+  chatFeedTab: "chats",
+  replyingTo: null,
 
   init: async () => {
-    if (!getOpenWAApiKey()) {
+    const storedKey = getOpenWAApiKey();
+    if (!storedKey) {
       set({ authNeeded: true, live: false });
       return;
     }
-    set({ sessionsLoading: true, sessionsError: null });
+    if (bootInFlight) return;
+    bootInFlight = true;
+    if (bootRetryTimer) {
+      clearTimeout(bootRetryTimer);
+      bootRetryTimer = null;
+    }
+    const { status, body } = await probeApiKeyValidation(storedKey, getOpenWAUrl());
+    const startup = resolveStartupValidation(status, body);
+    if (startup.action === "logout") {
+      bootInFlight = false;
+      get().logout();
+      return;
+    }
+    if (startup.action === "role") {
+      sessionStorage.setItem("dashboard_user", startup.role);
+      set({ user: startup.role });
+    }
+    set({ authNeeded: false, sessionsLoading: true, sessionsError: null });
     try {
       const result = await listSessions();
       if (result.success && Array.isArray(result.data)) {
@@ -543,6 +734,10 @@ export const useGateway = create<State>((set, get) => ({
         const active =
           sessions.find((s) => s.sessionId === current && s.status === "connected") ??
           sessions.find((s) => s.status === "connected") ??
+          sessions.find((s) => s.sessionId === current && (s.status === "connecting" || s.status === "qr_ready")) ??
+          sessions.find((s) => s.status === "connecting" || s.status === "qr_ready") ??
+          sessions.find((s) => s.sessionId === current && Boolean(s.phoneNumber)) ??
+          sessions.find((s) => Boolean(s.phoneNumber)) ??
           sessions.find((s) => s.sessionId === current) ??
           sessions[0];
         set({
@@ -556,25 +751,29 @@ export const useGateway = create<State>((set, get) => ({
         get().pushEvent("connection", "Connected to OpenWA");
         wireRealtime();
         for (const s of sessions) {
-          if (s.phoneNumber && s.status === "disconnected") {
-            void autoRestartLinkedSession(s.sessionId, "dashboard opened");
+          if (sessionNeedsAutoReconnect(s)) {
+            void autoRestartLinkedSession(s.sessionId, "dashboard opened", { skipCooldown: true });
           }
         }
         await get().loadChats();
       } else {
         set({ live: false, wsConnected: false, sessionsLoading: false, sessionsError: result.message ?? "No sessions" });
         get().pushEvent("error", result.message ?? "Gateway returned no sessions");
+        scheduleGatewayBootRetry();
       }
     } catch (err) {
-      const status = err instanceof OpenWAError ? err.status : 0;
+      const errStatus = err instanceof OpenWAError ? err.status : 0;
       set({
         live: false,
         wsConnected: false,
         sessionsLoading: false,
-        authNeeded: status === 401,
+        authNeeded: errStatus === 401,
         sessionsError: err instanceof Error ? err.message : "Gateway not reachable",
       });
       get().pushEvent("error", "Gateway not reachable");
+      if (errStatus !== 401) scheduleGatewayBootRetry();
+    } finally {
+      bootInFlight = false;
     }
     try {
       const stats = await loadWsStats();
@@ -597,8 +796,8 @@ export const useGateway = create<State>((set, get) => ({
       inboxRefreshTimer = setInterval(() => {
         const { nav, live, activeChatId, overlay } = get();
         if (!live || nav !== "chats" || overlay) return;
-        void get().loadChats();
-        if (activeChatId) void get().loadMessages(activeChatId, { force: true });
+        void get().loadChats({ silent: true });
+        if (activeChatId) void get().loadMessages(activeChatId, { force: true, silent: true });
       }, INBOX_REFRESH_MS);
     }
   },
@@ -626,20 +825,36 @@ export const useGateway = create<State>((set, get) => ({
       );
       if (line) get().pushEvent("connection", line);
       const b = before.find((x) => x.sessionId === s.sessionId);
-      if (b && b.status === "connected" && s.status === "disconnected" && s.phoneNumber) {
+      if (b && b.status === "connected" && sessionNeedsAutoReconnect(s)) {
         void autoRestartLinkedSession(s.sessionId, "status poll");
+      }
+      if (!b && sessionNeedsAutoReconnect(s)) {
+        void autoRestartLinkedSession(s.sessionId, "status poll", { skipCooldown: true });
       }
       // Announce when a history sync finishes so the chat list reloads.
       if (b?.sync?.active && s.sync && !s.sync.active) {
         get().pushEvent("connection", `${s.name || s.sessionId}: history synced (${s.sync.chats} chats, ${s.sync.messages} messages)`);
-        if (s.sessionId === get().activeAccountId) void get().loadChats();
+        if (s.sessionId === get().activeAccountId) void get().loadChats({ silent: true });
       }
     }
     const activeId = get().activeAccountId;
     const activeBefore = before.find((s) => s.sessionId === activeId);
     const activeAfter = sessions.find((s) => s.sessionId === activeId);
-    const fallback = sessions.find((s) => s.status === "connected") ?? sessions[0];
-    const nextActive = activeAfter ? activeId : (fallback?.sessionId ?? "");
+    const connected = sessions.find((s) => s.status === "connected");
+    const fallback =
+      connected ??
+      sessions.find((s) => s.status === "connecting" || s.status === "qr_ready") ??
+      sessions.find((s) => Boolean(s.phoneNumber)) ??
+      sessions[0];
+    const nextActive =
+      (activeAfter?.status === "connected" ? activeId : undefined) ??
+      connected?.sessionId ??
+      (activeAfter && (activeAfter.status === "connecting" || activeAfter.status === "qr_ready")
+        ? activeId
+        : undefined) ??
+      (activeAfter?.phoneNumber ? activeId : undefined) ??
+      fallback?.sessionId ??
+      "";
     set({ sessions, activeAccountId: nextActive });
     if (nextActive !== activeId) {
       await get().loadChats();
@@ -654,22 +869,28 @@ export const useGateway = create<State>((set, get) => ({
    * the reason — the panes render an explicit empty state rather than
    * pretending to hold data.
    */
-  loadChats: async () => {
+  loadChats: async (opts = {}) => {
+    const silent = Boolean(opts.silent);
     const session = activeSession(get());
     if (!session || session.status !== "connected") {
+      if (silent) return;
       set({ chats: [], chatsHasMore: false, threads: {}, threadMeta: {}, activeChatId: "" });
       if (session) get().pushEvent("connection", `${session.name || session.sessionId} is ${session.status} — no chats to show.`);
       else get().pushEvent("connection", "No connected session — scan the QR to load chats.");
       return;
     }
-    set({ chatsLoading: true, chatsError: null });
+    if (chatsLoadInFlight && silent) return;
+    chatsLoadInFlight = true;
+    if (!silent) set({ chatsLoading: true, chatsError: null });
     try {
       const result = await listChats(session.sessionId, CHATS_PAGE, 0);
       // The account changed while we were waiting — drop this response.
       if (get().activeAccountId !== session.sessionId) return;
       if (!result.success || !result.data) {
-        set({ chatsError: result.message ?? "Could not load chats" });
-        get().pushEvent("error", result.message ?? "Could not load chats");
+        if (!silent) {
+          set({ chatsError: result.message ?? "Could not load chats" });
+          get().pushEvent("error", result.message ?? "Could not load chats");
+        }
         return;
       }
       const fresh = result.data.chats.map(toChatPreview);
@@ -678,19 +899,21 @@ export const useGateway = create<State>((set, get) => ({
         const firstIds = new Set(fresh.map((c) => c.id));
         const tail = s.chats.slice(CHATS_PAGE).filter((c) => !firstIds.has(c.id));
         const chats = [...fresh, ...tail];
-        const activeChatId = chats.some((c) => c.id === s.activeChatId) ? s.activeChatId : (chats[0]?.id ?? "");
+        const keepSelection = Boolean(s.activeChatId && (chats.some((c) => c.id === s.activeChatId) || silent));
+        const activeChatId = keepSelection ? s.activeChatId : (chats[0]?.id ?? "");
         return { chats, chatsHasMore: result.data!.hasMore, activeChatId };
       });
       if (fresh.length === 0) {
-        get().pushEvent("connection", `Connected — no chat history on ${session.name || session.sessionId} yet.`);
+        if (!silent) get().pushEvent("connection", `Connected — no chat history on ${session.name || session.sessionId} yet.`);
         return;
       }
       const { activeChatId, threads } = get();
       if (activeChatId && !threads[activeChatId]) await get().loadMessages(activeChatId);
     } catch {
-      get().pushEvent("error", "Could not load chats");
+      if (!silent) get().pushEvent("error", "Could not load chats");
     } finally {
-      set({ chatsLoading: false });
+      chatsLoadInFlight = false;
+      if (!silent) set({ chatsLoading: false });
     }
   },
 
@@ -721,12 +944,17 @@ export const useGateway = create<State>((set, get) => ({
    * without losing older pages the user scrolled to.
    */
   loadMessages: async (chatId, opts = {}) => {
+    const silent = Boolean(opts.silent);
     const session = activeSession(get());
     if (!chatId || !session || session.status !== "connected") return;
     const existing = get().threadMeta[chatId];
     if (existing && !opts.force) return;
     if (existing?.loading) return;
-    set((s) => ({ threadMeta: { ...s.threadMeta, [chatId]: { ...(existing ?? { cursor: null, hasMore: false }), loading: true } } }));
+    if (messageLoadInFlight.has(chatId)) return;
+    messageLoadInFlight.add(chatId);
+    if (!silent) {
+      set((s) => ({ threadMeta: { ...s.threadMeta, [chatId]: { ...(existing ?? { cursor: null, hasMore: false }), loading: true } } }));
+    }
     try {
       const result = await listMessages(session.sessionId, chatId, MESSAGES_PAGE, null);
       if (get().activeAccountId !== session.sessionId) return;
@@ -746,7 +974,11 @@ export const useGateway = create<State>((set, get) => ({
         return { threads: { ...s.threads, [chatId]: merged }, threadMeta: { ...s.threadMeta, [chatId]: meta } };
       });
     } catch {
-      set((s) => ({ threadMeta: { ...s.threadMeta, [chatId]: { ...(s.threadMeta[chatId] ?? { cursor: null, hasMore: false }), loading: false } } }));
+      if (!silent) {
+        set((s) => ({ threadMeta: { ...s.threadMeta, [chatId]: { ...(s.threadMeta[chatId] ?? { cursor: null, hasMore: false }), loading: false } } }));
+      }
+    } finally {
+      messageLoadInFlight.delete(chatId);
     }
   },
 
@@ -814,7 +1046,7 @@ export const useGateway = create<State>((set, get) => ({
     }));
     void get().loadMessages(id);
     const session = activeSession(get());
-    if (session?.status === "connected") void markChatRead(session.sessionId, id);
+    if (session?.status === "connected") markReadCoalescer.call({ sessionId: session.sessionId, chatId: id });
   },
 
   /** Switch the inbox (and the Broadcast panel) to another account. */
@@ -836,6 +1068,8 @@ export const useGateway = create<State>((set, get) => ({
   setComposer: (composer) => set({ composer }),
   setContactTab: (contactTab) => set({ contactTab }),
   setMobilePane: (mobilePane) => set({ mobilePane }),
+  setChatFeedTab: (chatFeedTab) => set({ chatFeedTab }),
+  setReplyingTo: (replyingTo) => set({ replyingTo }),
 
   sendComposer: async () => {
     const { composer, activeChatId, live, pushToast, pushEvent } = get();
@@ -852,14 +1086,35 @@ export const useGateway = create<State>((set, get) => ({
     set((s) => ({
       composer: "",
       threads: { ...s.threads, [activeChatId]: [...(s.threads[activeChatId] ?? []), bubble] },
-      chats: s.chats.map((c) => (c.id === activeChatId ? { ...c, preview: text, time } : c)),
+      chats: promoteChatWithSnippet(
+        s.chats.map((c) => ({ ...c, lastMessage: c.preview, timestamp: c.lastAt, unreadCount: c.unread })),
+        activeChatId,
+        text,
+        Math.floor(Date.now() / 1000),
+      ).map((row) => {
+        const orig = s.chats.find((c) => c.id === row.id)!;
+        return { ...orig, preview: row.lastMessage ?? text, time, lastAt: row.timestamp ?? orig.lastAt };
+      }),
     }));
+    const reply = get().replyingTo;
     try {
-      const result = await sendText({ sessionId: session.sessionId, chatId: activeChatId, message: text });
-      if (!result.success) throw new Error(result.message || "Send failed");
-      const realId = result.data?.messageId ?? tempId;
+      let realId: string | undefined;
+      if (reply) {
+        const data = await replyToMessage(session.sessionId, {
+          chatId: activeChatId,
+          quotedMessageId: reply.messageId,
+          text,
+        });
+        realId = data.messageId;
+        set({ replyingTo: null });
+      } else {
+        const result = await sendText({ sessionId: session.sessionId, chatId: activeChatId, message: text });
+        if (!result.success) throw new Error(result.message || "Send failed");
+        realId = result.data?.messageId;
+      }
+      const settledId = realId ?? tempId;
       set((s) => ({
-        threads: patchBubble(s.threads, activeChatId, tempId, (b) => ({ ...b, id: realId, pending: false })),
+        threads: patchBubble(s.threads, activeChatId, tempId, (b) => ({ ...b, id: settledId, pending: false })),
       }));
       pushEvent("message", `Sent: ${text.slice(0, 60)}`);
     } catch (err) {
@@ -937,6 +1192,7 @@ export const useGateway = create<State>((set, get) => ({
   },
 
   createSession: async (id, webhook, proxy) => {
+    if (createInFlight) return;
     if (!/^[a-zA-Z0-9-]+$/.test(id)) {
       get().pushToast("error", "Session name: letters, numbers, and hyphens only");
       return;
@@ -948,25 +1204,28 @@ export const useGateway = create<State>((set, get) => ({
     const body: Record<string, unknown> = { name: id };
     if (webhook) body.webhooks = [{ url: webhook }];
     if (proxy) body.proxy = proxy;
-    let result: Awaited<ReturnType<typeof connectSession>>;
+    createInFlight = true;
+    let created: Awaited<ReturnType<typeof createSessionRecord>>;
     try {
-      result = await connectSession(id, body);
+      created = await createSessionRecord(id, body);
     } catch {
+      createInFlight = false;
       get().pushToast("error", "Gateway unreachable — session not created");
       return;
     }
-    if (!result.success) {
-      get().pushToast("error", result.message || "Failed to create session");
+    if (!created.success) {
+      createInFlight = false;
+      get().pushToast("error", created.message || "Failed to create session");
       return;
     }
-    const sessionId = result.data?.sessionId ?? id;
+    const sessionId = created.data?.sessionId ?? id;
     set((s) => ({
       sessions: [
         ...s.sessions.filter((x) => x.sessionId !== sessionId && x.sessionId !== id),
         {
           sessionId,
-          name: result.data?.name ?? id,
-          status: result.data?.status ?? "qr_ready",
+          name: created.data?.name ?? id,
+          status: created.data?.status ?? "connecting",
           webhooks: webhook ? [{ url: webhook }] : [],
           proxy: proxy ? proxy.replace(/:([^:@/]+)@/, ":***@") : null,
         },
@@ -974,14 +1233,23 @@ export const useGateway = create<State>((set, get) => ({
       overlay: "qr",
       qrSession: sessionId,
       qrSrc: "",
+      qrExpiresAt: null,
       pairingCode: "",
       pairingPhone: "",
       pairingExpiresAt: null,
     }));
+    subscribeSession(sessionId);
     get().pushEvent("connection", `Session ${id} created`);
     get().pushToast("success", "Scan QR to connect");
-    await get().refreshQr(sessionId);
     get().watchQrSession(sessionId);
+    void get().refreshQr(sessionId, { maxAttempts: 90 });
+    void startExistingSession(sessionId).then((result) => {
+      if (!result.success) {
+        get().pushToast("error", result.message || "Failed to start session");
+      }
+    }).finally(() => {
+      createInFlight = false;
+    });
   },
 
   setProxy: async (sessionId, proxy) => {
@@ -1093,7 +1361,9 @@ export const useGateway = create<State>((set, get) => ({
 
   refreshQr: async (id, opts?: { maxAttempts?: number }) => {
     const maxAttempts = opts?.maxAttempts ?? 30;
-    set({ qrSession: id, qrSrc: "", qrExpiresAt: null });
+    if (get().qrSession !== id) {
+      set({ qrSession: id, qrSrc: "", qrExpiresAt: null });
+    }
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const result = await getQr(id);
       if (result.success && result.data?.qrCode) {
@@ -1109,8 +1379,7 @@ export const useGateway = create<State>((set, get) => ({
       }
       const msg = result.message ?? "";
       if (/already authenticated/i.test(msg)) {
-        get().closeOverlay();
-        get().pushToast("success", "Session is already linked");
+        completeQrLink(id);
         void get().refreshSessions();
         return;
       }
@@ -1120,7 +1389,9 @@ export const useGateway = create<State>((set, get) => ({
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    get().pushToast("error", "QR not ready — wait a moment and try Reconnect again");
+    if (!get().qrSrc) {
+      get().pushToast("error", "QR not ready — wait a moment and try Reconnect again");
+    }
   },
 
   /**
@@ -1131,35 +1402,48 @@ export const useGateway = create<State>((set, get) => ({
    */
   watchQrSession: (id) => {
     if (qrWatchTimer) clearInterval(qrWatchTimer);
-    qrWatchTimer = setInterval(async () => {
+    let lastListAt = 0;
+    const tick = async () => {
+      if (qrWatchInFlight) return;
       const { overlay, qrSession } = get();
       if (overlay !== "qr" || !qrSession || qrSession !== id) return;
+      qrWatchInFlight = true;
       try {
-        const [qr, list] = await Promise.all([getQr(qrSession), listSessions()]);
-        if (qr.success && qr.data?.qrCode && qr.data.qrCode !== get().qrSrc) {
-          set({ qrSrc: qr.data.qrCode });
+        const before = get();
+        const qrExpired = before.qrExpiresAt !== null && Date.now() >= before.qrExpiresAt;
+        const qr = await getQr(qrSession);
+        if (qr.success && qr.data) {
+          const nextQr = qr.data.qrCode;
+          const qrRotated = Boolean(nextQr && (nextQr !== before.qrSrc || qrExpired));
+          const patch: Partial<typeof before> = {};
+          if (nextQr && qrRotated) patch.qrSrc = nextQr;
+          if (qr.data.qrExpiresAt != null) patch.qrExpiresAt = qr.data.qrExpiresAt;
+          if (qr.data.pairingCode) {
+            patch.pairingCode = qr.data.pairingCode;
+            patch.pairingPhone = qr.data.pairingPhone ?? before.pairingPhone;
+            patch.pairingExpiresAt = qr.data.pairingExpiresAt ?? before.pairingExpiresAt;
+          } else if (qrRotated && before.pairingCode && !pairingStillValid(before)) {
+            patch.pairingCode = "";
+            patch.pairingExpiresAt = null;
+          }
+          if (Object.keys(patch).length > 0) set(patch);
+          if (qrRotated && before.pairingPhone.replace(/\D/g, "") && !pairingStillValid(before)) {
+            void get().requestPairingCode(before.pairingPhone);
+          }
+        } else if (/already authenticated/i.test(qr.message ?? "")) {
+          completeQrLink(qrSession);
+          void get().refreshSessions();
+          return;
         }
-        if (qr.success && qr.data?.qrExpiresAt && qr.data.qrExpiresAt !== get().qrExpiresAt) {
-          set({ qrExpiresAt: qr.data.qrExpiresAt });
-        }
-        if (qr.success && qr.data?.pairingCode && qr.data.pairingCode !== get().pairingCode) {
-          set({
-            pairingCode: qr.data.pairingCode,
-            pairingPhone: qr.data.pairingPhone ?? get().pairingPhone,
-            pairingExpiresAt: qr.data.pairingExpiresAt ?? get().pairingExpiresAt,
-          });
-        }
+        const now = Date.now();
+        if (now - lastListAt < 2000) return;
+        lastListAt = now;
+        const list = await listSessions();
         const sessions = list.success && Array.isArray(list.data) ? list.data : undefined;
         const status = sessions?.find((s) => s.sessionId === qrSession)?.status;
         if (status === "connected") {
-          // Write the fresh list back BEFORE loading chats, or the account still
-          // reads as qr_ready and the inbox stays empty until a refresh.
           set((s) => ({ sessions: sessions ?? s.sessions }));
-          get().closeOverlay();
-          get().pushToast("success", "WhatsApp linked successfully");
-          get().pushEvent("connection", `Session ${qrSession} connected`);
-          if (get().activeAccountId !== qrSession) get().selectAccount(qrSession);
-          else await get().loadChats();
+          completeQrLink(qrSession);
         } else if (status === "qr_expired") {
           set((s) => ({
             sessions: (sessions ?? s.sessions).filter((x) => x.sessionId !== qrSession && x.status !== "qr_expired"),
@@ -1172,8 +1456,12 @@ export const useGateway = create<State>((set, get) => ({
         }
       } catch {
         /* gateway hiccup — retry on the next tick */
+      } finally {
+        qrWatchInFlight = false;
       }
-    }, 2000);
+    };
+    void tick();
+    qrWatchTimer = setInterval(() => void tick(), 500);
   },
 
   requestPairingCode: async (phoneNumber) => {
@@ -1201,7 +1489,7 @@ export const useGateway = create<State>((set, get) => ({
       set({
         pairingCode: result.data.pairingCode,
         pairingPhone: result.data.pairingPhone || digits,
-        pairingExpiresAt: result.data.pairingExpiresAt ?? null,
+        pairingExpiresAt: result.data.pairingExpiresAt ?? Date.now() + 180_000,
       });
       get().pushToast("success", "Enter this code in WhatsApp");
       get().pushEvent("qr", `Pairing code generated for ${digits}`);
@@ -1403,12 +1691,12 @@ export const useGateway = create<State>((set, get) => ({
     }
   },
 
-  login: async (user, _pass, key, url) => {
+  login: async (user, _pass, key, url, opts) => {
     const apiKey = (key || get().apiKey).trim();
     const origin = (url || get().serverUrl || "http://localhost:2785").replace(/\/+$/, "");
     if (!apiKey) {
-      get().pushToast("error", "API key required");
-      return false;
+      if (!opts?.quiet) get().pushToast("error", "API key required");
+      return { ok: false as const, message: "API key required" };
     }
     try {
       const data = await validateApiKey(apiKey, origin);
@@ -1418,16 +1706,22 @@ export const useGateway = create<State>((set, get) => ({
       set({ user: user || data.role || "operator", apiKey, serverUrl: origin, authNeeded: false, live: true });
       get().pushToast("success", "Connected to OpenWA");
       await get().init();
-      return true;
+      return { ok: true as const };
     } catch (err) {
-      get().pushToast("error", err instanceof Error ? err.message : "Invalid API key");
-      return false;
+      const message = err instanceof Error ? err.message : "Invalid API key";
+      if (!opts?.quiet) get().pushToast("error", message);
+      return { ok: false as const, message };
     }
   },
 
   logout: () => {
+    if (bootRetryTimer) {
+      clearTimeout(bootRetryTimer);
+      bootRetryTimer = null;
+    }
     disconnectSocket();
     clearOpenWACredentials();
+    clearAppQueryCache();
     sessionStorage.removeItem("dashboard_auth");
     sessionStorage.removeItem("dashboard_user");
     set({ apiKey: "", user: "", live: false, authNeeded: true, sessions: [], chats: [], threads: {}, wsConnected: false });

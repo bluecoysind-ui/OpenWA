@@ -262,7 +262,7 @@ export function addLabelToChat(sessionId: string, chatId: string, labelId: strin
   });
 }
 export function getOwnProfile(sessionId: string) {
-  return akgRequest<{ phone?: string; pushName?: string; status?: string; pictureUrl?: string | null }>(
+  return akgRequest<{ phone?: string | null; pushName?: string | null; about?: string | null; profilePictureUrl?: string | null }>(
     `/sessions/${sessionId}/profile`,
   );
 }

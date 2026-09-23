@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { Copy, Loader2, Plus, Power, RefreshCw, Trash2 } from "lucide-react";
 import type { InstanceView, PluginConfigField } from "@/lib/openwa-api";
+import { redrivePluginInstance } from "@/lib/openwa/extended-api";
 import { copyToClipboard } from "@/lib/openwa/clipboard";
 import { coerceFieldInput, emptyForField } from "@/lib/openwa/pluginConfigForm";
 import { isValidInstanceId, isValidInstanceSecret, parseInstanceConfig } from "@/lib/openwa/instanceForm";
@@ -91,6 +92,17 @@ export function PluginInstances({ pluginId }: { pluginId: string }) {
               }
             >
               <RefreshCw size={12} /> New secret
+            </button>
+            <button
+              type="button"
+              className={ghost}
+              onClick={() =>
+                void redrivePluginInstance(pluginId, inst.instanceId)
+                  .then((r) => (r.success ? toast.success("Redrive queued", r.message) : toast.warning("Redrive", r.message)))
+                  .catch((err: unknown) => toast.error("Redrive failed", err instanceof Error ? err.message : ""))
+              }
+            >
+              Redrive
             </button>
             <button type="button" className={danger} onClick={() => { if (window.confirm(`Delete ${inst.instanceId}?`)) deleteM.mutate(inst.instanceId); }}>
               <Trash2 size={12} />

@@ -149,4 +149,13 @@ export class QRCodeResponseDto {
     required: false,
   })
   qrExpiresAt?: number;
+
+  @ApiProperty({ description: 'Latest phone pairing code for this session, if requested.', required: false })
+  pairingCode?: string;
+
+  @ApiProperty({ description: 'Phone number the pairing code was requested for.', required: false })
+  pairingPhone?: string;
+
+  @ApiProperty({ description: 'When the pairing code expires (epoch ms).', required: false })
+  pairingExpiresAt?: number;
 }

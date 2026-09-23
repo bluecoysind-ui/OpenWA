@@ -55,5 +55,6 @@ describe('LID group metadata uses the phone-dialect twins the payload already ca
 
     expect(info.owner).toBe('111222333@lid');
     expect(info.participants.map(p => p.id)).toEqual(['111222333@lid', '444555666@lid']);
+    expect(info.participants.map(p => p.number)).toEqual(['', '']);
   });
 });

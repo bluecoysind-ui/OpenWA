@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Aurora from "@/components/gateway/Aurora";
-import { getOpenWAUrl } from "@/lib/openwa-config";
+import { waitForUiConnectKey } from "@/lib/openwa/uiConnect";
+import { getOpenWAUrl, setOpenWACredentials } from "@/lib/openwa-config";
 import { useGateway } from "@/store/gateway-store";
 
 export function OpenWALogin() {
@@ -9,7 +10,34 @@ export function OpenWALogin() {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [autoConnecting, setAutoConnecting] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const key = await waitForUiConnectKey();
+      if (cancelled) return;
+      if (key) {
+        const origin = getOpenWAUrl();
+        setOpenWACredentials(origin, key);
+        sessionStorage.setItem("dashboard_auth", "authenticated");
+        sessionStorage.setItem("dashboard_user", "operator");
+        useGateway.setState({
+          apiKey: key,
+          user: "operator",
+          serverUrl: origin,
+          authNeeded: false,
+        });
+        await useGateway.getState().init();
+        return;
+      }
+      if (!cancelled) setAutoConnecting(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -19,23 +47,45 @@ export function OpenWALogin() {
     }
     setBusy(true);
     setError("");
-    const ok = await login("operator", "", apiKey.trim(), url.trim() || "http://localhost:2785");
+    const result = await login("", "", apiKey.trim(), url.trim() || getOpenWAUrl());
     setBusy(false);
-    if (!ok) setError("Could not validate that key against OpenWA. Check the URL and key.");
+    if (!result.ok) {
+      setError(
+        result.message?.trim() ||
+          "Could not validate that key against OpenWA. Check the URL, API key, WA_GATEWAY_URL, and CORS_ORIGINS on the API.",
+      );
+    }
   };
+
+  if (autoConnecting) {
+    return (
+      <div className="relative flex h-dvh items-center justify-center overflow-hidden text-ink">
+        <div className="app-bg">
+          <Aurora />
+        </div>
+        <div className="glass relative z-10 w-full max-w-sm rounded-3xl p-8 text-center">
+          <div className="mx-auto mb-3 size-12 overflow-hidden rounded-[12px] bg-white">
+            <img src="/__grok/logo.png" alt="OpenWA" className="size-full object-cover" />
+          </div>
+          <h1 className="text-xl font-semibold">Connecting to OpenWA</h1>
+          <p className="mt-2 text-sm text-muted">Using the local gateway key. You do not need to paste it.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-dvh items-center justify-center overflow-hidden text-ink">
       <div className="app-bg">
-        <Aurora colorStops={["#f8a66d", "#B497CF", "#5227FF"]} blend={0.5} amplitude={1} speed={0.5} />
+        <Aurora />
       </div>
       <form onSubmit={onSubmit} className="glass relative z-10 w-full max-w-md rounded-3xl p-8">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 size-12 overflow-hidden rounded-[12px] bg-white shadow-[0_4px_12px_rgba(37,211,102,0.35)]">
+          <div className="mx-auto mb-3 size-12 overflow-hidden rounded-[12px] bg-white">
             <img src="/__grok/logo.png" alt="OpenWA" className="size-full object-cover" />
           </div>
           <h1 className="text-xl font-semibold">Connect OpenWA</h1>
-          <p className="mt-1 text-sm text-muted">Enter the gateway URL and an admin API key to continue.</p>
+          <p className="mt-1 text-sm text-muted">Automatic connect did not find a local key. Paste an admin API key to continue.</p>
         </div>
         <label className="mb-3 block text-left text-xs text-muted">
           Server URL

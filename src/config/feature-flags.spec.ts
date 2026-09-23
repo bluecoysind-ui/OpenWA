@@ -7,7 +7,7 @@ describe('feature-flags', () => {
     it('applies the documented defaults for an empty environment', () => {
       const flags = computeFeatureFlags({});
       expect(flags).toEqual<FeatureFlags>({
-        autoStartSessions: false, // opt-in
+        autoStartSessions: true, // opt-out
         storeEphemeralMessages: true, // opt-out
         resolveLidToPhone: false, // opt-in
         simulateTyping: true, // opt-out
@@ -20,12 +20,16 @@ describe('feature-flags', () => {
       });
     });
 
-    it('treats opt-in flags (autoStart, resolveLid) as ON only for the exact string "true"', () => {
-      expect(computeFeatureFlags({ AUTO_START_SESSIONS: 'true' }).autoStartSessions).toBe(true);
+    it('treats autoStart as OFF only for the exact string "false"', () => {
+      expect(computeFeatureFlags({ AUTO_START_SESSIONS: 'false' }).autoStartSessions).toBe(false);
+      for (const v of ['true', 'TRUE', '1', 'yes', '']) {
+        expect(computeFeatureFlags({ AUTO_START_SESSIONS: v }).autoStartSessions).toBe(true);
+      }
+    });
+
+    it('treats resolveLid as ON only for the exact string "true"', () => {
       expect(computeFeatureFlags({ RESOLVE_LID_TO_PHONE: 'true' }).resolveLidToPhone).toBe(true);
-      // Anything else stays OFF.
       for (const v of ['false', 'TRUE', '1', 'yes', '']) {
-        expect(computeFeatureFlags({ AUTO_START_SESSIONS: v }).autoStartSessions).toBe(false);
         expect(computeFeatureFlags({ RESOLVE_LID_TO_PHONE: v }).resolveLidToPhone).toBe(false);
       }
     });

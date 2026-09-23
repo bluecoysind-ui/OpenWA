@@ -4,6 +4,7 @@
   overflow: hidden;
 }
 
+.aurora-container .darkveil-canvas,
 .aurora-container canvas {
   display: block;
   width: 100%;

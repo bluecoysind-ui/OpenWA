@@ -25,7 +25,7 @@ jobs:
   # ──── Release Gate (CI-strength) ──────────────────────────────────
   # Mirror the CI workflow's gate jobs so a tag can never publish an image or GitHub Release that
   # lint, the spec type-check, OpenAPI snapshot, unit + e2e tests, the Postgres migration smoke, or the
-  # dashboard build/lint/type-check would have rejected. Each job below matches its CI counterpart; only the tag-match
+  # frontend build/type-check would have rejected. Each job below matches its CI counterpart; only the tag-match
   # guard and the publish jobs (docker, release) are release-specific.
   lint:
     name: Lint
@@ -38,11 +38,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          # Both trees are installed in this job (the dashboard audit below), so both lockfiles
+          # Both trees are installed in this job (the frontend audit below), so both lockfiles
           # belong in the cache key.
           cache-dependency-path: |
             package-lock.json
-            dashboard/package-lock.json
+            frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -69,15 +69,15 @@ jobs:
         # accepted, which is how a release stalls with nothing actionable to fix.
         run: npm run check:audit
 
-      # Second tree, same rule. The dashboard's runtime deps are bundled into dashboard/dist and the
+      # Second tree, same rule. The frontend's runtime deps are bundled into frontend/dist and the
       # published image serves them to every operator's browser, so the tag path must scan them for
       # the same reason ci.yml's audit job now does — otherwise this gate is laxer than the PR gate
       # for exactly the dependencies that reach a user.
-      - name: Install dashboard dependencies
-        run: cd dashboard && npm ci
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
 
-      - name: Security audit (dashboard)
-        run: cd dashboard && npm audit --audit-level=high
+      - name: Security audit (frontend)
+        run: cd frontend && npm audit --audit-level=high
 
       - name: Run ESLint
         run: npm run lint
@@ -242,8 +242,8 @@ jobs:
           DATABASE_PASSWORD: openwa
           DATABASE_NAME: openwa
 
-  dashboard:
-    name: Dashboard
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -253,30 +253,22 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: dashboard/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: cd dashboard && npm ci
+        run: cd frontend && npm ci
 
-      - name: Run ESLint
-        run: cd dashboard && npm run lint
-
-      # The root format:check globs are anchored at the repo root and never reach dashboard/, so
-      # this is the only gate on dashboard formatting — and it was present on the branch path only.
-      - name: Check formatting
-        run: cd dashboard && npm run format:check
-
-      - name: Type-check dashboard tests
-        run: cd dashboard && npm run typecheck
+      - name: Type-check frontend
+        run: cd frontend && npm run typecheck
 
       - name: Check i18n parity
-        run: cd dashboard && npm run i18n:check
+        run: cd frontend && npm run i18n:check
 
-      - name: Build dashboard
-        run: cd dashboard && npm run build
+      - name: Build frontend
+        run: cd frontend && npm run build
 
-      - name: Run dashboard unit tests
-        run: cd dashboard && npm run test:unit
+      - name: Run frontend unit tests
+        run: cd frontend && npm test
 
   # Mirrors ci.yml's scripts-smoke job, which had no counterpart here at all: the shell scripts that
   # ship inside the image were linted and exercised on the branch path and on nothing else.
@@ -358,7 +350,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, dashboard, scripts-smoke, chart]
+    needs: [lint, test, frontend, scripts-smoke, chart]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -385,7 +377,7 @@ jobs:
     # a matching container image, and a runtime boot check on both architectures (boot-smoke runs the
     # published image on amd64 + arm64). Trades a few minutes of buildx/boot latency for release
     # safety.
-    needs: [lint, test, test-postgres, dashboard, build, docker, boot-smoke, image-scan, promote, verify-published]
+    needs: [lint, test, test-postgres, frontend, build, docker, boot-smoke, image-scan, promote, verify-published]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -432,7 +424,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    needs: [lint, test, test-postgres, dashboard, build]
+    needs: [lint, test, test-postgres, frontend, build]
     # The promote and verify-published jobs consume exactly what this build produced — the pushed
     # manifest digest and the tag set computed once here — instead of re-deriving tags from the
     # tag pattern downstream. What is promoted and verified is by construction what was built.

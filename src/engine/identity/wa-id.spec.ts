@@ -4,6 +4,7 @@ import {
   isChannelJid,
   isChatWid,
   isIndividualWid,
+  msisdnOf,
   parseWaId,
   toNeutralJid,
   toParticipantWid,
@@ -16,6 +17,15 @@ describe('wa-id', () => {
       expect(userPart('628111@c.us')).toBe('628111');
       expect(userPart('628111:12@s.whatsapp.net')).toBe('628111');
       expect(userPart('120363-456@g.us')).toBe('120363-456');
+    });
+  });
+
+  describe('msisdnOf', () => {
+    it('returns phone digits for user dialects and nothing for a lid or group', () => {
+      expect(msisdnOf('628111@c.us')).toBe('628111');
+      expect(msisdnOf('628111:3@s.whatsapp.net')).toBe('628111');
+      expect(msisdnOf('111222333@lid')).toBe('');
+      expect(msisdnOf('120363@g.us')).toBe('');
     });
   });
 

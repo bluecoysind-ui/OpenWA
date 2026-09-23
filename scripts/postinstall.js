@@ -4,12 +4,12 @@
  * Ten conditional steps, each skipped when its target is absent so the hook is a no-op where the
  * piece is missing (the Docker builder stage copies package*.json long before any source):
  *
- *   1. `npm ci` inside dashboard/ when dashboard/ exists — the dashboard carries its own lockfile and
+ *   1. `npm ci` inside frontend/ when frontend/ exists — the UI carries its own lockfile and
  *      the root install would otherwise leave it without dependencies. We run `npm ci` directly in
- *      dashboard/ with any `npm_config_allow_scripts` environment variable stripped so that npm 11
+ *      frontend/ with any `npm_config_allow_scripts` environment variable stripped so that npm 11
  *      does not reject `allow-scripts=true` from user `.npmrc` with EALLOWSCRIPTS. A failure here
  *      MUST abort the install: the old inline hook swallowed spawnSync's exit status, so a red
- *      dashboard install still reported `npm install` success and the breakage surfaced only at
+ *      frontend install still reported `npm install` success and the breakage surfaced only at
  *      build/run time.
  *   2. `node scripts/patch-wwebjs-201832.js --best-effort` when the patcher exists. The patcher
  *      itself decides fatality: under --best-effort it warns and exits 0 for a pristine-but-
@@ -51,7 +51,7 @@ const ROOT = path.join(__dirname, '..');
  * originates from the environment (`npm_config_allow_scripts`) rather than `.npmrc` or
  * `package.json`. When a root install is invoked with `allow-scripts=true` in `.npmrc`, npm
  * exports that setting to the lifecycle environment as `npm_config_allow_scripts`. Stripping it
- * prevents nested npm executions (`npm run dashboard:ci` -> `cd dashboard && npm ci`) from
+ * prevents nested npm executions (`npm run frontend:ci` -> `cd frontend && npm ci`) from
  * failing with EALLOWSCRIPTS while preserving the user's `.npmrc` configuration.
  */
 function sanitizeEnv(env = process.env) {
@@ -68,11 +68,11 @@ function sanitizeEnv(env = process.env) {
 function planSteps(root, env = process.env) {
   const cleanEnv = sanitizeEnv(env);
   const steps = [];
-  if (fs.existsSync(path.join(root, 'dashboard'))) {
+  if (fs.existsSync(path.join(root, 'frontend'))) {
     steps.push({
-      name: 'dashboard dependencies (npm ci)',
+      name: 'frontend dependencies (npm ci)',
       command: 'npm ci',
-      options: { stdio: 'inherit', shell: true, cwd: path.join(root, 'dashboard'), env: cleanEnv },
+      options: { stdio: 'inherit', shell: true, cwd: path.join(root, 'frontend'), env: cleanEnv },
     });
   }
   const patcher = path.join(root, 'scripts', 'patch-wwebjs-201832.js');
@@ -176,7 +176,7 @@ function failureReason(res) {
 function run(root = ROOT, spawn = spawnSync, env = process.env) {
   const steps = planSteps(root, env);
   if (!steps.length) {
-    console.log('postinstall: no dashboard/ or patch script present — nothing to do.');
+    console.log('postinstall: no frontend/ or patch script present — nothing to do.');
     return 0;
   }
   for (const step of steps) {

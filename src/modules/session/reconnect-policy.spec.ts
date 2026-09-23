@@ -19,15 +19,15 @@ const NO_JITTER = 0;
 
 describe('decideReconnect', () => {
   describe('exponential backoff', () => {
-    it('schedules the first attempt at baseDelay', () => {
+    it('schedules the first attempt immediately (jitter only)', () => {
       const s = state();
 
       const d = decideReconnect(s, NO_JITTER);
 
-      expect(d).toMatchObject({ kind: 'schedule', delayMs: 5000, attempt: 1 });
+      expect(d).toMatchObject({ kind: 'schedule', delayMs: 0, attempt: 1 });
     });
 
-    it('doubles the delay per consecutive attempt', () => {
+    it('uses baseDelay from the second attempt and doubles thereafter', () => {
       const s = state();
       const delays: number[] = [];
 
@@ -36,7 +36,7 @@ describe('decideReconnect', () => {
         if (d.kind === 'schedule') delays.push(d.delayMs);
       }
 
-      expect(delays).toEqual([5000, 10000, 20000, 40000]);
+      expect(delays).toEqual([0, 5000, 10000, 20000]);
     });
 
     it('adds the supplied jitter before clamping', () => {
@@ -44,7 +44,7 @@ describe('decideReconnect', () => {
 
       const d = decideReconnect(s, 777);
 
-      expect(d).toMatchObject({ delayMs: 5777 });
+      expect(d).toMatchObject({ delayMs: 777 });
     });
 
     it('parks at the cap once the exponent outgrows it (unlimited budget never overflows setTimeout)', () => {
@@ -139,9 +139,9 @@ describe('decideReconnect', () => {
       const out = drive(s, 30);
 
       const delays = out.map(d => (d.kind === 'schedule' ? d.delayMs : -1));
-      // 5000 * 2^6 = 320 s is the first computed delay past the cap, so attempt 7 onward parks there.
-      expect(delays.slice(0, 6)).toEqual([5000, 10000, 20000, 40000, 80000, 160000]);
-      expect(delays.slice(6).every(ms => ms === RECONNECT_DELAY_CAP_MS)).toBe(true);
+      // 5000 * 2^6 = 320 s is the first computed delay past the cap (attempt 8 onward parks there).
+      expect(delays.slice(0, 7)).toEqual([0, 5000, 10000, 20000, 40000, 80000, 160000]);
+      expect(delays.slice(7).every(ms => ms === RECONNECT_DELAY_CAP_MS)).toBe(true);
       expect(out[29]).toMatchObject({ kind: 'schedule', attempt: 30 });
       expect(s.attempts).toBe(30);
     });

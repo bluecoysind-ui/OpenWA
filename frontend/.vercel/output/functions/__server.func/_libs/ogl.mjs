@@ -5,7 +5,7 @@
 * @param {vec3} a vector to calculate length of
 * @returns {Number} length of a
 */
-function length(a) {
+function length$1(a) {
 	let x = a[0];
 	let y = a[1];
 	let z = a[2];
@@ -18,7 +18,7 @@ function length(a) {
 * @param {vec3} a the source vector
 * @returns {vec3} out
 */
-function copy$4(out, a) {
+function copy$5(out, a) {
 	out[0] = a[0];
 	out[1] = a[1];
 	out[2] = a[2];
@@ -33,7 +33,7 @@ function copy$4(out, a) {
 * @param {Number} z Z component
 * @returns {vec3} out
 */
-function set$4(out, x, y, z) {
+function set$5(out, x, y, z) {
 	out[0] = x;
 	out[1] = y;
 	out[2] = z;
@@ -47,7 +47,7 @@ function set$4(out, x, y, z) {
 * @param {vec3} b the second operand
 * @returns {vec3} out
 */
-function add$1(out, a, b) {
+function add$2(out, a, b) {
 	out[0] = a[0] + b[0];
 	out[1] = a[1] + b[1];
 	out[2] = a[2] + b[2];
@@ -61,7 +61,7 @@ function add$1(out, a, b) {
 * @param {vec3} b the second operand
 * @returns {vec3} out
 */
-function subtract$1(out, a, b) {
+function subtract$2(out, a, b) {
 	out[0] = a[0] - b[0];
 	out[1] = a[1] - b[1];
 	out[2] = a[2] - b[2];
@@ -75,7 +75,7 @@ function subtract$1(out, a, b) {
 * @param {vec3} b the second operand
 * @returns {vec3} out
 */
-function multiply$3(out, a, b) {
+function multiply$4(out, a, b) {
 	out[0] = a[0] * b[0];
 	out[1] = a[1] * b[1];
 	out[2] = a[2] * b[2];
@@ -89,7 +89,7 @@ function multiply$3(out, a, b) {
 * @param {vec3} b the second operand
 * @returns {vec3} out
 */
-function divide(out, a, b) {
+function divide$1(out, a, b) {
 	out[0] = a[0] / b[0];
 	out[1] = a[1] / b[1];
 	out[2] = a[2] / b[2];
@@ -103,7 +103,7 @@ function divide(out, a, b) {
 * @param {Number} b amount to scale the vector by
 * @returns {vec3} out
 */
-function scale$2(out, a, b) {
+function scale$3(out, a, b) {
 	out[0] = a[0] * b;
 	out[1] = a[1] * b;
 	out[2] = a[2] * b;
@@ -116,7 +116,7 @@ function scale$2(out, a, b) {
 * @param {vec3} b the second operand
 * @returns {Number} distance between a and b
 */
-function distance(a, b) {
+function distance$1(a, b) {
 	let x = b[0] - a[0];
 	let y = b[1] - a[1];
 	let z = b[2] - a[2];
@@ -129,7 +129,7 @@ function distance(a, b) {
 * @param {vec3} b the second operand
 * @returns {Number} squared distance between a and b
 */
-function squaredDistance(a, b) {
+function squaredDistance$1(a, b) {
 	let x = b[0] - a[0];
 	let y = b[1] - a[1];
 	let z = b[2] - a[2];
@@ -141,7 +141,7 @@ function squaredDistance(a, b) {
 * @param {vec3} a vector to calculate squared length of
 * @returns {Number} squared length of a
 */
-function squaredLength(a) {
+function squaredLength$1(a) {
 	let x = a[0];
 	let y = a[1];
 	let z = a[2];
@@ -154,7 +154,7 @@ function squaredLength(a) {
 * @param {vec3} a vector to negate
 * @returns {vec3} out
 */
-function negate(out, a) {
+function negate$1(out, a) {
 	out[0] = -a[0];
 	out[1] = -a[1];
 	out[2] = -a[2];
@@ -167,7 +167,7 @@ function negate(out, a) {
 * @param {vec3} a vector to invert
 * @returns {vec3} out
 */
-function inverse(out, a) {
+function inverse$1(out, a) {
 	out[0] = 1 / a[0];
 	out[1] = 1 / a[1];
 	out[2] = 1 / a[2];
@@ -180,7 +180,7 @@ function inverse(out, a) {
 * @param {vec3} a vector to normalize
 * @returns {vec3} out
 */
-function normalize$2(out, a) {
+function normalize$3(out, a) {
 	let x = a[0];
 	let y = a[1];
 	let z = a[2];
@@ -198,7 +198,7 @@ function normalize$2(out, a) {
 * @param {vec3} b the second operand
 * @returns {Number} dot product of a and b
 */
-function dot$2(a, b) {
+function dot$3(a, b) {
 	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 /**
@@ -209,7 +209,7 @@ function dot$2(a, b) {
 * @param {vec3} b the second operand
 * @returns {vec3} out
 */
-function cross(out, a, b) {
+function cross$1(out, a, b) {
 	let ax = a[0], ay = a[1], az = a[2];
 	let bx = b[0], by = b[1], bz = b[2];
 	out[0] = ay * bz - az * by;
@@ -226,7 +226,7 @@ function cross(out, a, b) {
 * @param {Number} t interpolation amount between the two inputs
 * @returns {vec3} out
 */
-function lerp(out, a, b, t) {
+function lerp$1(out, a, b, t) {
 	let ax = a[0];
 	let ay = a[1];
 	let az = a[2];
@@ -245,7 +245,7 @@ function lerp(out, a, b, t) {
 * @param {Number} dt delta time
 * @returns {vec3} out
 */
-function smoothLerp(out, a, b, decay, dt) {
+function smoothLerp$1(out, a, b, decay, dt) {
 	const exp = Math.exp(-decay * dt);
 	let ax = a[0];
 	let ay = a[1];
@@ -264,7 +264,7 @@ function smoothLerp(out, a, b, decay, dt) {
 * @param {mat4} m matrix to transform with
 * @returns {vec3} out
 */
-function transformMat4(out, a, m) {
+function transformMat4$1(out, a, m) {
 	let x = a[0], y = a[1], z = a[2];
 	let w = m[3] * x + m[7] * y + m[11] * z + m[15];
 	w = w || 1;
@@ -294,7 +294,7 @@ function scaleRotateMat4(out, a, m) {
 * @param {mat3} m the 3x3 matrix to transform with
 * @returns {vec3} out
 */
-function transformMat3(out, a, m) {
+function transformMat3$1(out, a, m) {
 	let x = a[0], y = a[1], z = a[2];
 	out[0] = x * m[0] + y * m[3] + z * m[6];
 	out[1] = x * m[1] + y * m[4] + z * m[7];
@@ -348,11 +348,11 @@ var angle = (function() {
 		0
 	];
 	return function(a, b) {
-		copy$4(tempA, a);
-		copy$4(tempB, b);
-		normalize$2(tempA, tempA);
-		normalize$2(tempB, tempB);
-		let cosine = dot$2(tempA, tempB);
+		copy$5(tempA, a);
+		copy$5(tempB, b);
+		normalize$3(tempA, tempA);
+		normalize$3(tempB, tempB);
+		let cosine = dot$3(tempA, tempB);
 		if (cosine > 1) return 0;
 		else if (cosine < -1) return Math.PI;
 		else return Math.acos(cosine);
@@ -365,7 +365,7 @@ var angle = (function() {
 * @param {vec3} b The second vector.
 * @returns {Boolean} True if the vectors are equal, false otherwise.
 */
-function exactEquals(a, b) {
+function exactEquals$1(a, b) {
 	return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 //#endregion
@@ -395,80 +395,80 @@ var Vec3 = class Vec3 extends Array {
 	}
 	set(x, y = x, z = x) {
 		if (x.length) return this.copy(x);
-		set$4(this, x, y, z);
+		set$5(this, x, y, z);
 		return this;
 	}
 	copy(v) {
-		copy$4(this, v);
+		copy$5(this, v);
 		return this;
 	}
 	add(va, vb) {
-		if (vb) add$1(this, va, vb);
-		else add$1(this, this, va);
+		if (vb) add$2(this, va, vb);
+		else add$2(this, this, va);
 		return this;
 	}
 	sub(va, vb) {
-		if (vb) subtract$1(this, va, vb);
-		else subtract$1(this, this, va);
+		if (vb) subtract$2(this, va, vb);
+		else subtract$2(this, this, va);
 		return this;
 	}
 	multiply(v) {
-		if (v.length) multiply$3(this, this, v);
-		else scale$2(this, this, v);
+		if (v.length) multiply$4(this, this, v);
+		else scale$3(this, this, v);
 		return this;
 	}
 	divide(v) {
-		if (v.length) divide(this, this, v);
-		else scale$2(this, this, 1 / v);
+		if (v.length) divide$1(this, this, v);
+		else scale$3(this, this, 1 / v);
 		return this;
 	}
 	inverse(v = this) {
-		inverse(this, v);
+		inverse$1(this, v);
 		return this;
 	}
 	len() {
-		return length(this);
+		return length$1(this);
 	}
 	distance(v) {
-		if (v) return distance(this, v);
-		else return length(this);
+		if (v) return distance$1(this, v);
+		else return length$1(this);
 	}
 	squaredLen() {
-		return squaredLength(this);
+		return squaredLength$1(this);
 	}
 	squaredDistance(v) {
-		if (v) return squaredDistance(this, v);
-		else return squaredLength(this);
+		if (v) return squaredDistance$1(this, v);
+		else return squaredLength$1(this);
 	}
 	negate(v = this) {
-		negate(this, v);
+		negate$1(this, v);
 		return this;
 	}
 	cross(va, vb) {
-		if (vb) cross(this, va, vb);
-		else cross(this, this, va);
+		if (vb) cross$1(this, va, vb);
+		else cross$1(this, this, va);
 		return this;
 	}
 	scale(v) {
-		scale$2(this, this, v);
+		scale$3(this, this, v);
 		return this;
 	}
 	normalize() {
-		normalize$2(this, this);
+		normalize$3(this, this);
 		return this;
 	}
 	dot(v) {
-		return dot$2(this, v);
+		return dot$3(this, v);
 	}
 	equals(v) {
-		return exactEquals(this, v);
+		return exactEquals$1(this, v);
 	}
 	applyMatrix3(mat3) {
-		transformMat3(this, this, mat3);
+		transformMat3$1(this, this, mat3);
 		return this;
 	}
 	applyMatrix4(mat4) {
-		transformMat4(this, this, mat4);
+		transformMat4$1(this, this, mat4);
 		return this;
 	}
 	scaleRotateMatrix4(mat4) {
@@ -483,11 +483,11 @@ var Vec3 = class Vec3 extends Array {
 		return angle(this, v);
 	}
 	lerp(v, t) {
-		lerp(this, this, v, t);
+		lerp$1(this, this, v, t);
 		return this;
 	}
 	smoothLerp(v, decay, dt) {
-		smoothLerp(this, this, v, decay, dt);
+		smoothLerp$1(this, this, v, decay, dt);
 		return this;
 	}
 	clone() {
@@ -1188,7 +1188,7 @@ var Renderer = class {
 * @param {vec4} a the source vector
 * @returns {vec4} out
 */
-function copy$3(out, a) {
+function copy$4(out, a) {
 	out[0] = a[0];
 	out[1] = a[1];
 	out[2] = a[2];
@@ -1205,7 +1205,7 @@ function copy$3(out, a) {
 * @param {Number} w W component
 * @returns {vec4} out
 */
-function set$3(out, x, y, z, w) {
+function set$4(out, x, y, z, w) {
 	out[0] = x;
 	out[1] = y;
 	out[2] = z;
@@ -1219,7 +1219,7 @@ function set$3(out, x, y, z, w) {
 * @param {vec4} a vector to normalize
 * @returns {vec4} out
 */
-function normalize$1(out, a) {
+function normalize$2(out, a) {
 	let x = a[0];
 	let y = a[1];
 	let z = a[2];
@@ -1239,7 +1239,7 @@ function normalize$1(out, a) {
 * @param {vec4} b the second operand
 * @returns {Number} dot product of a and b
 */
-function dot$1(a, b) {
+function dot$2(a, b) {
 	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
 }
 //#endregion
@@ -1283,7 +1283,7 @@ function setAxisAngle(out, axis, rad) {
 * @param {quat} b the second operand
 * @returns {quat} out
 */
-function multiply$2(out, a, b) {
+function multiply$3(out, a, b) {
 	let ax = a[0], ay = a[1], az = a[2], aw = a[3];
 	let bx = b[0], by = b[1], bz = b[2], bw = b[3];
 	out[0] = ax * bw + aw * bx + ay * bz - az * by;
@@ -1507,7 +1507,7 @@ function fromEuler(out, euler, order = "YXZ") {
 * @returns {quat} out
 * @function
 */
-var copy$2 = copy$3;
+var copy$3 = copy$4;
 /**
 * Set the components of a quat to the given values
 *
@@ -1519,7 +1519,7 @@ var copy$2 = copy$3;
 * @returns {quat} out
 * @function
 */
-var set$2 = set$3;
+var set$3 = set$4;
 /**
 * Calculates the dot product of two quat's
 *
@@ -1528,7 +1528,7 @@ var set$2 = set$3;
 * @returns {Number} dot product of a and b
 * @function
 */
-var dot = dot$1;
+var dot$1 = dot$2;
 /**
 * Normalize a quat
 *
@@ -1537,7 +1537,7 @@ var dot = dot$1;
 * @returns {quat} out
 * @function
 */
-var normalize = normalize$1;
+var normalize$1 = normalize$2;
 //#endregion
 //#region node_modules/ogl/src/math/Quat.js
 var Quat = class extends Array {
@@ -1592,7 +1592,7 @@ var Quat = class extends Array {
 	}
 	set(x, y, z, w) {
 		if (x.length) return this.copy(x);
-		set$2(this._target, x, y, z, w);
+		set$3(this._target, x, y, z, w);
 		this.onChange();
 		return this;
 	}
@@ -1622,23 +1622,23 @@ var Quat = class extends Array {
 		return this;
 	}
 	copy(q) {
-		copy$2(this._target, q);
+		copy$3(this._target, q);
 		this.onChange();
 		return this;
 	}
 	normalize(q = this._target) {
-		normalize(this._target, q);
+		normalize$1(this._target, q);
 		this.onChange();
 		return this;
 	}
 	multiply(qA, qB) {
-		if (qB) multiply$2(this._target, qA, qB);
-		else multiply$2(this._target, this._target, qA);
+		if (qB) multiply$3(this._target, qA, qB);
+		else multiply$3(this._target, this._target, qA);
 		this.onChange();
 		return this;
 	}
 	dot(v) {
-		return dot(this._target, v);
+		return dot$1(this._target, v);
 	}
 	fromMatrix3(matrix3) {
 		fromMat3(this._target, matrix3);
@@ -1686,7 +1686,7 @@ var EPSILON = 1e-6;
 * @param {mat4} a the source matrix
 * @returns {mat4} out
 */
-function copy$1(out, a) {
+function copy$2(out, a) {
 	out[0] = a[0];
 	out[1] = a[1];
 	out[2] = a[2];
@@ -1711,7 +1711,7 @@ function copy$1(out, a) {
 * @param {mat4} out the receiving matrix
 * @returns {mat4} out
 */
-function set$1(out, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
+function set$2(out, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
 	out[0] = m00;
 	out[1] = m01;
 	out[2] = m02;
@@ -1832,7 +1832,7 @@ function determinant(a) {
 * @param {mat4} b the second operand
 * @returns {mat4} out
 */
-function multiply$1(out, a, b) {
+function multiply$2(out, a, b) {
 	let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
 	let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
 	let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
@@ -1926,7 +1926,7 @@ function translate$1(out, a, v) {
 * @param {vec3} v the vec3 to scale the matrix by
 * @returns {mat4} out
 **/
-function scale$1(out, a, v) {
+function scale$2(out, a, v) {
 	let x = v[0], y = v[1], z = v[2];
 	out[0] = a[0] * x;
 	out[1] = a[1] * x;
@@ -2144,17 +2144,17 @@ var getRotation = (function() {
 * @param {vec3} dstScale Scale element, to be overwritten
 */
 function decompose(srcMat, dstRotation, dstTranslation, dstScale) {
-	let sx = length([
+	let sx = length$1([
 		srcMat[0],
 		srcMat[1],
 		srcMat[2]
 	]);
-	const sy = length([
+	const sy = length$1([
 		srcMat[4],
 		srcMat[5],
 		srcMat[6]
 	]);
-	const sz = length([
+	const sz = length$1([
 		srcMat[8],
 		srcMat[9],
 		srcMat[10]
@@ -2386,7 +2386,7 @@ function targetTo(out, eye, target, up) {
 * @param {mat4} b the second operand
 * @returns {mat4} out
 */
-function add(out, a, b) {
+function add$1(out, a, b) {
 	out[0] = a[0] + b[0];
 	out[1] = a[1] + b[1];
 	out[2] = a[2] + b[2];
@@ -2413,7 +2413,7 @@ function add(out, a, b) {
 * @param {mat4} b the second operand
 * @returns {mat4} out
 */
-function subtract(out, a, b) {
+function subtract$1(out, a, b) {
 	out[0] = a[0] - b[0];
 	out[1] = a[1] - b[1];
 	out[2] = a[2] - b[2];
@@ -2492,7 +2492,7 @@ var Mat4 = class extends Array {
 	}
 	set(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
 		if (m00.length) return this.copy(m00);
-		set$1(this, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
+		set$2(this, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
 		return this;
 	}
 	translate(v, m = this) {
@@ -2504,7 +2504,7 @@ var Mat4 = class extends Array {
 		return this;
 	}
 	scale(v, m = this) {
-		scale$1(this, m, typeof v === "number" ? [
+		scale$2(this, m, typeof v === "number" ? [
 			v,
 			v,
 			v
@@ -2512,19 +2512,19 @@ var Mat4 = class extends Array {
 		return this;
 	}
 	add(ma, mb) {
-		if (mb) add(this, ma, mb);
-		else add(this, this, ma);
+		if (mb) add$1(this, ma, mb);
+		else add$1(this, this, ma);
 		return this;
 	}
 	sub(ma, mb) {
-		if (mb) subtract(this, ma, mb);
-		else subtract(this, this, ma);
+		if (mb) subtract$1(this, ma, mb);
+		else subtract$1(this, this, ma);
 		return this;
 	}
 	multiply(ma, mb) {
 		if (!ma.length) multiplyScalar(this, this, ma);
-		else if (mb) multiply$1(this, ma, mb);
-		else multiply$1(this, this, ma);
+		else if (mb) multiply$2(this, ma, mb);
+		else multiply$2(this, this, ma);
 		return this;
 	}
 	identity() {
@@ -2532,7 +2532,7 @@ var Mat4 = class extends Array {
 		return this;
 	}
 	copy(m) {
-		copy$1(this, m);
+		copy$2(this, m);
 		return this;
 	}
 	fromPerspective({ fov, aspect, near, far } = {}) {
@@ -2893,7 +2893,7 @@ function fromQuat(out, q) {
 * @param {mat3} a the source matrix
 * @returns {mat3} out
 */
-function copy(out, a) {
+function copy$1(out, a) {
 	out[0] = a[0];
 	out[1] = a[1];
 	out[2] = a[2];
@@ -2911,7 +2911,7 @@ function copy(out, a) {
 * @param {mat3} out the receiving matrix
 * @returns {mat3} out
 */
-function set(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
+function set$1(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
 	out[0] = m00;
 	out[1] = m01;
 	out[2] = m02;
@@ -2977,7 +2977,7 @@ function invert(out, a) {
 * @param {mat3} b the second operand
 * @returns {mat3} out
 */
-function multiply(out, a, b) {
+function multiply$1(out, a, b) {
 	let a00 = a[0], a01 = a[1], a02 = a[2];
 	let a10 = a[3], a11 = a[4], a12 = a[5];
 	let a20 = a[6], a21 = a[7], a22 = a[8];
@@ -3045,7 +3045,7 @@ function rotate(out, a, rad) {
 * @param {vec2} v the vec2 to scale the matrix by
 * @returns {mat3} out
 **/
-function scale(out, a, v) {
+function scale$1(out, a, v) {
 	let x = v[0], y = v[1];
 	out[0] = x * a[0];
 	out[1] = x * a[1];
@@ -3106,7 +3106,7 @@ var Mat3 = class extends Array {
 	}
 	set(m00, m01, m02, m10, m11, m12, m20, m21, m22) {
 		if (m00.length) return this.copy(m00);
-		set(this, m00, m01, m02, m10, m11, m12, m20, m21, m22);
+		set$1(this, m00, m01, m02, m10, m11, m12, m20, m21, m22);
 		return this;
 	}
 	translate(v, m = this) {
@@ -3118,12 +3118,12 @@ var Mat3 = class extends Array {
 		return this;
 	}
 	scale(v, m = this) {
-		scale(this, m, v);
+		scale$1(this, m, v);
 		return this;
 	}
 	multiply(ma, mb) {
-		if (mb) multiply(this, ma, mb);
-		else multiply(this, this, ma);
+		if (mb) multiply$1(this, ma, mb);
+		else multiply$1(this, this, ma);
 		return this;
 	}
 	identity() {
@@ -3131,7 +3131,7 @@ var Mat3 = class extends Array {
 		return this;
 	}
 	copy(m) {
-		copy(this, m);
+		copy$1(this, m);
 		return this;
 	}
 	fromMatrix4(m) {
@@ -3218,87 +3218,390 @@ var Mesh = class extends Transform {
 	}
 };
 //#endregion
-//#region node_modules/ogl/src/math/functions/ColorFunc.js
-var NAMES = {
-	black: "#000000",
-	white: "#ffffff",
-	red: "#ff0000",
-	green: "#00ff00",
-	blue: "#0000ff",
-	fuchsia: "#ff00ff",
-	cyan: "#00ffff",
-	yellow: "#ffff00",
-	orange: "#ff8000"
-};
-function hexToRGB(hex) {
-	if (hex.length === 4) hex = hex[0] + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
-	const rgb = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-	if (!rgb) console.warn(`Unable to convert hex string ${hex} to rgb values`);
-	return [
-		parseInt(rgb[1], 16) / 255,
-		parseInt(rgb[2], 16) / 255,
-		parseInt(rgb[3], 16) / 255
-	];
+//#region node_modules/ogl/src/math/functions/Vec2Func.js
+/**
+* Copy the values from one vec2 to another
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the source vector
+* @returns {vec2} out
+*/
+function copy(out, a) {
+	out[0] = a[0];
+	out[1] = a[1];
+	return out;
 }
-function numberToRGB(num) {
-	num = parseInt(num);
-	return [
-		(num >> 16 & 255) / 255,
-		(num >> 8 & 255) / 255,
-		(num & 255) / 255
-	];
+/**
+* Set the components of a vec2 to the given values
+*
+* @param {vec2} out the receiving vector
+* @param {Number} x X component
+* @param {Number} y Y component
+* @returns {vec2} out
+*/
+function set(out, x, y) {
+	out[0] = x;
+	out[1] = y;
+	return out;
 }
-function parseColor(color) {
-	if (color === void 0) return [
-		0,
-		0,
-		0
-	];
-	if (arguments.length === 3) return arguments;
-	if (!isNaN(color)) return numberToRGB(color);
-	if (color[0] === "#") return hexToRGB(color);
-	if (NAMES[color.toLowerCase()]) return hexToRGB(NAMES[color.toLowerCase()]);
-	console.warn("Color format not recognised");
-	return [
-		0,
-		0,
-		0
-	];
+/**
+* Adds two vec2's
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {vec2} out
+*/
+function add(out, a, b) {
+	out[0] = a[0] + b[0];
+	out[1] = a[1] + b[1];
+	return out;
+}
+/**
+* Subtracts vector b from vector a
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {vec2} out
+*/
+function subtract(out, a, b) {
+	out[0] = a[0] - b[0];
+	out[1] = a[1] - b[1];
+	return out;
+}
+/**
+* Multiplies two vec2's
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {vec2} out
+*/
+function multiply(out, a, b) {
+	out[0] = a[0] * b[0];
+	out[1] = a[1] * b[1];
+	return out;
+}
+/**
+* Divides two vec2's
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {vec2} out
+*/
+function divide(out, a, b) {
+	out[0] = a[0] / b[0];
+	out[1] = a[1] / b[1];
+	return out;
+}
+/**
+* Scales a vec2 by a scalar number
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the vector to scale
+* @param {Number} b amount to scale the vector by
+* @returns {vec2} out
+*/
+function scale(out, a, b) {
+	out[0] = a[0] * b;
+	out[1] = a[1] * b;
+	return out;
+}
+/**
+* Calculates the euclidian distance between two vec2's
+*
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {Number} distance between a and b
+*/
+function distance(a, b) {
+	var x = b[0] - a[0], y = b[1] - a[1];
+	return Math.sqrt(x * x + y * y);
+}
+/**
+* Calculates the squared euclidian distance between two vec2's
+*
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {Number} squared distance between a and b
+*/
+function squaredDistance(a, b) {
+	var x = b[0] - a[0], y = b[1] - a[1];
+	return x * x + y * y;
+}
+/**
+* Calculates the length of a vec2
+*
+* @param {vec2} a vector to calculate length of
+* @returns {Number} length of a
+*/
+function length(a) {
+	var x = a[0], y = a[1];
+	return Math.sqrt(x * x + y * y);
+}
+/**
+* Calculates the squared length of a vec2
+*
+* @param {vec2} a vector to calculate squared length of
+* @returns {Number} squared length of a
+*/
+function squaredLength(a) {
+	var x = a[0], y = a[1];
+	return x * x + y * y;
+}
+/**
+* Negates the components of a vec2
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a vector to negate
+* @returns {vec2} out
+*/
+function negate(out, a) {
+	out[0] = -a[0];
+	out[1] = -a[1];
+	return out;
+}
+/**
+* Returns the inverse of the components of a vec2
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a vector to invert
+* @returns {vec2} out
+*/
+function inverse(out, a) {
+	out[0] = 1 / a[0];
+	out[1] = 1 / a[1];
+	return out;
+}
+/**
+* Normalize a vec2
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a vector to normalize
+* @returns {vec2} out
+*/
+function normalize(out, a) {
+	var x = a[0], y = a[1];
+	var len = x * x + y * y;
+	if (len > 0) len = 1 / Math.sqrt(len);
+	out[0] = a[0] * len;
+	out[1] = a[1] * len;
+	return out;
+}
+/**
+* Calculates the dot product of two vec2's
+*
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {Number} dot product of a and b
+*/
+function dot(a, b) {
+	return a[0] * b[0] + a[1] * b[1];
+}
+/**
+* Computes the cross product of two vec2's
+* Note that the cross product returns a scalar
+*
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @returns {Number} cross product of a and b
+*/
+function cross(a, b) {
+	return a[0] * b[1] - a[1] * b[0];
+}
+/**
+* Performs a linear interpolation between two vec2's
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @param {Number} t interpolation amount between the two inputs
+* @returns {vec2} out
+*/
+function lerp(out, a, b, t) {
+	var ax = a[0], ay = a[1];
+	out[0] = ax + t * (b[0] - ax);
+	out[1] = ay + t * (b[1] - ay);
+	return out;
+}
+/**
+* Performs a frame rate independant, linear interpolation between two vec2's
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the first operand
+* @param {vec2} b the second operand
+* @param {Number} decay decay constant for interpolation. useful range between 1 and 25, from slow to fast.
+* @param {Number} dt delta time
+* @returns {vec2} out
+*/
+function smoothLerp(out, a, b, decay, dt) {
+	const exp = Math.exp(-decay * dt);
+	let ax = a[0];
+	let ay = a[1];
+	out[0] = b[0] + (ax - b[0]) * exp;
+	out[1] = b[1] + (ay - b[1]) * exp;
+	return out;
+}
+/**
+* Transforms the vec2 with a mat3
+* 3rd vector component is implicitly '1'
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the vector to transform
+* @param {mat3} m matrix to transform with
+* @returns {vec2} out
+*/
+function transformMat3(out, a, m) {
+	var x = a[0], y = a[1];
+	out[0] = m[0] * x + m[3] * y + m[6];
+	out[1] = m[1] * x + m[4] * y + m[7];
+	return out;
+}
+/**
+* Transforms the vec2 with a mat4
+* 3rd vector component is implicitly '0'
+* 4th vector component is implicitly '1'
+*
+* @param {vec2} out the receiving vector
+* @param {vec2} a the vector to transform
+* @param {mat4} m matrix to transform with
+* @returns {vec2} out
+*/
+function transformMat4(out, a, m) {
+	let x = a[0];
+	let y = a[1];
+	out[0] = m[0] * x + m[4] * y + m[12];
+	out[1] = m[1] * x + m[5] * y + m[13];
+	return out;
+}
+/**
+* Returns whether or not the vectors exactly have the same elements in the same position (when compared with ===)
+*
+* @param {vec2} a The first vector.
+* @param {vec2} b The second vector.
+* @returns {Boolean} True if the vectors are equal, false otherwise.
+*/
+function exactEquals(a, b) {
+	return a[0] === b[0] && a[1] === b[1];
 }
 //#endregion
-//#region node_modules/ogl/src/math/Color.js
-var Color = class extends Array {
-	constructor(color) {
-		if (Array.isArray(color)) return super(...color);
-		return super(...parseColor(...arguments));
+//#region node_modules/ogl/src/math/Vec2.js
+var Vec2 = class Vec2 extends Array {
+	constructor(x = 0, y = x) {
+		super(x, y);
+		return this;
 	}
-	get r() {
+	get x() {
 		return this[0];
 	}
-	get g() {
+	get y() {
 		return this[1];
 	}
-	get b() {
-		return this[2];
-	}
-	set r(v) {
+	set x(v) {
 		this[0] = v;
 	}
-	set g(v) {
+	set y(v) {
 		this[1] = v;
 	}
-	set b(v) {
-		this[2] = v;
-	}
-	set(color) {
-		if (Array.isArray(color)) return this.copy(color);
-		return this.copy(parseColor(...arguments));
+	set(x, y = x) {
+		if (x.length) return this.copy(x);
+		set(this, x, y);
+		return this;
 	}
 	copy(v) {
-		this[0] = v[0];
-		this[1] = v[1];
-		this[2] = v[2];
+		copy(this, v);
 		return this;
+	}
+	add(va, vb) {
+		if (vb) add(this, va, vb);
+		else add(this, this, va);
+		return this;
+	}
+	sub(va, vb) {
+		if (vb) subtract(this, va, vb);
+		else subtract(this, this, va);
+		return this;
+	}
+	multiply(v) {
+		if (v.length) multiply(this, this, v);
+		else scale(this, this, v);
+		return this;
+	}
+	divide(v) {
+		if (v.length) divide(this, this, v);
+		else scale(this, this, 1 / v);
+		return this;
+	}
+	inverse(v = this) {
+		inverse(this, v);
+		return this;
+	}
+	len() {
+		return length(this);
+	}
+	distance(v) {
+		if (v) return distance(this, v);
+		else return length(this);
+	}
+	squaredLen() {
+		return this.squaredDistance();
+	}
+	squaredDistance(v) {
+		if (v) return squaredDistance(this, v);
+		else return squaredLength(this);
+	}
+	negate(v = this) {
+		negate(this, v);
+		return this;
+	}
+	cross(va, vb) {
+		if (vb) return cross(va, vb);
+		return cross(this, va);
+	}
+	scale(v) {
+		scale(this, this, v);
+		return this;
+	}
+	normalize() {
+		normalize(this, this);
+		return this;
+	}
+	dot(v) {
+		return dot(this, v);
+	}
+	equals(v) {
+		return exactEquals(this, v);
+	}
+	applyMatrix3(mat3) {
+		transformMat3(this, this, mat3);
+		return this;
+	}
+	applyMatrix4(mat4) {
+		transformMat4(this, this, mat4);
+		return this;
+	}
+	lerp(v, a) {
+		lerp(this, this, v, a);
+		return this;
+	}
+	smoothLerp(v, decay, dt) {
+		smoothLerp(this, this, v, decay, dt);
+		return this;
+	}
+	clone() {
+		return new Vec2(this[0], this[1]);
+	}
+	fromArray(a, o = 0) {
+		this[0] = a[o];
+		this[1] = a[o + 1];
+		return this;
+	}
+	toArray(a = [], o = 0) {
+		a[o] = this[0];
+		a[o + 1] = this[1];
+		return a;
 	}
 };
 //#endregion
@@ -3333,4 +3636,4 @@ var Triangle = class extends Geometry {
 	}
 };
 //#endregion
-export { Program as a, Renderer as i, Color as n, Mesh as r, Triangle as t };
+export { Program as a, Renderer as i, Vec2 as n, Mesh as r, Triangle as t };

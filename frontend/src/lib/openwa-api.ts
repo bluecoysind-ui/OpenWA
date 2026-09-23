@@ -1,6 +1,6 @@
 /**
  * Typed OpenWA REST client. Auth uses X-API-Key (OpenWA) and apikey (compat).
- * Base URL: VITE_OPENWA_URL or localStorage, default http://localhost:2785
+ * Base URL: VITE_OPENWA_URL, then localStorage, then the page origin (Vite proxies /api in dev).
  */
 
 import { getOpenWAApiBase, getOpenWAApiKey, openWAAuthHeaders } from "./openwa-config";
@@ -102,11 +102,30 @@ export type OpenWAContact = {
   isMyContact: boolean;
   isBlocked: boolean;
   profilePicUrl?: string;
+  lid?: string;
 };
 
 export type OpenWAGroup = {
   id: string;
   name: string;
+  linkedParentJID?: string | null;
+  participantsCount?: number;
+  isAdmin?: boolean;
+};
+
+export type OpenWAGroupParticipant = {
+  id: string;
+  number: string;
+  name?: string;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+};
+
+export type OpenWAGroupInfo = {
+  id: string;
+  name: string;
+  participants: OpenWAGroupParticipant[];
+  description?: string;
   linkedParentJID?: string | null;
 };
 
@@ -352,6 +371,14 @@ export type PluginConfigSchema = {
   properties: Record<string, PluginConfigField>;
 };
 
+export type PluginI18nText = { title?: string; description?: string };
+export type PluginI18nLocale = {
+  name?: string;
+  description?: string;
+  config?: Record<string, PluginI18nText>;
+};
+export type PluginI18n = Record<string, PluginI18nLocale>;
+
 export type Plugin = {
   id: string;
   name: string;
@@ -372,6 +399,7 @@ export type Plugin = {
   loadedAt?: string;
   enabledAt?: string;
   error?: string;
+  i18n?: PluginI18n;
 };
 
 export type Engine = {
@@ -609,13 +637,41 @@ async function requestText(endpoint: string): Promise<string> {
   return response.text();
 }
 
-export async function validateApiKey(apiKey: string, url?: string): Promise<{ role?: string }> {
+function authValidateUrl(url?: string): string {
   const origin = (url ?? getOpenWAApiBase().replace(/\/api$/, "")).replace(/\/+$/, "");
-  const response = await fetch(`${origin}/api/auth/validate`, {
+  // In the browser, hit this app's Nitro proxy (WA_GATEWAY_URL) so login works when the UI is on
+  // a different Railway domain than the API. The stored `origin` is still used for later REST/WS.
+  return typeof window !== "undefined"
+    ? `${window.location.origin.replace(/\/+$/, "")}/api/auth/validate`
+    : `${origin}/api/auth/validate`;
+}
+
+/** Non-throwing validate probe for startup re-auth (mirrors dashboard App.tsx). */
+export async function probeApiKeyValidation(
+  apiKey: string,
+  url?: string,
+): Promise<{ status: number; body: { valid?: boolean; role?: string } | null }> {
+  try {
+    const response = await fetch(authValidateUrl(url), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+      },
+    });
+    const body = (await response.json().catch(() => null)) as { valid?: boolean; role?: string } | null;
+    return { status: response.status, body };
+  } catch {
+    return { status: 0, body: null };
+  }
+}
+
+export async function validateApiKey(apiKey: string, url?: string): Promise<{ role?: string }> {
+  const response = await fetch(authValidateUrl(url), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-        "X-API-Key": apiKey,
+      "X-API-Key": apiKey,
     },
   });
   if (!response.ok) {
@@ -663,11 +719,18 @@ export function logoutSession(id: string) {
 }
 
 export function getSessionQr(id: string) {
-  return request<{ qrCode: string; status: string; qrExpiresAt?: number }>(`/sessions/${id}/qr`);
+  return request<{
+    qrCode: string;
+    status: string;
+    qrExpiresAt?: number;
+    pairingCode?: string;
+    pairingPhone?: string;
+    pairingExpiresAt?: number;
+  }>(`/sessions/${id}/qr`);
 }
 
 export function requestPairingCode(id: string, phoneNumber: string) {
-  return request<{ pairingCode: string; status: string }>(`/sessions/${id}/pairing-code`, {
+  return request<{ pairingCode: string; status: string; pairingExpiresAt?: number }>(`/sessions/${id}/pairing-code`, {
     method: "POST",
     body: JSON.stringify({ phoneNumber }),
   });
@@ -911,14 +974,19 @@ export function listGroups(sessionId: string) {
 }
 
 export function getGroup(sessionId: string, groupId: string) {
-  return request<Record<string, unknown>>(`/sessions/${sessionId}/groups/${encodeURIComponent(groupId)}`);
+  return request<OpenWAGroupInfo>(`/sessions/${sessionId}/groups/${encodeURIComponent(groupId)}`);
 }
 
+export type ParticipantOpResult = { id: string; success: boolean; status?: number; message?: string };
+
 export function addGroupParticipants(sessionId: string, groupId: string, participants: string[]) {
-  return request<unknown>(`/sessions/${sessionId}/groups/${encodeURIComponent(groupId)}/participants`, {
-    method: "POST",
-    body: JSON.stringify({ participants }),
-  });
+  return request<{ success: boolean; message: string; results?: ParticipantOpResult[] }>(
+    `/sessions/${sessionId}/groups/${encodeURIComponent(groupId)}/participants`,
+    {
+      method: "POST",
+      body: JSON.stringify({ participants }),
+    },
+  );
 }
 
 // ── Webhooks ──────────────────────────────────────────────────────────
@@ -1200,5 +1268,6 @@ export function sendRaw(method: string, path: string, bodyText: string) {
   });
 }
 
+export * from "./openwa/extended-api";
 export * from "./openwa/akg-api";
 

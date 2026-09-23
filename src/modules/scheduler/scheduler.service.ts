@@ -57,6 +57,18 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    void this.boot();
+  }
+
+  private async boot(): Promise<void> {
+    try {
+      await this.ensureRecurrenceSchema();
+    } catch (err) {
+      this.logger.error(
+        'Scheduler schema check failed',
+        err instanceof Error ? err.stack : String(err),
+      );
+    }
     void this.failInterruptedJobs().catch(err =>
       this.logger.error('Scheduler crash-recovery failed', err instanceof Error ? err.stack : String(err)),
     );
@@ -70,6 +82,42 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       );
     }, TICK_MS);
     this.timer.unref?.();
+  }
+
+  private async ensureRecurrenceSchema(): Promise<void> {
+    const type = this.jobs.manager.connection.options.type;
+    if (type !== 'better-sqlite3' && type !== 'postgres') return;
+
+    const needed: Array<[string, string]> = [
+      ['recurrence', `varchar(16) NOT NULL DEFAULT 'none'`],
+      ['recurrenceInterval', `integer NOT NULL DEFAULT 1`],
+      ['daysOfWeek', `text`],
+      ['dayOfMonth', `integer`],
+      ['untilUtc', type === 'postgres' ? 'timestamp' : 'datetime'],
+      ['maxOccurrences', `integer`],
+      ['occurrenceCount', `integer NOT NULL DEFAULT 0`],
+      ['anchorAtUtc', type === 'postgres' ? 'timestamp' : 'datetime'],
+    ];
+
+    let existing: Set<string>;
+    if (type === 'postgres') {
+      const rows = (await this.jobs.query(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_schema = current_schema() AND table_name = 'scheduled_messages'`,
+      )) as Array<{ column_name: string }>;
+      if (rows.length === 0) return;
+      existing = new Set(rows.map(r => r.column_name));
+    } else {
+      const rows = (await this.jobs.query(`PRAGMA table_info("scheduled_messages")`)) as Array<{ name: string }>;
+      if (rows.length === 0) return;
+      existing = new Set(rows.map(r => r.name));
+    }
+
+    for (const [column, ddl] of needed) {
+      if (existing.has(column)) continue;
+      await this.jobs.query(`ALTER TABLE "scheduled_messages" ADD COLUMN "${column}" ${ddl}`);
+      this.logger.log(`Added scheduled_messages.${column} (missed migration 178690)`);
+    }
   }
 
   onModuleDestroy(): void {

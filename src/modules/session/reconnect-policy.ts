@@ -92,7 +92,11 @@ export function decideReconnect(
   // Exponential backoff: baseDelay * 2^attempts (with jitter), clamped finite + within
   // setTimeout's safe range so the timer can't overflow and fire immediately. With the default
   // unlimited budget the delay parks at RECONNECT_DELAY_CAP_MS once the exponent outgrows it.
-  const delayMs = clampReconnectDelay(state.baseDelay * Math.pow(2, state.attempts) + jitter, state.baseDelay);
+  // First attempt fires immediately (jitter only); later attempts use exponential backoff.
+  const delayMs =
+    state.attempts === 0
+      ? clampReconnectDelay(jitter, state.baseDelay)
+      : clampReconnectDelay(state.baseDelay * Math.pow(2, state.attempts - 1) + jitter, state.baseDelay);
   state.attempts++;
 
   return {

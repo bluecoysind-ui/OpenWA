@@ -45,6 +45,29 @@ export function isSwaggerEnabled(enableSwaggerEnv?: string, nodeEnv?: string): b
 }
 
 /**
+ * Whether the bundled UI may fetch the local bootstrap API key (`GET /api/auth/ui-connect`)
+ * instead of asking the operator to paste it. Same default as Swagger: on outside production,
+ * off in production unless `UI_AUTO_CONNECT=true`.
+ */
+export function isUiAutoConnectEnabled(flag?: string, nodeEnv?: string): boolean {
+  if (flag === 'true') return true;
+  if (flag === 'false') return false;
+  return nodeEnv !== 'production';
+}
+
+/**
+ * The UI-connect key must not be fetchable from another site. Browsers send `Sec-Fetch-Site`.
+ * Non-browser callers (no fetch metadata) are limited to loopback.
+ */
+export function isUiConnectFetchAllowed(secFetchSite?: string, remoteIp?: string): boolean {
+  const site = (secFetchSite ?? '').toLowerCase();
+  if (site === 'same-origin') return true;
+  if (site === 'cross-site' || site === 'same-site') return false;
+  const ip = (remoteIp ?? '').replace(/^::ffff:/, '');
+  return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost';
+}
+
+/**
  * Whether the global ValidationPipe should EXPOSE field-level validation error messages. Hidden by
  * default in production (a 400 there returns a generic message so the DTO shape isn't reflected back)
  * and shown outside production. `VALIDATION_ERROR_DETAIL=true` forces detail on — useful for debugging

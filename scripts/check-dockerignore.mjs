@@ -10,7 +10,7 @@
  *
  *   1. Non-build / sensitive material (private working notes, VCS metadata, runtime data, local
  *      env files, agent/tool workspaces, dependency and build-output dirs) is rejected.
- *   2. Every input the multi-stage build actually needs (package manifests, src/, the dashboard
+ *   2. Every input the multi-stage build actually needs (package manifests, src/, the frontend
  *      source, the backport patcher, docker-entrypoint.sh, TS configs) still passes.
  *
  * Run locally: `npm run check:dockerignore`. Runs in CI (lint job).
@@ -90,10 +90,10 @@ function ignored(path) {
 const mustReject = [
   // Dependencies (reinstalled via npm ci in the image)
   'node_modules/typescript/package.json',
-  'dashboard/node_modules/vite/package.json',
+  'frontend/node_modules/vite/package.json',
   // Build output / local compiler caches
   'dist/main.js',
-  'dashboard/dist/index.html',
+  'frontend/dist/index.html',
   'tsconfig.tsbuildinfo',
   // Test coverage
   'coverage/lcov.info',
@@ -101,7 +101,7 @@ const mustReject = [
   '.env',
   '.env.minimal',
   '.env.production.local',
-  'dashboard/.env.local',
+  'frontend/.env.local',
   // Runtime data (sessions, media, databases, keys)
   'data/main.sqlite',
   'data/.api-key',
@@ -136,11 +136,10 @@ const mustKeep = [
   'tsconfig.json',
   'tsconfig.build.json',
   'src/main.ts',
-  'dashboard/package.json',
-  'dashboard/package-lock.json',
-  'dashboard/index.html',
-  'dashboard/vite.config.ts',
-  'dashboard/src/main.tsx',
+  'frontend/package.json',
+  'frontend/package-lock.json',
+  'frontend/vite.config.ts',
+  'frontend/src/routes/index.tsx',
   'scripts/postinstall.js',
   'scripts/patch-wwebjs-201832.js',
   'scripts/patch-wwebjs-newsletter-preview.js',

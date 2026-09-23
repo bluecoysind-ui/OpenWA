@@ -1,11 +1,13 @@
 # Dependencies — reinstalled inside the image via npm ci
 node_modules/
-dashboard/node_modules/
+frontend/node_modules/
 
 # Build output — rebuilt inside the image; local output/caches must not leak
 # into the builder's `COPY . .` (a stale tsbuildinfo can poison the build)
 dist/
-dashboard/dist/
+frontend/dist/
+frontend/.vercel/
+frontend/.output/
 *.tsbuildinfo
 
 # Test coverage

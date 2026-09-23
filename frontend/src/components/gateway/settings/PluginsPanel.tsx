@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Cpu, Database, Globe, Loader2, Puzzle, Search, Server, Shield, Trash2, Upload, Zap } from "lucide-react";
 import type { Plugin, PluginConfigField } from "@/lib/openwa-api";
-import { pluginHealthCheck } from "@/lib/openwa-api";
+import { pluginHealthCheck, updatePluginFromUrl } from "@/lib/openwa-api";
+import { localizePlugin } from "@/lib/openwa/localizePlugin";
 import { emptyForField } from "@/lib/openwa/pluginConfigForm";
 import { configUiSafeConfig, missingRequiredConfig, sparseSessionOverride } from "@/lib/openwa/pluginConfigRules";
 import { injectConfigUiCsp } from "@/lib/openwa/pluginFrameSecurity";
@@ -43,7 +44,10 @@ export function PluginsPanel() {
   const [showInstall, setShowInstall] = useState(false);
   const [installMode, setInstallMode] = useState<"upload" | "url" | "catalog">("catalog");
   const [url, setUrl] = useState("");
+  const [updateTarget, setUpdateTarget] = useState<Plugin | null>(null);
+  const [updateUrl, setUpdateUrl] = useState("");
   const [search, setSearch] = useState("");
+  const pluginLang = (typeof navigator !== "undefined" ? navigator.language : "en").split("-")[0] || "en";
   const catalogQ = usePluginCatalogQuery(showInstall && installMode === "catalog");
   const configPlugin = (pluginsQ.data ?? []).find((p) => p.id === configId) ?? null;
 
@@ -73,7 +77,8 @@ export function PluginsPanel() {
         </button>
       </div>
       {pluginsQ.isLoading ? <Loader2 className="animate-spin text-muted" /> : null}
-      {(pluginsQ.data ?? []).map((p) => {
+      {(pluginsQ.data ?? []).map((raw) => {
+        const p = localizePlugin(raw, pluginLang);
         const Icon = typeIcons[p.type] ?? Puzzle;
         return (
           <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-line bg-night/30 px-4 py-3">
@@ -87,6 +92,7 @@ export function PluginsPanel() {
                 </div>
                 <div className="text-[11px] text-muted">
                   {p.type} · {p.status}
+                  {p.description ? ` · ${p.description}` : ""}
                   {p.error ? ` · ${p.error}` : ""}
                 </div>
               </div>
@@ -95,6 +101,11 @@ export function PluginsPanel() {
               <button type="button" className={ghost} onClick={() => setConfigId(p.id)}>
                 Configure
               </button>
+              {!p.builtIn ? (
+                <button type="button" className={ghost} onClick={() => { setUpdateTarget(p); setUpdateUrl(""); }}>
+                  Update URL
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={ghost}
@@ -119,7 +130,28 @@ export function PluginsPanel() {
         );
       })}
 
-      {configPlugin ? <PluginConfigModal plugin={configPlugin} onClose={() => setConfigId(null)} /> : null}
+      {configPlugin ? <PluginConfigModal plugin={localizePlugin(configPlugin, pluginLang)} onClose={() => setConfigId(null)} /> : null}
+
+      <Modal open={Boolean(updateTarget)} title={`Update ${updateTarget?.name ?? "plugin"}`} onClose={() => setUpdateTarget(null)}>
+        <input className={field} value={updateUrl} onChange={(e) => setUpdateUrl(e.target.value)} placeholder="https://…/plugin.zip" />
+        <button
+          type="button"
+          className={`${btn} mt-2`}
+          disabled={!updateTarget || !updateUrl.trim()}
+          onClick={() => {
+            if (!updateTarget) return;
+            void updatePluginFromUrl(updateTarget.id, updateUrl.trim())
+              .then(() => {
+                toast.success("Plugin updated");
+                setUpdateTarget(null);
+                void pluginsQ.refetch();
+              })
+              .catch((err: unknown) => toast.error("Update failed", err instanceof Error ? err.message : ""));
+          }}
+        >
+          Update from URL
+        </button>
+      </Modal>
 
       <Modal open={showInstall} title="Install plugin" onClose={() => setShowInstall(false)} wide>
         <div className="mb-3 flex gap-1">

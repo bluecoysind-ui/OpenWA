@@ -17,6 +17,8 @@ import {
   useUpdateSessionProxyMutation,
 } from "@/lib/openwa-query";
 import { useGateway } from "@/store/gateway-store";
+import { restrictionTooltip } from "@/lib/openwa/restrictionLabel";
+import { sessionDisplayName } from "@/lib/openwa/sessionLabel";
 import { btn, Card, danger, ErrorLine, field, ghost, Modal, Toggle } from "./ui";
 
 export function SessionsPanel() {
@@ -52,7 +54,10 @@ export function SessionsPanel() {
   return (
     <div className="space-y-3">
       <ErrorLine error={sessionsQ.error} />
-      <Card title="Create session" sub="Letters, numbers, and hyphens. Optional proxy is used on first connect.">
+      <Card
+        title="Create session"
+        sub="Letters, numbers, and hyphens. Optional proxy is used on first connect. Linked sessions auto-restart after API or socket gaps when WhatsApp auth is still valid."
+      >
         <div className="grid gap-2 sm:grid-cols-3">
           <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="session-name" />
           <input className={field} value={proxy} onChange={(e) => setProxy(e.target.value)} placeholder="socks5://host:1080 (optional)" />
@@ -91,12 +96,15 @@ export function SessionsPanel() {
         <div key={session.id} className="rounded-2xl border border-line bg-night/30 px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <div className="text-sm font-medium">{session.name}</div>
+              <div className="text-sm font-medium">{sessionDisplayName(session)}</div>
               <div className="text-[11px] text-muted">
+                {session.pushName && session.name !== session.pushName ? `${session.name} · ` : ""}
                 {session.status}
                 {session.phone ? ` · ${session.phone}` : ""}
                 {session.lastError ? ` · ${session.lastError}` : ""}
-                {session.restriction ? ` · ${session.restriction.kind}` : ""}
+                {session.restriction ? (
+                  <span title={restrictionTooltip(session.restriction)}> · {session.restriction.kind}</span>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5">

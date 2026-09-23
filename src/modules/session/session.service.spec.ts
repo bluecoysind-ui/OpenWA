@@ -64,6 +64,7 @@ import {
   getSessionReconnectLoopAlertsTotal,
 } from '../../common/metrics/session-reconnect-metrics';
 import { AuditService } from '../audit/audit.service';
+import { SessionQrStateService } from './session-qr-state.service';
 
 /** The (action, context) pair of one audit call, typed so assertions do not fall back to `any`. */
 const auditCall = (mock: jest.Mock, index = 0): [string, { sessionId?: string; metadata?: Record<string, unknown> }] =>
@@ -234,6 +235,7 @@ describe('SessionService', () => {
         SessionEngineLifecycle,
         SessionErrorStore,
         SessionRestrictionStore,
+        SessionQrStateService,
         PresenceStore,
         { provide: AuditService, useValue: auditService },
         {
@@ -6196,6 +6198,23 @@ describe('SessionService', () => {
       const result = await service.getQRCode('sess-uuid-1');
 
       expect(result.qrCode).toBe('data:image/png;base64,iVBOR...');
+      expect(result.qrExpiresAt).toBeGreaterThan(Date.now());
+    });
+
+    it('does not reset qr expiry on repeated polls for the same payload', async () => {
+      const session = createMockSession({ status: SessionStatus.QR_READY });
+      (repository.findOne as jest.Mock).mockResolvedValue(session);
+      (repository.update as jest.Mock).mockResolvedValue({ affected: 1 });
+
+      await service.start('sess-uuid-1');
+      mockEngine.getQRCode.mockReturnValue('data:image/png;base64,same');
+
+      const first = await service.getQRCode('sess-uuid-1');
+      jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000);
+      const second = await service.getQRCode('sess-uuid-1');
+
+      expect(second.qrExpiresAt).toBe(first.qrExpiresAt);
+      jest.restoreAllMocks();
     });
 
     it('should throw if session is READY (already authenticated)', async () => {
@@ -7191,8 +7210,8 @@ describe('SessionService', () => {
       await service.onModuleDestroy();
     });
 
-    it('does nothing when AUTO_START_SESSIONS is not enabled', async () => {
-      delete process.env.AUTO_START_SESSIONS;
+    it('does nothing when AUTO_START_SESSIONS is explicitly disabled', async () => {
+      process.env.AUTO_START_SESSIONS = 'false';
       const startSpy = jest.spyOn(service, 'start').mockResolvedValue(undefined as never);
 
       service.onApplicationBootstrap();

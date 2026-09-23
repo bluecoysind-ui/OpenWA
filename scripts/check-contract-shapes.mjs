@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Shape gate: the hand-written wire types of all five clients (the JavaScript SDK's types.ts, the
- * dashboard's api.ts, the Python TypedDicts, the Go structs and the Java records) against the DTO
+ * frontend wire types, the Python TypedDicts, the Go structs and the Java records) against the DTO
  * schemas of the committed openapi.json. Both directions of the traffic are mapped: response
  * payloads and request bodies alike.
  *
@@ -35,7 +35,7 @@
  * deliberate (the hand parser stays regular), and the exclusions below record what is known to be
  * unpinned. Every mapping entry must resolve on BOTH sides — a renamed hand type or schema fails
  * loudly instead of being skipped (the vacuous-pass failure mode), and the run refuses to gate
- * fewer than 8 pairs per client for the same reason (the dashboard's mappable surface is smaller than the SDK's; exclusions are explicit and counted either way).
+ * fewer than 8 pairs per client for the same reason (the UI client's mappable surface is smaller than the SDK's; exclusions are explicit and counted either way).
  *
  * Pairs that drift today live in EXCLUDED with a one-line reason, mirroring the per-advisory
  * allowlist culture of check-audit: an exclusion is a recorded decision, not a silent skip, and
@@ -139,7 +139,7 @@ const MAPPINGS = {
     WebhookFilterCondition: 'WebhookFilterConditionDto',
     WebhookResponse: 'WebhookResponseDto',
   },
-  'dashboard/src/services/api.ts': {
+  'frontend/src/lib/openwa-contract-types.ts': {
     AccountRestriction: 'AccountRestrictionDto',
     AuditLog: 'AuditLogDto',
     BatchMessageResult: 'BatchMessageResultDto',
@@ -172,7 +172,7 @@ const MAPPINGS = {
  */
 const MINIMUM_MAPPED = {
   'sdk/javascript/src/types.ts': 83,
-  'dashboard/src/services/api.ts': 21,
+  'frontend/src/lib/openwa-contract-types.ts': 21,
   'sdk/python/openwa/types.py': 79,
   'sdk/go': 79,
   'sdk/java': 83,
@@ -196,7 +196,7 @@ const EXCLUDED = {
     UpdateSessionConfigRequest:
       'BY DESIGN: the three clear* components are client-side control flags consumed by UpdateSessionConfigRequestSerializer, which is what emits the explicit null; they never reach the wire',
   },
-  'dashboard/src/services/api.ts': {
+  'frontend/src/lib/openwa-contract-types.ts': {
     Webhook:
       'the events list models client state as much as the wire: it is rebuilt from checkbox toggles in Webhooks.tsx and re-guarded at runtime in queries.ts/useWebSocket.ts, so narrowing it to the event union would type those call sites rather than the payload. The vocabulary is gated on the JavaScript, Python and Java clients',
     Session:

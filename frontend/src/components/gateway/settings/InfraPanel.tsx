@@ -12,6 +12,7 @@ import {
   Server,
   Upload,
 } from "lucide-react";
+import { exportStorageArchive, importStorageArchive } from "@/lib/openwa/extended-api";
 import { getOpenWAApiBase } from "@/lib/openwa-config";
 import { copyToClipboard } from "@/lib/openwa/clipboard";
 import { useConfigSave } from "@/lib/openwa/useConfigSave";
@@ -56,7 +57,38 @@ export function InfraPanel() {
     },
   });
   const [queueStats, setQueueStats] = useState({ pending: 0, completed: 0, failed: 0 });
+  const [storageBusy, setStorageBusy] = useState(false);
   const currentEngine = currentEngineQ.data?.engineType ?? "";
+
+  const exportStorage = async () => {
+    setStorageBusy(true);
+    try {
+      const blob = await exportStorageArchive();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `openwa-storage-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Storage archive exported");
+    } catch (err) {
+      toast.error("Export failed", err instanceof Error ? err.message : "");
+    } finally {
+      setStorageBusy(false);
+    }
+  };
+
+  const importStorage = async (file: File) => {
+    setStorageBusy(true);
+    try {
+      const res = await importStorageArchive(file);
+      toast.success(res.message ?? "Storage imported");
+    } catch (err) {
+      toast.error("Import failed", err instanceof Error ? err.message : "");
+    } finally {
+      setStorageBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!infraStatus) return;
@@ -166,6 +198,23 @@ export function InfraPanel() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) void dataBackup.importBackup(file);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button type="button" className={ghost} disabled={storageBusy} onClick={() => void exportStorage()}>
+            {storageBusy ? <Loader2 size={14} className="animate-spin" /> : <HardDrive size={14} />} Export storage ZIP
+          </button>
+          <label className={ghost}>
+            <Upload size={14} /> Import storage ZIP
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              className="hidden"
+              disabled={storageBusy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void importStorage(file);
                 e.target.value = "";
               }}
             />

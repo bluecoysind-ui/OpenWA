@@ -3,7 +3,7 @@
 
 # ===== Stage 1: Builder =====
 # Pin the builder to the BUILD host's platform (not the target's). It only produces arch-INDEPENDENT
-# artifacts (the NestJS dist/ JS and the static dashboard SPA), so it never needs to run emulated for
+# artifacts (the NestJS dist/ JS and the static frontend SPA), so it never needs to run emulated for
 # the non-native target. On a multi-arch buildx build this avoids QEMU emulating the whole npm ci +
 # Vite build for arm64 — which is slow AND is where the arm64 lightningcss (Vite 8's native CSS
 # minifier) optional dependency fails to install ("Cannot find module lightningcss.linux-arm64-gnu.node").
@@ -27,19 +27,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package*.json ./
 
 # The postinstall hook is a real file (scripts/postinstall.js), and `npm ci` fails outright when
-# a lifecycle script is missing — copy it BEFORE the install. dashboard/ and the backport patcher
-# are deliberately still absent at this point, so the hook cleanly no-ops here (dashboard deps are
+# a lifecycle script is missing — copy it BEFORE the install. frontend/ and the backport patcher
+# are deliberately still absent at this point, so the hook cleanly no-ops here (frontend deps are
 # installed explicitly below; the patcher only matters for the production stage).
 COPY scripts/postinstall.js ./scripts/
 
 # Install all dependencies INCLUDING devDependencies — the build needs them (`nest` from
-# @nestjs/cli, plus `vite`/`typescript` for the dashboard). `--include=dev` is REQUIRED, not
+# @nestjs/cli). `--include=dev` is REQUIRED, not
 # cosmetic: npm omits devDependencies whenever NODE_ENV=production is present in the build env.
 # Coolify (and similar PaaS) promote every ${VAR} referenced in the compose file to a build-time
 # variable, so docker-compose.yml's `NODE_ENV=${NODE_ENV:-production}` leaks NODE_ENV=production
 # into this stage and a bare `npm ci` would skip @nestjs/cli → `sh: 1: nest: not found` (exit 127).
 # (docker-compose.dev.yml hardcodes NODE_ENV=development, which is why the dev build never hit this.)
-# This stage only builds dist/ and the dashboard SPA and never launches a browser; the production
+# This stage only builds dist/ and the frontend SPA and never launches a browser; the production
 # stage downloads Chrome explicitly. Skip the Puppeteer postinstall download so @puppeteer/browsers 3
 # does not try to extract a zip here, where no archiver is installed.
 RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci --include=dev
@@ -47,15 +47,21 @@ RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci --include=dev
 # Copy source code
 COPY . .
 
-# Build the API (dist/) and the dashboard SPA (dashboard/dist/). The root `npm ci` above
-# ran before the dashboard source was copied, so its postinstall hook skipped the dashboard
-# deps - install them explicitly here (npm ci, reproducible from dashboard/package-lock.json).
-# `--include=dev` for the same reason as above: the dashboard build needs vite/typescript
+# Build the API (dist/) and the frontend SPA (copied to frontend/dist/). The root `npm ci` above
+# ran before the frontend source was copied, so its postinstall hook skipped the frontend
+# deps - install them explicitly here (npm ci, reproducible from frontend/package-lock.json).
+# `--include=dev` for the same reason as above: the frontend build needs vite/typescript
 # (devDependencies), which a NODE_ENV=production build env would otherwise omit.
 # Drop the incremental-build cache afterwards: it is pinned inside dist/ (so nest's deleteOutDir
 # wipes it with the output), and the production stage copies dist/ wholesale — it would otherwise
 # ship dead compiler metadata in every image.
-RUN npm run build && npm run dashboard:ci -- --include=dev && npm run dashboard:build && rm -f dist/*.tsbuildinfo
+# NITRO_PRESET=vercel produces a static SPA under .vercel/output/static. `frontend:build`
+# then copies it to frontend/dist for Nest to serve on the API port (same-origin /api).
+# Leave VITE_OPENWA_URL unset so the browser uses window.location.origin.
+RUN npm run build \
+    && npm run frontend:ci -- --include=dev \
+    && NITRO_PRESET=vercel npm run frontend:build \
+    && rm -f dist/*.tsbuildinfo
 
 # ===== Stage 2: Production =====
 # Same digest-pinned node:22-slim base as the builder stage.
@@ -67,6 +73,8 @@ FROM docker.io/node:22-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc
 # `docker run` of this image did not. The npm installs below pin --omit=dev explicitly, so this
 # changes nothing about which dependencies land in the image.
 ENV NODE_ENV=production
+# REST API, Socket.IO, and bundled frontend SPA share one listener (no separate Vite port in-image).
+ENV PORT=2785
 
 # amd64 uses Chrome for Testing (downloaded below) to avoid the Debian chromium
 # package's K8s SIGTRAP under strict non-root/seccomp. arm64 installs Debian's
@@ -252,9 +260,9 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/puppeteer-chrome
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy the bundled dashboard SPA; ServeStaticModule serves it from this same process/port
-# (app.module.ts resolves dashboard/dist relative to dist/). Single container, single port.
-COPY --from=builder /app/dashboard/dist ./dashboard/dist
+# Copy the bundled frontend SPA; ServeStaticModule serves it from this same process/port
+# (app.module.ts resolves frontend/dist relative to dist/). Single container, single port.
+COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # Create data directories with correct ownership. Only ./data is chowned, NOT all of /app: the app
 # tree (node_modules, dist) only needs read access, which root-owned files already grant, and the
@@ -286,7 +294,7 @@ COPY scripts/backup.sh scripts/restore.sh scripts/lib-env.sh ./scripts/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Expose port
+# HTTP: API + bundled frontend UI
 EXPOSE 2785
 
 # Health check

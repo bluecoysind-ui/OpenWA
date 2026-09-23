@@ -21,13 +21,13 @@ the test inventory, and use the test commands in the next section for pass/fail 
 ```bash
 rg --files -g '*.spec.ts' src | wc -l
 rg --files -g '*.e2e-spec.ts' test | wc -l
-rg --files -g '*.test.ts' dashboard/src | wc -l
+rg --files -g '*.test.ts' frontend/src | wc -l
 rg --files sdk/javascript/test sdk/python/tests sdk/php/tests sdk/java/src/test sdk/go \
   | rg '(\.test\.ts$|test_.*\.py$|Test\.php$|Test\.java$|_test\.go$)' \
   | wc -l
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
-npm --prefix dashboard run test:unit
+npm --prefix frontend run test
 ```
 
 ## 9.2 Test Commands
@@ -47,11 +47,10 @@ npm --prefix dashboard run test:unit
 | `npm run openapi:check`                                          | Verify the committed OpenAPI snapshot                                    |
 | `npm run check:versions`                                         | Verify documentation and package version consistency                     |
 | `npm run check:dockerignore`                                     | Verify the Docker build context that `.dockerignore` defines             |
-| `cd dashboard && npm run lint`                                   | Run dashboard ESLint                                                     |
-| `cd dashboard && npm run typecheck`                              | Type-check dashboard test files                                          |
-| `cd dashboard && npm run test:unit`                              | Run dashboard pure utility/unit tests                                    |
-| `cd dashboard && npm run i18n:check`                             | Verify dashboard locale key parity                                       |
-| `cd dashboard && npm run build`                                  | Type-check and build the dashboard                                       |
+| `cd frontend && npm run typecheck`                               | Type-check the frontend                                                  |
+| `cd frontend && npm test`                                        | Run frontend unit tests                                                  |
+| `cd frontend && npm run i18n:check`                              | Verify frontend locale key parity                                        |
+| `cd frontend && npm run build`                                   | Build the frontend SPA                                                   |
 | `cd sdk/javascript && npm test && npm run typecheck`             | Type-check and unit-test the JavaScript SDK                              |
 | `cd sdk/javascript && npm run build && npm run smoke`            | Build and dual CJS/ESM package-smoke the JavaScript SDK                  |
 | `cd sdk/python && pytest`                                        | Run the Python SDK tests                                                 |
@@ -259,14 +258,14 @@ Main CI is defined in `.github/workflows/ci.yml`.
 
 | Job             | Checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lint`          | backend ESLint, full-program TypeScript check, formatting, version consistency, .dockerignore context, OpenAPI snapshot, SDK routes and webhook events against the contract, contract coverage per SDK, SDK docs against the shipped client surface, client wire shapes (`check:contract-shapes` — the JavaScript SDK's, dashboard's, Python's, Go's and Java's hand-written types against the OpenAPI schemas; the PHP client returns untyped arrays and has no types layer to gate) |
-| `audit`         | dependency security audit of BOTH npm trees (root and `dashboard/`)                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `lint`          | backend ESLint, full-program TypeScript check, formatting, version consistency, .dockerignore context, OpenAPI snapshot, SDK routes and webhook events against the contract, contract coverage per SDK, SDK docs against the shipped client surface, client wire shapes (`check:contract-shapes` — the JavaScript SDK's, frontend's, Python's, Go's and Java's hand-written types against the OpenAPI schemas; the PHP client returns untyped arrays and has no types layer to gate) |
+| `audit`         | dependency security audit of BOTH npm trees (root and `frontend/`)                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `test`          | backend coverage run, script unit tests (node:test), e2e smoke tests, Codecov upload                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `test-postgres` | real PostgreSQL 16 service, backend build, migration smoke, and PostgreSQL FTS provider spec                                                                                                                                                                                                                                                                                                                                                                                          |
-| `dashboard`     | dashboard install, lint, formatting, type-check, i18n parity, build, unit tests                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `frontend`      | frontend install, type-check, i18n parity, build, unit tests                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `scripts-smoke` | shellcheck on `docker-entrypoint.sh` and every `scripts/*.sh`, plus the backup/restore smoke test                                                                                                                                                                                                                                                                                                                                                                                     |
 | `chart`         | helm lint, helm template with default and fully-toggled values, kubeconform on both renders, the rendered-behaviour check, actionlint on the workflows                                                                                                                                                                                                                                                                                                                                |
-| `build`         | backend build after lint/audit/test/dashboard/scripts-smoke/chart jobs pass                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `build`         | backend build after lint/audit/test/frontend/scripts-smoke/chart jobs pass                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `docker`        | multi-arch Docker build on pushes and pull requests, then `scripts/smoke-test-non-root.sh` against the built image so the entrypoint's root→openwa drop is verified, not assumed; publishes to GHCR only on push, so fork pull requests validate both architectures without publishing                                                                                                                                                                                                |
 
 SDK CI is defined in `.github/workflows/sdk-ci.yml` and is path-filtered to SDK sources plus server
@@ -282,7 +281,7 @@ re-runs the SDK suites. It runs:
 
 Release tags run `.github/workflows/release.yml`, which mirrors the CI gate rather than running a
 lighter one: the same lint job (including all four SDK contract checks), the same test, PostgreSQL,
-dashboard, shell-script and chart jobs. It additionally verifies the tag matches `package.json`, and
+frontend, shell-script and chart jobs. It additionally verifies the tag matches `package.json`, and
 publishes the GitHub Release only after the Docker image has built and pushed successfully. Nothing in
 it packages or publishes the Helm chart — operators install that from the tagged ref, so the tag is the
 last gate the chart passes.
@@ -361,7 +360,7 @@ Live WhatsApp checks require an operator-owned account and should not be part of
   `test` job starts a `redis:7-alpine` service container so the queue-on e2e suite has a broker. That suite
   skips itself when no Redis is reachable, so it stays green on a machine without one.)
 - Performance testing is not automated.
-- Dashboard browser/visual UI tests are not currently automated; dashboard pure utility tests run via `npm --prefix dashboard run test:unit`.
+- Frontend browser/visual UI tests are not currently automated; frontend unit tests run via `npm --prefix frontend run test`.
 
 These gaps are intentional because the project prioritizes deterministic tests: no job needs an
 operator-owned WhatsApp account, cloud credentials, or a Docker socket, and neither service container CI

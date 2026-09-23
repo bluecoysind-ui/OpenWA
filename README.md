@@ -187,15 +187,14 @@ docker compose -f docker-compose.dev.yml up -d
 git clone https://github.com/rmyndharis/OpenWA.git
 cd OpenWA
 
-# Install the locked dependencies (includes dashboard)
+# Install the locked dependencies (includes frontend)
 npm ci
 
-# Start API + Dashboard (config is auto-generated on first run)
+# Start API + frontend (config is auto-generated on first run)
 npm run dev
 
-# Access (in dev the dashboard runs on the Vite server with hot reload)
-# Dashboard: http://localhost:2886
-# API: http://localhost:2785/api
+# Access (in dev the UI runs on the Vite server with hot reload)
+# UI + API (proxied): http://localhost:2785
 # Swagger: http://localhost:2785/api/docs
 ```
 
@@ -264,7 +263,7 @@ docker compose --profile full up -d
 
 > **Development vs Production**
 >
-> - Development (`docker-compose.dev.yml`): SQLite, local storage, API serves the bundled dashboard
+> - Development (`docker-compose.dev.yml`): SQLite, local storage, API serves the bundled frontend
 > - Production (`docker-compose.yml`): Configurable database, profiles for optional services
 >
 > Official GHCR images are published as multi-arch manifests for:
@@ -276,9 +275,9 @@ docker compose --profile full up -d
 
 | Service         | Port            | Description                                                                         |
 | --------------- | --------------- | ----------------------------------------------------------------------------------- |
-| API & Dashboard | `2785`          | REST API + bundled web dashboard (same port)                                        |
+| API & UI        | `2785`          | REST API + bundled web UI (same port)                                               |
 | Swagger         | `2785/api/docs` | Interactive API docs — off under `NODE_ENV=production` unless `ENABLE_SWAGGER=true` |
-| Dashboard (dev) | `2886`          | Vite dev server with hot reload (`npm run dev`)                                     |
+| UI (dev)        | `2785`          | Vite + hot reload; `/api` proxied to Nest on `2786` (`npm run dev`)                 |
 
 ---
 

@@ -1,11 +1,18 @@
 const URL_KEY = "openwa_url";
 const API_KEY_KEY = "openwa_api_key";
 
+import { warnIfInsecureHttpUrl } from "./openwa/urlSecurity";
+
 const DEFAULT_URL = "http://localhost:2785";
 
 function envUrl(): string {
   const raw = (import.meta.env.VITE_OPENWA_URL as string | undefined) ?? "";
   return raw.replace(/\/+$/, "");
+}
+
+function sameOrigin(): string {
+  if (typeof window === "undefined") return DEFAULT_URL;
+  return window.location.origin.replace(/\/+$/, "");
 }
 
 function envApiKey(): string {
@@ -17,7 +24,7 @@ export function getOpenWAUrl(): string {
     const stored = window.localStorage.getItem(URL_KEY);
     if (stored) return stored.replace(/\/+$/, "");
   }
-  return envUrl() || DEFAULT_URL;
+  return envUrl() || sameOrigin();
 }
 
 export function getOpenWAApiKey(): string {
@@ -29,7 +36,7 @@ export function getOpenWAApiKey(): string {
 }
 
 export function setOpenWACredentials(url: string, apiKey: string): void {
-  const origin = url.replace(/\/+$/, "") || DEFAULT_URL;
+  const origin = warnIfInsecureHttpUrl(url.replace(/\/+$/, "") || DEFAULT_URL, "OpenWA gateway URL");
   window.localStorage.setItem(URL_KEY, origin);
   window.localStorage.setItem(API_KEY_KEY, apiKey);
   window.sessionStorage.setItem(API_KEY_KEY, apiKey);

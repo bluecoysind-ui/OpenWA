@@ -1,12 +1,17 @@
-import { Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, HttpCode, HttpStatus, NotFoundException, ForbiddenException, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
-import { CurrentApiKey } from './decorators/auth.decorators';
+import type { Request } from 'express';
+import { CurrentApiKey, Public } from './decorators/auth.decorators';
 import { ApiKey } from './entities/api-key.entity';
 import { ValidateApiKeyResponseDto } from './dto';
+import { AuthService } from './auth.service';
+import { isUiAutoConnectEnabled, isUiConnectFetchAllowed } from '../../config/bootstrap-security';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthValidateController {
+  constructor(private readonly authService: AuthService) {}
+
   @Post('validate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate an API key' })
@@ -25,5 +30,28 @@ export class AuthValidateController {
       return { valid: false };
     }
     return { valid: true, role: apiKey.role };
+  }
+
+  @Public()
+  @Get('ui-connect')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Hand the local bootstrap API key to the same-origin UI so it can connect without a paste form',
+  })
+  @ApiResponse({ status: 200, description: 'Bootstrap key for the local UI' })
+  @ApiResponse({ status: 403, description: 'Not a same-origin UI request' })
+  @ApiResponse({ status: 404, description: 'Auto-connect is off, or no live bootstrap key' })
+  async uiConnect(@Req() req: Request): Promise<{ apiKey: string }> {
+    if (!isUiAutoConnectEnabled(process.env.UI_AUTO_CONNECT, process.env.NODE_ENV)) {
+      throw new NotFoundException();
+    }
+    const site = typeof req.headers['sec-fetch-site'] === 'string' ? req.headers['sec-fetch-site'] : undefined;
+    const ip = (req as Request & { clientIp?: string }).clientIp ?? req.ip ?? req.socket.remoteAddress;
+    if (!isUiConnectFetchAllowed(site, ip)) {
+      throw new ForbiddenException();
+    }
+    const apiKey = await this.authService.getLiveBootstrapKey();
+    if (!apiKey) throw new NotFoundException();
+    return { apiKey };
   }
 }

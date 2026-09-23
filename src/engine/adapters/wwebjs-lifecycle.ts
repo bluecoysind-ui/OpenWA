@@ -254,12 +254,10 @@ export class WwebjsLifecycle {
         this.host.logger.log(`Pinning WhatsApp Web version ${versionPin.webVersion}`);
       }
 
-      // Extend the first-boot init wait on slow setups (WSL2/low-resource), #353. Opt-in:
-      // unset keeps whatsapp-web.js's 30000ms default.
-      const authTimeoutMs = resolveAuthTimeoutMs();
-      if (authTimeoutMs) {
-        this.host.logger.log(`Using auth timeout ${authTimeoutMs}ms`);
-      }
+      // Pairing codes are valid for ~3 minutes. The library default (30s) expires while the user is
+      // still entering the code, so the phone shows a linked device and this engine never reaches READY.
+      const authTimeoutMs = resolveAuthTimeoutMs() ?? 180_000;
+      this.host.logger.log(`Using auth timeout ${authTimeoutMs}ms`);
 
       // One retry for a navigation-killed first inject (#1081): a WhatsApp Web reload landing
       // mid-inject rejects initialize() with nothing upstream ever retrying (see
@@ -346,7 +344,7 @@ export class WwebjsLifecycle {
    */
   private async runInitAttempt(
     puppeteerArgs: string[],
-    authTimeoutMs: number | undefined,
+    authTimeoutMs: number,
     proxyAuthentication: { username: string; password: string } | undefined,
     versionPin: Awaited<ReturnType<typeof resolveWebVersionPin>>,
   ): Promise<void> {
@@ -388,7 +386,7 @@ export class WwebjsLifecycle {
         // Absent, puppeteer-core nullish-coalesces to its own 180 000 ms (`cdp/Connection.js`).
         ...(protocolTimeout !== undefined ? { protocolTimeout } : {}),
       },
-      ...(authTimeoutMs !== undefined ? { authTimeoutMs } : {}),
+      authTimeoutMs,
       ...(proxyAuthentication ? { proxyAuthentication } : {}),
       ...(versionPin ?? {}),
     });

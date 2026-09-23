@@ -13,6 +13,7 @@ import { SessionProxyInterceptor } from './session-proxy.interceptor';
 import { MessageProjector } from './message-projector.service';
 import { SessionErrorStore } from './session-error-store.service';
 import { SessionRestrictionStore } from './session-restriction-store.service';
+import { SessionQrStateService } from './session-qr-state.service';
 import { PresenceStore } from './presence-store.service';
 import { SessionController } from './session.controller';
 import { WebhookModule } from '../webhook/webhook.module';
@@ -45,6 +46,7 @@ import { PLUGIN_SESSION_PORT } from '../../core/plugins/plugin-host-ports';
     SessionEngineLifecycle,
     SessionErrorStore,
     SessionRestrictionStore,
+    SessionQrStateService,
     PresenceStore,
     SessionLidResolver,
     SessionLivenessWatchdog,

@@ -10,7 +10,7 @@
  */
 
 export const GATEWAY_ORIGIN = (
-  process.env.WA_GATEWAY_URL ?? "http://localhost:3000"
+  process.env.WA_GATEWAY_URL ?? "http://localhost:2785"
 ).replace(/\/+$/, "");
 
 /**

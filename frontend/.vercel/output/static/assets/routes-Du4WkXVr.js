@@ -1,0 +1,1 @@
+import{t as e}from"./GatewayApp-CcEpAYQh.js";import{D as t}from"./index-xTCDASZ2.js";var n=t();function r(){return(0,n.jsx)(e,{})}export{r as component};

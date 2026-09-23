@@ -45,5 +45,11 @@ export type Bubble =
       media?: BubbleMedia;
       /** Optimistic bubbles show a pending marker until the send resolves. */
       pending?: boolean;
+      waMessageId?: string;
+      deliveryStatus?: "pending" | "sent" | "delivered" | "read" | "failed";
+      revoked?: boolean;
+      reactions?: Record<string, string>;
+      quotedPreview?: string;
+      mediaOmitted?: boolean;
     }
   | { id: string; kind: "promo"; time: string };

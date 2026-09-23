@@ -16,7 +16,7 @@
  *   2. An allowlist entry whose advisory no longer appears ALSO FAILS. A carve-out that outlives
  *      its cause is how a gate quietly narrows, so removing it is not left to anyone remembering.
  *
- * Scope: the root tree only. `dashboard/` keeps a plain `npm audit --audit-level=high`, because it
+ * Scope: the root tree only. `frontend/` keeps a plain `npm audit --audit-level=high`, because it
  * has nothing to excuse and should stay the stricter of the two.
  *
  * Run locally: `npm run check:audit`.

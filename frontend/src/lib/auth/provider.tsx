@@ -7,6 +7,11 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Clears React Query after logout so the next actor never sees cached rows. */
+export function clearAppQueryCache(): void {
+  queryClient.clear();
+}
+
 /**
  * App-wide client provider mounted once near the root (in `src/routes/__root.tsx`).
  */

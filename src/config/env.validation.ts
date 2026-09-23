@@ -394,6 +394,7 @@ export function validateEnv(config: EnvConfig): EnvConfig {
     'QUEUE_ENABLED',
     'MCP_ENABLED',
     'SERVE_DASHBOARD',
+    'UI_AUTO_CONNECT',
     'AUTO_START_SESSIONS',
     'STATUS_SEED_ON_READY',
     'STORE_EPHEMERAL_MESSAGES',

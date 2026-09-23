@@ -26,6 +26,7 @@ import { type createLogger } from '../../common/services/logger.service';
 import { userPart } from '../../engine/identity/wa-id';
 import { SessionEngineLeafEvents } from './session-engine-leaf-events';
 import { resolveFeatureFlags } from '../../config/feature-flags';
+import { SessionQrStateService } from './session-qr-state.service';
 
 /** The lastError an engine-internal reconnect episode records; onQRCode clears only this one. */
 export const RECONNECT_LOOP_REASON = 'Reconnecting after a dropped connection';
@@ -114,9 +115,11 @@ export interface SessionEngineWiringHost {
  */
 export class SessionEngineEventWiring {
   private readonly logger: ReturnType<typeof createLogger>;
+  private readonly qrState?: SessionQrStateService;
 
-  constructor(deps: { logger: ReturnType<typeof createLogger> }) {
+  constructor(deps: { logger: ReturnType<typeof createLogger>; qrState?: SessionQrStateService }) {
     this.logger = deps.logger;
+    this.qrState = deps.qrState;
   }
 
   /**
@@ -210,9 +213,12 @@ export class SessionEngineEventWiring {
           },
         );
 
+        this.qrState?.touchQr(id, qr);
+
         persistStatus(SessionStatus.QR_READY);
       },
       onReady: (phone, pushName): void => {
+        this.qrState?.clear(id);
         // Account-binding guard: a ready link whose number differs from the one this session is
         // already bound to is a different account scanning its QR (a takeover), not a re-link. Refuse
         // it rather than silently overwrite the binding. An empty incoming phone (wwjs can report one)

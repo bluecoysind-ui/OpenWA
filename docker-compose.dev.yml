@@ -169,7 +169,7 @@ services:
       - MCP_IP_RATE_LIMIT_MAX=${MCP_IP_RATE_LIMIT_MAX:-}
       - MCP_IP_RATE_LIMIT_WINDOW_MS=${MCP_IP_RATE_LIMIT_WINDOW_MS:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://127.0.0.1:2785,http://localhost:2785}
       - SSRF_ALLOWED_HOSTS=${SSRF_ALLOWED_HOSTS:-}
       - SSRF_DNS_TIMEOUT_MS=${SSRF_DNS_TIMEOUT_MS:-}
       - WEBHOOK_SSRF_REDIRECTS=${WEBHOOK_SSRF_REDIRECTS:-}
@@ -308,8 +308,9 @@ services:
       retries: 3
       start_period: 30s
 
-  # The dashboard SPA is bundled into the image and served by NestJS on the same port:
-  # open http://localhost:2785 — there is no separate dashboard container.
+  # The frontend SPA is bundled into the image and served by NestJS on the same port:
+  # open http://localhost:2785 — there is no separate UI container. Local `npm run dev`
+  # on the host, `npm run dev` serves the UI on :2785 with /api proxied to Nest on :2786.
 
 networks:
   default:

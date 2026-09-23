@@ -85,12 +85,12 @@ if (process.env.MCP_ENABLED === 'true') {
   );
 }
 
-// Serve the bundled dashboard SPA from this same NestJS process/port when a build is
-// present (the production image copies dashboard/dist in). In local dev the build is
-// absent, so this stays inert and the Vite dev server (:2886) handles the UI. Opt out
+// Serve the bundled UI SPA from this same NestJS process/port when a build is
+// present (the production image copies frontend/dist in). In local dev the build is
+// absent, so this stays inert and the Vite dev server (:2785) handles the UI. Opt out
 // explicitly with SERVE_DASHBOARD=false. The path + flags are exported so main.ts can
 // log a clear status line (served / disabled / build missing) at startup.
-export const DASHBOARD_DIST = path.resolve(__dirname, '..', 'dashboard', 'dist');
+export const DASHBOARD_DIST = path.resolve(__dirname, '..', 'frontend', 'dist');
 export const dashboardServingEnabled = process.env.SERVE_DASHBOARD !== 'false';
 export const dashboardBuildPresent = fs.existsSync(path.join(DASHBOARD_DIST, 'index.html'));
 
